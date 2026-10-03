@@ -32,8 +32,8 @@ button:focus-visible{outline:2px solid var(--va)}
 .grip[data-c=br]{right:0;bottom:0;cursor:nwse-resize;background:linear-gradient(315deg,#7d8794 0 2px,transparent 2px 5px,#7d8794 5px 7px,transparent 7px 10px,#7d8794 10px 12px,transparent 12px)}
 #toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:#1a1f26;color:#fff;padding:6px 12px;border-radius:6px;font-size:12px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
 #info{padding:6px 12px;color:var(--mu);font:12px ui-monospace,Menlo,Consolas,monospace;min-height:28px;border-bottom:1px solid var(--line)}
-main{flex:1;min-height:0;position:relative}
-canvas{cursor:crosshair;position:absolute;inset:0;width:100%;height:100%}
+main{user-select:none;flex:1;min-height:0;position:relative}
+canvas{touch-action:none;cursor:crosshair;position:absolute;inset:0;width:100%;height:100%}
 </style>
 </head>
 <body>
@@ -46,7 +46,7 @@ canvas{cursor:crosshair;position:absolute;inset:0;width:100%;height:100%}
     <span id="tfBtns"></span><span id="tpoBtns"></span><span id="modeBtns"></span><span id="nBtns"></span>
   </div>
 </header>
-<div id="info">Hover a candle for details. Candle width = volume. Alt+H / Alt+V lines, Alt+B box (starts at pointer, click the top), Alt+J dot at pointer · drag the chart to pan in any direction · drag the price axis to rescale (double-click resets) · drag to move · double-click or Delete to remove.</div>
+<div id="info"></div>
 <main><canvas id="c"></canvas></main>
 <div id="toast"></div>
 <div id="mini">
@@ -55,7 +55,7 @@ canvas{cursor:crosshair;position:absolute;inset:0;width:100%;height:100%}
   <div class="grip" data-c="tl" title="Drag to resize"></div><div class="grip" data-c="tr" title="Drag to resize"></div><div class="grip" data-c="bl" title="Drag to resize"></div><div class="grip" data-c="br" title="Drag to resize"></div>
 </div>
 <script>
-const SYM='BTCFDUSD', IV='5m', MS=300000, TPO_MS=1800000;
+const SYM='BTCFDUSD', IV='5m', TPO_MS=1800000, DP=0; // DP = decimals shown on prices
 // TPO letter colours by UTC hour: Asia (red) → Europe (blue) → US open (green) → US late (yellow)
 const STOPS=[[0,[229,57,53]],[8,[30,100,230]],[14,[8,153,129]],[21,[225,165,0]]];
 const BIG_WIN=150, BIG_PERC=0.95; // 'big candle + high volume' circles: window length and percentile (nearest-rank, as in the Pine script)
@@ -66,32 +66,56 @@ function tpoColor(i,a=1){const h=Math.min(21,i*0.5);let k=0;
   return `rgba(${c0.map((v,j)=>Math.round(v+(c1[j]-v)*f)).join(',')},${a})`}
 const REST=['https://api.binance.com','https://data-api.binance.vision'];
 const WS=['wss://stream.binance.com:9443','wss://data-stream.binance.vision'];
-let tpoC=[], tpoK=[], c15=[], charts=[], mid=null, xh=null, activeChart=null, lines=[], linesSig='', nTpo=3, TF='5m', hostI=0, retry=0, ws;
+// k5 = 5m candles (main chart), k15 = 15m candles (TPO profiles), c15 = 15s candles (line-break window / 15s view)
+let k5=[], k15=[], c15=[], charts=[], mid=null, xh=null, activeChart=null, lines=[], linesSig='', nTpo=3, TF='5m', hostI=0, retry=0, ws;
+let conn='connecting', everOpen=false, lastT=null;
+const histFail=new Set(), seeded={}, olderBusy={}, olderEnd={};
 
 const $=id=>document.getElementById(id);
+const HELP=$('info').textContent;
+const toC=a=>({t:a[0],o:+a[1],h:+a[2],l:+a[3],c:+a[4],v:+a[5],bv:+a[9]});
 
-function spread(c){ // approximate: spread volume evenly across the candle's range
-  c.bins=new Map();
-  const a=Math.floor(c.l), b=Math.floor(c.h), n=b-a+1;
-  for(let k=a;k<=b;k++) c.bins.set(k,c.v/n);
+function stat(){ // connection state + any history that could not be loaded
+  $('dot').className=conn==='live'?'dot on':'dot';
+  $('st').textContent=conn+(histFail.size?' · history failed: '+[...histFail].join(', '):'');
 }
-function feed(arr,ms,p,q,T,m){
-  if(!Number.isFinite(p)||!Number.isFinite(q)||!Number.isFinite(T))return; // ignore malformed trades
+// vol=false for the kline-backed stores: trades only move the price there, volume comes from the kline stream (no double counting)
+function feed(arr,ms,p,q,T,m,vol){
   const t=Math.floor(T/ms)*ms;
   let c=arr[arr.length-1];
   if(!c||t>c.t){
     c={t,o:p,h:p,l:p,c:p,v:0,bv:0};arr.push(c);charts.forEach(h=>h.newCandle(arr));
     if(arr.length>8000)arr.shift();
   }else if(t<c.t){return}
-  c.h=Math.max(c.h,p);c.l=Math.min(c.l,p);c.c=p;c.v+=q;if(!m)c.bv+=q;
+  c.h=Math.max(c.h,p);c.l=Math.min(c.l,p);c.c=p;if(vol){c.v+=q;if(!m)c.bv+=q}
+}
+// Join between 1s history and live trades for the 15s store: history owns every second before `cut`,
+// the trade stream owns everything from `cut` on. `seam` collects the live part of the 15s bucket that contains `cut`.
+let cut=null, seam=null, cutArm=false, cutDone=null;
+function armCut(){
+  cut=null;seam=null;cutArm=true;
+  return new Promise(res=>{
+    const t=setTimeout(()=>{cutDone=null;cutArm=false;if(cut!=null)setTimeout(res,1500);else res()},4000); // no trades: carry on without a cut
+    cutDone=()=>{clearTimeout(t);cutDone=null;res()};
+  });
 }
 function addTrade(p,q,T,m){
-  feed(tpoC,300000,p,q,T,m);feed(tpoK,900000,p,q,T,m);
-  feed(c15,15000,p,q,T,m);
-  if(mid==null)$('px').textContent=document.title=p.toFixed(0);schedule();
+  if(!Number.isFinite(p)||!Number.isFinite(q)||!Number.isFinite(T))return; // ignore malformed trades
+  lastT=T;
+  if(cutArm){cut=Math.floor(T/1000)*1000+1000;cutArm=false}
+  if(cut!=null){
+    if(T>=cut&&T<Math.floor(cut/15000)*15000+15000){
+      if(!seam)seam={h:p,l:p,c:p,v:0,bv:0};
+      seam.h=Math.max(seam.h,p);seam.l=Math.min(seam.l,p);seam.c=p;seam.v+=q;if(!m)seam.bv+=q;
+    }
+    if(cutDone&&T>=cut+1000)cutDone(); // the seconds before the cut are now closed on the exchange
+  }
+  feed(k5,300000,p,q,T,m,false);feed(k15,900000,p,q,T,m,false);
+  feed(c15,15000,p,q,T,m,true);
+  if(mid==null)$('px').textContent=document.title=p.toFixed(DP);schedule();
 }
 function onKline(k){ // 5m store feeds the 5m view, 15m store feeds the TPO profiles
-  const A=k.i==='15m'?tpoK:tpoC;
+  const A=k.i==='15m'?k15:k5;
   if(![k.t,k.o,k.h,k.l,k.c,k.v,k.V].every(v=>Number.isFinite(+v)))return; // ignore malformed klines
   let c=A.find(x=>x.t===k.t);
   if(!c){c={t:k.t};A.push(c);charts.forEach(h=>h.newCandle(A));A.sort((a,b)=>a.t-b.t)}
@@ -104,15 +128,14 @@ async function fetch1s(end){
   }
   return null;
 }
-// 15s candles from 1s klines: up to 66 pages (≈18h), fetched 11 at a time, newest first, stops as soon as the callback says there is enough
-async function seed15(m,cb,alive){
-  const PAGES=66,B=11,now=Date.now(),seen=new Set();
-  for(let i=0;i<PAGES;i+=B){
-    const res=await Promise.all(Array.from({length:Math.min(B,PAGES-i)},(_,k)=>fetch1s(now-(i+k)*1000000)));
-    if(!alive())return;
+// 15s candles from 1s klines ending at `end`: `pages` pages of 1000s, fetched 11 at a time, newest first; stops as soon as the callback returns true
+async function seed15(m,end,pages,lim,cb){
+  const B=11,seen=new Set();
+  for(let i=0;i<pages;i+=B){
+    const res=await Promise.all(Array.from({length:Math.min(B,pages-i)},(_,k)=>fetch1s(end-(i+k)*1000000)));
     let any=false;
     res.forEach(j=>{if(!j)return;j.forEach(a=>{
-      if(seen.has(a[0]))return;seen.add(a[0]);any=true;
+      if(seen.has(a[0])||(lim!=null&&a[0]>=lim))return;seen.add(a[0]);any=true;
       const t=Math.floor(a[0]/15000)*15000;let c=m.get(t);
       if(!c){c={t,o:+a[1],h:+a[2],l:+a[3],c:+a[4],v:0,bv:0,fo:a[0],lt:a[0]};m.set(t,c)}
       c.h=Math.max(c.h,+a[2]);c.l=Math.min(c.l,+a[3]);
@@ -120,21 +143,38 @@ async function seed15(m,cb,alive){
       if(a[0]>=c.lt){c.lt=a[0];c.c=+a[4]}
       c.v+=+a[5];c.bv+=+a[9];
     })});
-    if(cb(Math.min(PAGES,i+B)/PAGES)===true)break; // callback returns true when enough history was loaded
+    if(cb()===true)break;
     if(!any)break;
   }
 }
 function schedule(){charts.forEach(h=>h.sched())}
-async function load15(){ // adaptive: keep fetching older 1s history until the 15s line-break chart has enough bricks (zoom-out room beyond the 200 shown at start)
-  const m=new Map(),TARGET=450;let bricks=0;
-  await seed15(m,pr=>{
-    c15=[...m.values()].sort((x,y)=>x.t-y.t).concat(c15.filter(c=>!m.has(c.t)));
-    bricks=lbBars(c15).length;
-    $('mst').textContent=bricks>=TARGET?'':'loading 15s '+bricks+'/'+TARGET;
-    schedule();return bricks>=TARGET;
-  },()=>true);
-  $('mst').textContent=m.size?(bricks>=TARGET?'':'15s history: only '+bricks+' bricks available'):'no 15s history (live only)';
+// since==null: first load, adaptive (keeps fetching older 1s history until the 15s line-break chart has enough bricks, up to ≈18h)
+// since=time: backfill after a reconnect, from that time up to now
+async function fill15(since){
+  await armCut();
+  const lim=cut,end=lim!=null?lim-1:Date.now(),first=since==null,TARGET=450;
+  const pages=first?66:Math.max(1,Math.min(66,Math.ceil((end-since)/1000000)+1));
+  const m=new Map();let bricks=0,joined=false;
+  await seed15(m,end,pages,lim,()=>{
+    if(!joined){ // add the live part of the bucket that straddles the cut, once
+      joined=true;
+      const b=lim!=null&&seam?m.get(Math.floor(lim/15000)*15000):null;
+      if(b){b.h=Math.max(b.h,seam.h);b.l=Math.min(b.l,seam.l);b.c=seam.c;b.v+=seam.v;b.bv+=seam.bv}
+      cut=null;seam=null;
+    }
+    let lo=Infinity;m.forEach((c,t)=>{if(t<lo)lo=t});
+    const all=new Map(c15.map(c=>[c.t,c]));
+    m.forEach((c,t)=>{if(!first&&t===lo&&all.has(t))return;all.set(t,c)}); // a backfill's oldest bucket may be partial: keep the one we have
+    c15=[...all.values()].sort((x,y)=>x.t-y.t).slice(-8000);
+    if(first){bricks=lbBars(c15).length;$('mst').textContent=bricks>=TARGET?'':'loading 15s '+bricks+'/'+TARGET}
+    schedule();return first&&bricks>=TARGET;
+  });
+  cut=null;seam=null;
+  if(first)$('mst').textContent=m.size&&bricks<TARGET?'15s history: only '+bricks+' bricks available':'';
+  return m.size>0;
 }
+let q15=Promise.resolve(); // 15s fills run one at a time
+const load15=since=>hist('15s',()=>(q15=q15.then(()=>fill15(since)).catch(e=>{console.error(e);return false})));
 // Three-line break bricks built from candle closes; each brick carries the volume since the previous brick
 function lbBars(arr){
   const out=[];let av=0,ab=0;
@@ -156,42 +196,60 @@ async function fj(url,ms=10000){
   const ac=new AbortController(),t=setTimeout(()=>ac.abort(),ms);
   try{const r=await fetch(url,{signal:ac.signal});return await r.json()}finally{clearTimeout(t)}
 }
-async function seedK(){ // 15m candles for the TPO profiles
+const store=iv=>iv==='15m'?k15:k5, setStore=(iv,a)=>{if(iv==='15m')k15=a;else k5=a};
+async function seedIv(iv){ // recent kline history (5m for the chart, 15m for the TPO profiles); merges into what is already loaded, so it also heals gaps after a reconnect
   for(const h of REST){
     try{
-      const j=await fj(`${h}/api/v3/klines?symbol=${SYM}&interval=15m&limit=400`);
-      if(!Array.isArray(j))continue;
-      const arr=j.map(a=>({t:a[0],o:+a[1],h:+a[2],l:+a[3],c:+a[4],v:+a[5],bv:+a[9]})),lt=arr.length?arr[arr.length-1].t:0;
-      tpoK=arr.concat(tpoK.filter(c=>c.t>lt));schedule();return true;
+      const j=await fj(`${h}/api/v3/klines?symbol=${SYM}&interval=${iv}&limit=${iv==='15m'?400:700}`);
+      if(!Array.isArray(j)||!j.length)continue;
+      const arr=j.map(toC),f=arr[0].t,lt=arr[arr.length-1].t,old=store(iv);
+      setStore(iv,old.filter(c=>c.t<f).concat(arr,old.filter(c=>c.t>lt)));
+      seeded[iv]=true;
+      if(iv===IV&&mid==null)$('px').textContent=k5[k5.length-1].c.toFixed(DP);
+      schedule();return true;
     }catch(e){}
   }
   return false;
 }
-async function seed(){
+async function older(iv){ // lazy history: one more page of older klines when the view reaches the start of what is loaded
+  if(olderBusy[iv]||olderEnd[iv]||!store(iv).length)return;
+  olderBusy[iv]=true;let ok=false;
   for(const h of REST){
     try{
-      const j=await fj(`${h}/api/v3/klines?symbol=${SYM}&interval=${IV}&limit=700`);
+      const j=await fj(`${h}/api/v3/klines?symbol=${SYM}&interval=${iv}&limit=1000&endTime=${store(iv)[0].t-1}`);
       if(!Array.isArray(j))continue;
-      const arr=j.map(a=>({t:a[0],o:+a[1],h:+a[2],l:+a[3],c:+a[4],v:+a[5],bv:+a[9]})),lt=arr.length?arr[arr.length-1].t:0;
-      tpoC=arr.concat(tpoC.filter(c=>c.t>lt));
-      if(mid==null)$('px').textContent=tpoC[tpoC.length-1].c.toFixed(0);schedule();
-      return true;
+      const cur=store(iv),arr=j.map(toC).filter(c=>c.t<cur[0].t);
+      if(arr.length)setStore(iv,arr.concat(cur));
+      if(!arr.length||store(iv).length>=6000)olderEnd[iv]=true;
+      ok=true;schedule();break;
     }catch(e){}
   }
-  $('st').textContent='history failed (live only)';return false;
+  setTimeout(()=>{olderBusy[iv]=false},ok?0:10000);
+}
+async function hist(name,fn){ // run a history load, show it in the status while it is failing, retry a few times
+  for(let i=0;;i++){
+    if(await fn()){histFail.delete(name);stat();return}
+    histFail.add(name);stat();
+    if(i>=5)return;
+    await new Promise(r=>setTimeout(r,5000*(i+1)));
+  }
+}
+function resync(){ // after a reconnect: refetch what was missed while the stream was down
+  hist(IV,()=>seedIv(IV));hist('15m',()=>seedIv('15m'));load15(lastT!=null?lastT-60000:null);
 }
 function connect(){
   const s=`${SYM.toLowerCase()}@aggTrade/${SYM.toLowerCase()}@kline_${IV}/${SYM.toLowerCase()}@kline_15m/${SYM.toLowerCase()}@bookTicker`;
   ws=new WebSocket(`${WS[hostI%WS.length]}/stream?streams=${s}`);
-  ws.onopen=()=>{retry=0;$('dot').className='dot on';$('st').textContent='live'};
+  ws.onopen=()=>{retry=0;conn='live';stat();if(everOpen)resync();everOpen=true};
   ws.onmessage=e=>{
-    const m=JSON.parse(e.data).data;
+    let m;try{m=JSON.parse(e.data).data}catch(err){return}
+    if(!m)return;
     if(m.e==='aggTrade')addTrade(+m.p,+m.q,m.T,m.m);
-    else if(m.e==='kline')onKline(m.k);
-    else if(m.b!==undefined&&m.a!==undefined){mid=(+m.b+ +m.a)/2;$('px').textContent=document.title=mid.toFixed(0);schedule()} // bookTicker: mid = (bid+ask)/2
+    else if(m.e==='kline'&&m.k)onKline(m.k);
+    else if(m.b!==undefined&&m.a!==undefined){mid=(+m.b+ +m.a)/2;$('px').textContent=document.title=mid.toFixed(DP);schedule()} // bookTicker: mid = (bid+ask)/2
   };
   ws.onclose=()=>{
-    $('dot').className='dot';$('st').textContent='reconnecting…';
+    conn='reconnecting…';stat();
     hostI++;setTimeout(connect,Math.min(1000*2**retry++,15000));
   };
   ws.onerror=()=>ws.close();
@@ -199,9 +257,9 @@ function connect(){
 
 function makeChart(cv,cfg){
   const g=cv.getContext('2d');
-  const src=()=>cfg.main?(TF==='5m'?tpoC:c15):c15,sec=()=>cfg.main?TF==='15s':true;
+  const src=()=>cfg.main?(TF==='5m'?k5:c15):c15,sec=()=>cfg.main?TF==='15s':true;
   const TS=()=>sec()?{hour:'2-digit',minute:'2-digit',second:'2-digit'}:{hour:'2-digit',minute:'2-digit'};
-let W=0,H=0,raf=0,geo=null,view=null,hl=null,drag=null,hitEdge=null,dragEdge=null,boxTool=0,dotTool=0,draft=null,off=0,pan=null,sc=null,ysc=1,ypan=0,N=cfg.N,mode=cfg.mode,hover=-1,mouse=null,profs=[],arrLen=0,moveInfo=null,tpoFrac=null,divDrag=false;
+let W=0,H=0,raf=0,geo=null,view=null,hl=null,drag=null,hitEdge=null,dragEdge=null,boxTool=0,dotTool=0,draft=null,off=0,pan=null,sc=null,ysc=1,ypan=0,N=cfg.N,mode=cfg.mode,hover=-1,mouse=null,profs=[],arrLen=0,moveInfo=null,tpoFrac=null,divDrag=false,lbT=null,fit=null,lock=null; // fit = auto-fitted price range, lock = range frozen once the chart has been dragged
 function size(){
   const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;
   W=r.width;H=r.height;cv.width=W*d;cv.height=H*d;g.setTransform(d,0,0,d,0,0);draw();
@@ -222,47 +280,62 @@ function draw(){
 function drawInner(){
   g.clearRect(0,0,W,H);
   const arr=mode==='lb'?lbBars(src()):src();arrLen=arr.length;
+  if(mode==='lb'){ // a panned line-break view is counted in bricks: stay on the same bricks when new ones print
+    if(off>0&&lbT!=null)for(let i=arr.length-1;i>=0&&arr[i].t>lbT;i--)off++;
+    lbT=arr.length?arr[arr.length-1].t:null;
+  }else lbT=null;
   off=Math.max(-(N-3),Math.min(off,Math.max(0,arr.length-N)));
+  if(cfg.main&&TF==='5m'&&seeded[IV]&&arr.length-off-N<=0)older(IV); // view reaches the oldest loaded candle: load more
   const vis=arr.slice(Math.max(0,arr.length-off-N),arr.length-off).filter(okC);
   if(!vis.length||!W)return;
   const dayStart=Math.floor(vis[vis.length-1].t/86400000)*86400000;
-  const dayC=cfg.tpo?tpoK.filter(c=>c.t>=dayStart&&okC(c)):[];
+  const dayC=cfg.tpo?k15.filter(c=>c.t>=dayStart&&okC(c)):[];
   let hi=-1e12,lo=1e12;vis.concat(dayC).forEach(c=>{hi=Math.max(hi,c.h);lo=Math.min(lo,c.l)});
-  const pad=(hi-lo)*0.06||1;hi+=pad;lo-=pad;const hi0=hi,lo0=lo,mid0=(hi+lo)/2+ypan;hi=mid0+(hi0-lo0)/2*ysc;lo=mid0-(hi0-lo0)/2*ysc;
-  const axW=62,tpoW=cfg.tpo?(tpoFrac!=null?Math.max(80,Math.min(W*0.75,tpoFrac*W)):Math.max(80,W*0.20-5)):0,deltaH=cfg.main?22:0,timeH=16,px0=W-axW;
-  const x0=tpoW+10,x1=W-axW-Math.max(cfg.main?60:24,W*(cfg.main?0.07:0.04)),top=8,bot=H-deltaH-timeH-6,ch=bot-top;
+  const pad=(hi-lo)*0.06||1;hi+=pad;lo-=pad;fit={hi,lo};if(lock){hi=lock.hi;lo=lock.lo}
+  const hi0=hi,lo0=lo,mid0=(hi+lo)/2+ypan;hi=mid0+(hi0-lo0)/2*ysc;lo=mid0-(hi0-lo0)/2*ysc;
+  const axW=62,tpoW=cfg.tpo?(tpoFrac!=null?Math.max(80,Math.min(W*0.75,tpoFrac*W)):Math.max(80,W*0.20-5)):0,legendH=cfg.main?22:0,timeH=16,px0=W-axW; // legendH = room for the TPO session legend and day labels
+  const x0=tpoW+10,x1=W-axW-Math.max(cfg.main?60:24,W*(cfg.main?0.07:0.04)),top=8,bot=H-legendH-timeH-6,ch=bot-top;
   const Y=p=>top+(hi-p)/(hi-lo)*ch;
+  // price tag in the axis column / time tag under the chart
+  const ptag=(y,txt,bg,fg='#fff')=>{g.fillStyle=bg;g.fillRect(px0,y-9,axW,18);g.fillStyle=fg;g.textAlign='left';g.textBaseline='middle';g.fillText(txt,px0+5,y)};
+  const ttag=(cx,txt,bg,fg='#fff')=>{const tw=g.measureText(txt).width+12,bx=Math.max(4,Math.min(px0-tw,cx-tw/2));
+    g.fillStyle=bg;g.fillRect(bx,bot+2,tw,16);g.fillStyle=fg;g.textAlign='center';g.textBaseline='middle';g.fillText(txt,bx+tw/2,bot+10)};
+  const dlabel=t=>{const d=new Date(t);return d.toLocaleDateString([],{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString([],TS())};
 
   // grid + price axis
   const gs=Math.max(1,nice((hi-lo)/6));g.font='11px ui-monospace,Menlo,monospace';g.textBaseline='middle';
   for(let p=Math.ceil(lo/gs)*gs;p<hi;p+=gs){
     g.strokeStyle='#eef0f3';g.beginPath();g.moveTo(4,Y(p));g.lineTo(W-axW,Y(p));g.stroke();
-    g.fillStyle='#6b7684';g.textAlign='left';g.fillText(p.toFixed(0),W-axW+6,Y(p));
+    g.fillStyle='#6b7684';g.textAlign='left';g.fillText(p.toFixed(DP),W-axW+6,Y(p));
   }
 
   // TPO (Market Profile): one brick per 30 min; up to 3 UTC days side by side (oldest left, latest next to the chart)
-  const step=Math.max(1,nice((hi0-lo0)/55)),rowH=ch*step/(hi-lo),gap=10;
+  // each day's row size comes from that day's own range, so its POC / value area do not move when the chart is zoomed or panned
+  const gap=10;
   const colW=(tpoW-6-(nTpo-1)*gap)/nTpo,cnt=cfg.tpo?Math.max(nTpo,2):0; // always compute at least 2 days so the previous day's POC exists
   profs=[];
   g.save();g.beginPath();g.rect(0,top,x0-5,bot-top);g.clip();
   for(let d=0;d<cnt;d++){
     const show=d>=cnt-nTpo,dS=dayStart-(cnt-1-d)*86400000,cx0=6+(d-(cnt-nTpo))*(colW+gap);
-    const rows=new Map(),per=new Map();
-    tpoK.forEach(c=>{if(c.h==null||c.t<dS||c.t>=dS+86400000)return;
+    const rows=new Map(),per=new Map();let dh=-Infinity,dl=Infinity;
+    k15.forEach(c=>{if(!okC(c)||c.t<dS||c.t>=dS+86400000)return;
+      dh=Math.max(dh,c.h);dl=Math.min(dl,c.l);
       const i=Math.floor((c.t-dS)/TPO_MS),q=per.get(i);
       if(!q)per.set(i,{i,h:c.h,l:c.l});else{q.h=Math.max(q.h,c.h);q.l=Math.min(q.l,c.l)}});
+    const step=dh>dl?Math.max(1,nice((dh-dl)/40)):1,rowH=ch*step/(hi-lo);
     [...per.values()].sort((m,n)=>m.i-n.i).forEach(q=>{
       for(let r=Math.floor(q.l/step);r<=Math.floor(q.h/step);r++){if(!rows.has(r))rows.set(r,[]);rows.get(r).push(q.i)}});
-    const P={d,dS,cx0,show,rows,step,lw:1,poc:null,a:null,b:null};profs.push(P);
+    const P={d,dS,cx0,show,rows,step,rowH,lw:1,poc:null,a:null,b:null};profs.push(P);
     const keys=[...rows.keys()];if(!keys.length)continue;
     const kmin=Math.min(...keys),kmax=Math.max(...keys),L=r=>rows.has(r)?rows.get(r).length:0;
     let tot=0,maxC=1;keys.forEach(r=>{tot+=L(r);maxC=Math.max(maxC,L(r))});
-    const mid=(kmin+kmax)/2;let poc=kmin;
-    for(let r=kmin;r<=kmax;r++)if(L(r)>L(poc)||(L(r)===L(poc)&&Math.abs(r-mid)<Math.abs(poc-mid)))poc=r;
+    const rmid=(kmin+kmax)/2;let poc=kmin;
+    for(let r=kmin;r<=kmax;r++)if(L(r)>L(poc)||(L(r)===L(poc)&&Math.abs(r-rmid)<Math.abs(poc-rmid)))poc=r;
     let a=poc,b=poc,acc=L(poc);
-    while(acc<tot*0.7&&(a>kmin||b<kmax)){
+    while(acc<tot*0.7&&(a>kmin||b<kmax)){ // 70% value area: compare the two rows above with the two rows below and take the heavier pair
       const up=b<kmax?L(b+1)+L(b+2):-1,dn=a>kmin?L(a-1)+L(a-2):-1;
-      if(up>=dn){b++;acc+=L(b)}else{a--;acc+=L(a)}
+      if(up>=dn)for(let n=Math.min(2,kmax-b);n>0;n--){b++;acc+=L(b)}
+      else for(let n=Math.min(2,a-kmin);n>0;n--){a--;acc+=L(a)}
     }
     const lw=Math.min(11,(colW-2)/maxC);Object.assign(P,{poc,a,b,lw});
     if(show)for(let r=a;r<=b;r++){g.fillStyle=r===poc?'rgba(224,138,0,.2)':'rgba(47,128,200,.08)';g.fillRect(cx0-2,Y((r+1)*step),colW+2,rowH)}
@@ -270,6 +343,7 @@ function drawInner(){
       lst.forEach((idx,k)=>{g.fillStyle=tpoColor(idx,.72);g.fillRect(cx0+k*lw,yT+0.5,Math.max(1,lw-1),Math.max(1,rowH-1))})});
   }
   g.restore();
+  if(cfg.tpo&&seeded['15m']&&k15.length&&dayStart-(cnt-1)*86400000<k15[0].t)older('15m'); // panned back past the loaded 15m history
   if(cfg.tpo){g.strokeStyle='#cfd5dc';g.beginPath();g.moveTo(x0-5,top);g.lineTo(x0-5,bot);g.stroke()}
   // session legend + day labels under each profile
   g.font='10px ui-monospace,Menlo,monospace';g.textBaseline='middle';
@@ -287,8 +361,8 @@ function drawInner(){
     g.fillStyle=col;g.textAlign='right';g.fillText(lbl,px0-4,y-7);
   };
   const PL=profs[profs.length-1],PP=profs[profs.length-2]; // PP = previous UTC day
-  if(PP&&PP.poc!=null)line((PP.poc+.5)*step,'#e08a00',[],'POC '+((PP.poc+.5)*step).toFixed(0),3);
-  if(PL&&PL.poc!=null){line((PL.b+1)*step,'#2f80c8',[4,4],'VAH');line(PL.a*step,'#2f80c8',[4,4],'VAL')}
+  if(PP&&PP.poc!=null)line((PP.poc+.5)*PP.step,'#e08a00',[],'POC '+((PP.poc+.5)*PP.step).toFixed(DP),3);
+  if(PL&&PL.poc!=null){line((PL.b+1)*PL.step,'#2f80c8',[4,4],'VAH');line(PL.a*PL.step,'#2f80c8',[4,4],'VAL')}
 
   // candles
   const vsum=vis.reduce((s,c)=>s+(c.v||0),0)||1,cw=x1-x0,slots=vis.length+Math.max(0,-off),cwE=cw*vis.length/slots;
@@ -296,10 +370,10 @@ function drawInner(){
   vis.forEach(c=>{
     const nV=vis.length,minW=Math.min(3,cwE/nV*0.4),w=mode==='eq'?minW+(cwE-nV*minW)*(c.v||0)/vsum:cw/slots;
     geo.push({x,w,c});
-    const col=c.c>=c.o?'#089981':'#000000',mid=x+w/2;
+    const col=c.c>=c.o?'#089981':'#000000',xm=x+w/2;
     g.save();g.beginPath();g.rect(x0,top,cw,bot-top);g.clip();
     g.strokeStyle=col;g.fillStyle=col;
-    g.beginPath();g.moveTo(mid,Y(c.h));g.lineTo(mid,Y(c.l));g.stroke();
+    g.beginPath();g.moveTo(xm,Y(c.h));g.lineTo(xm,Y(c.l));g.stroke();
     const yo=Y(c.o),yc=Y(c.c);g.fillRect(x+1,Math.min(yo,yc),Math.max(1,w-2),Math.max(1,Math.abs(yo-yc)));
     g.restore();
     x+=w;
@@ -319,17 +393,16 @@ function drawInner(){
   view={hi,lo,top,bot,ch,px0,x0,Y,pc:cw/slots};
   lines.forEach(l=>{
     const sel=l===hl||l===drag;g.strokeStyle=g.fillStyle='#8e44ad';g.lineWidth=sel?2:1;g.setLineDash([]);g.beginPath();
-    if(l.k==='h'){g.strokeStyle=g.fillStyle='#7d8794';g.lineWidth=sel?6:4;const y=Y(l.p);if(y>=top&&y<=bot){g.moveTo(4,y);g.lineTo(px0,y);g.globalAlpha=.5;g.stroke();g.globalAlpha=1;
-      g.fillRect(px0,y-9,axW,18);g.fillStyle='#fff';g.textAlign='left';g.textBaseline='middle';g.fillText(l.p.toFixed(0),px0+5,y)}}
-    else if(l.k==='v'){g.strokeStyle=g.fillStyle='#7d8794';g.lineWidth=sel?6:4;const o=geoAt(l.t);if(o){const cx=o.x+o.w/2,d=new Date(l.t),
-      lb=d.toLocaleDateString([],{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString([],TS()),tw=g.measureText(lb).width+12,bx=Math.max(4,Math.min(px0-tw,cx-tw/2));
-      g.moveTo(cx,top);g.lineTo(cx,bot);g.globalAlpha=.5;g.stroke();g.globalAlpha=1;g.fillRect(bx,bot+2,tw,16);g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';g.fillText(lb,bx+tw/2,bot+10)}}
+    if(l.k==='h'){g.strokeStyle='#7d8794';g.lineWidth=sel?6:4;const y=Y(l.p);if(y>=top&&y<=bot){g.moveTo(4,y);g.lineTo(px0,y);g.globalAlpha=.5;g.stroke();g.globalAlpha=1;
+      ptag(y,l.p.toFixed(DP),'#7d8794')}}
+    else if(l.k==='v'){g.strokeStyle='#7d8794';g.lineWidth=sel?6:4;const o=geoAt(l.t);if(o){const cx=o.x+o.w/2;
+      g.moveTo(cx,top);g.lineTo(cx,bot);g.globalAlpha=.5;g.stroke();g.globalAlpha=1;ttag(cx,dlabel(l.t),'#7d8794')}}
     else if(l.k==='d'){
       const o=geoAt(l.t),xs=o?o.x+o.w/2:x0,y=Y(l.p);
       if(y>=top&&y<=bot){
         g.strokeStyle=g.fillStyle='#388e3c';g.lineWidth=sel?3:2;g.beginPath();g.moveTo(xs,y);g.lineTo(px0,y);g.globalAlpha=.5;g.stroke();g.globalAlpha=1;
         g.beginPath();g.arc(xs,y,sel?2.5:1.5,0,6.2832);g.fill();
-        g.fillRect(px0,y-9,axW,18);g.fillStyle='#fff';g.textAlign='left';g.textBaseline='middle';g.fillText(l.p.toFixed(0),px0+5,y)}
+        ptag(y,l.p.toFixed(DP),'#388e3c')}
     }
     else if(l.k==='b'){
       const mx=Math.max(l.lo,l.hi),mn=Math.min(l.lo,l.hi),yT=Y(mx),yB=Y(mn),o=geoAt(l.t),xs=o?o.x+o.w/2:x0,p66=l.hi+0.66*(l.lo-l.hi),y66=Y(p66) /* l.lo = first point, l.hi = second point: line sits 34% from the first point */;
@@ -338,9 +411,7 @@ function drawInner(){
       g.strokeStyle='rgba(91,107,125,.5)';g.lineWidth=sel?2:1;g.strokeRect(xs,yT,px0-xs,yB-yT);
       g.setLineDash([5,4]);g.beginPath();g.moveTo(xs,y66);g.lineTo(px0,y66);g.stroke();g.setLineDash([]);
       g.restore();
-      g.textBaseline='middle';
-      [[mx,yT],[p66,y66],[mn,yB]].forEach(([pv,yy])=>{if(yy<top||yy>bot)return;
-        g.fillStyle='#5b6b7d';g.fillRect(px0,yy-9,axW,18);g.fillStyle='#fff';g.textAlign='left';g.fillText(pv.toFixed(0),px0+5,yy)});
+      [[mx,yT],[p66,y66],[mn,yB]].forEach(([pv,yy])=>{if(yy>=top&&yy<=bot)ptag(yy,pv.toFixed(DP),'#5b6b7d')});
     }
     g.lineWidth=1;
   });
@@ -350,51 +421,49 @@ function drawInner(){
   // last price
   const last=vis[vis.length-1],lp=mid!=null?mid:last.c,ly=Math.max(top,Math.min(bot,Y(lp)));
   g.strokeStyle='#000000';g.setLineDash([2,3]);g.beginPath();g.moveTo(4,ly);g.lineTo(px0,ly);g.stroke();g.setLineDash([]);
-  {const lt=lp.toFixed(0),lw=g.measureText(lt).width+10; // tag sits left of the axis so it does not cover the level tags of drawings
+  {const lt=lp.toFixed(DP),lw=g.measureText(lt).width+10; // tag sits left of the axis so it does not cover the level tags of drawings
     g.fillStyle='#000000';g.fillRect(px0-lw,ly-9,lw,18);g.fillStyle='#ffffff';g.textAlign='left';g.textBaseline='middle';g.fillText(lt,px0-lw+5,ly)}
   // hover
+  const XH='rgba(184,134,11,.8)',XB='#ffe58a',XF='#1a1f26'; // crosshair line / tag background / tag text
   if(mouse&&mouse.x>=4&&mouse.x<=px0&&mouse.y>=top&&mouse.y<=bot){
     const inTpo=mouse.x<x0-5,o=!inTpo&&hover>=0&&geo[hover],cx=o?o.x+o.w/2:mouse.x,pv=hi-(mouse.y-top)/ch*(hi-lo);
-    g.strokeStyle='rgba(184,134,11,.8)';g.setLineDash([4,4]);g.beginPath();
+    g.strokeStyle=XH;g.setLineDash([4,4]);g.beginPath();
     g.moveTo(cx,top);g.lineTo(cx,bot);g.moveTo(4,mouse.y);g.lineTo(px0,mouse.y);g.stroke();g.setLineDash([]);
-    g.textBaseline='middle';g.fillStyle='#ffe58a';g.fillRect(px0,mouse.y-9,axW,18);
-    g.fillStyle='#1a1f26';g.textAlign='left';g.fillText(pv.toFixed(0),px0+5,mouse.y);
+    ptag(mouse.y,pv.toFixed(DP),XB,XF);
     let lbl=null;
-    if(o){const d=new Date(o.c.t);lbl=d.toLocaleDateString([],{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString([],TS())}
+    if(o)lbl=dlabel(o.c.t);
     else if(inTpo){
       const P=profs.find(q=>q.show&&mouse.x>=q.cx0-2&&mouse.x<=q.cx0+colW);
       if(P&&P.poc!=null){
         const ri=Math.floor(pv/P.step),k=Math.floor((mouse.x-P.cx0)/P.lw),lst=P.rows.get(ri),idx=lst&&lst[k];
-        if(idx!=null){
-          const f=t=>new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),t0=P.dS+idx*TPO_MS;
-          lbl=f(t0)+'–'+f(t0+TPO_MS);
-          g.strokeStyle='#1a1f26';g.lineWidth=1.2;g.strokeRect(P.cx0+k*P.lw,Y((ri+1)*P.step)+0.5,Math.max(1,P.lw-1),Math.max(1,rowH-1));g.lineWidth=1;
+        if(idx!=null){ // TPO periods are UTC half-hours, so the label says so
+          const f=t=>new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}),t0=P.dS+idx*TPO_MS;
+          lbl=f(t0)+'–'+f(t0+TPO_MS)+' UTC';
+          g.strokeStyle='#1a1f26';g.lineWidth=1.2;g.strokeRect(P.cx0+k*P.lw,Y((ri+1)*P.step)+0.5,Math.max(1,P.lw-1),Math.max(1,P.rowH-1));g.lineWidth=1;
         }
       }
     }
-    if(lbl){const tw=g.measureText(lbl).width+12,bx=Math.max(4,Math.min(px0-tw,cx-tw/2));
-      g.fillStyle='#ffe58a';g.fillRect(bx,bot+2,tw,16);g.fillStyle='#1a1f26';g.textAlign='center';g.fillText(lbl,bx+tw/2,bot+10)}
+    if(lbl)ttag(cx,lbl,XB,XF);
   }
   if(xh&&xh.from!==api&&!(mouse&&mouse.x>=4&&mouse.x<=px0&&mouse.y>=top&&mouse.y<=bot)){ // crosshair mirrored from the other chart
     const ry=Y(xh.p),ro=xh.t!=null?geoAt(xh.t):null,okY=ry>=top&&ry<=bot;
-    g.strokeStyle='rgba(184,134,11,.8)';g.lineWidth=1;g.setLineDash([4,4]);g.beginPath();
+    g.strokeStyle=XH;g.lineWidth=1;g.setLineDash([4,4]);g.beginPath();
     if(okY){g.moveTo(4,ry);g.lineTo(px0,ry)}
     if(ro){const rx=ro.x+ro.w/2;g.moveTo(rx,top);g.lineTo(rx,bot)}
-    g.stroke();g.setLineDash([]);g.textBaseline='middle';
-    if(okY){g.fillStyle='#ffe58a';g.fillRect(px0,ry-9,axW,18);g.fillStyle='#1a1f26';g.textAlign='left';g.fillText(xh.p.toFixed(0),px0+5,ry)}
-    if(ro){const d=new Date(ro.c.t),lb=d.toLocaleDateString([],{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString([],TS()),tw=g.measureText(lb).width+12,rx=ro.x+ro.w/2,bx=Math.max(4,Math.min(px0-tw,rx-tw/2));
-      g.fillStyle='#ffe58a';g.fillRect(bx,bot+2,tw,16);g.fillStyle='#1a1f26';g.textAlign='center';g.fillText(lb,bx+tw/2,bot+10)}
+    g.stroke();g.setLineDash([]);
+    if(okY)ptag(ry,xh.p.toFixed(DP),XB,XF);
+    if(ro)ttag(ro.x+ro.w/2,dlabel(ro.c.t),XB,XF);
   }
   {const sg=JSON.stringify(lines);if(sg!==linesSig){linesSig=sg;schedule()}} // lines are shared: redraw the other chart when they change
 }
 function showInfo(){
   if(!cfg.main)return;
-  const o=geo&&geo[hover];if(!o){return}
+  const o=geo&&geo[hover];if(!o){$('info').textContent=HELP;return}
   const c=o.c,d=c.bv-(c.v-c.bv),t=new Date(c.t);
-  $('info').textContent=`${t.toLocaleTimeString([],TS())}  O ${c.o.toFixed(0)}  H ${c.h.toFixed(0)}  L ${c.l.toFixed(0)}  C ${c.c.toFixed(0)}  Vol ${c.v.toFixed(0)}  Δ ${d.toFixed(0)}`;
+  $('info').textContent=`${t.toLocaleTimeString([],TS())}  O ${c.o.toFixed(DP)}  H ${c.h.toFixed(DP)}  L ${c.l.toFixed(DP)}  C ${c.c.toFixed(DP)}  Vol ${c.v.toFixed(0)}  Δ ${d.toFixed(0)}`;
 }
 function move(e){
-  if(!geo)return;const r=cv.getBoundingClientRect(),t=e.touches?e.touches[0]:e;
+  if(!geo)return;const r=cv.getBoundingClientRect(),t=e;
   const x=t.clientX-r.left,y=t.clientY-r.top;mouse={x,y};
   if(divDrag&&view){tpoFrac=Math.max(80,Math.min(W*0.75,x-5))/W;draw();return}
   if(sc){ysc=Math.max(0.15,Math.min(6,sc.v*Math.exp((t.clientY-sc.y)/200)));draw();return}
@@ -410,21 +479,22 @@ function move(e){
         if(moveInfo.si>=0&&moveInfo.ci>=0)drag.t=geo[Math.max(0,Math.min(geo.length-1,moveInfo.si+ci-moveInfo.ci))].c.t;
       }else drag[dragEdge]=snap(x,y).p;
     }
-    else{const o=geo.find(q=>x>=q.x&&x<q.x+q.w)||(x<geo[0].x?geo[0]:geo[geo.length-1]);drag.t=o.c.t}
+    else{const o=at(x);drag.t=o.c.t}
   }else{const onDiv=isDiv(x,y);hl=onDiv?null:hit(x,y);cv.style.cursor=onDiv?'ew-resize':hl?(hl.k==='b'&&hitEdge==='move'?'move':hl.k==='h'||hl.k==='d'||hl.k==='b'?'ns-resize':'ew-resize'):(view&&x>view.px0?'ns-resize':'crosshair')}
   hover=geo.findIndex(o=>x>=o.x&&x<o.x+o.w);showInfo();draw();
   // publish the crosshair (price + candle time) so the other chart can mirror it
   xh=(view&&x>=4&&x<=view.px0&&y>=view.top&&y<=view.bot)?{p:view.hi-(y-view.top)/view.ch*(view.hi-view.lo),t:hover>=0&&geo[hover]?geo[hover].c.t:null,from:api}:null;
   charts.forEach(h=>{if(h!==api)h.sched()});
 }
-cv.addEventListener('mousemove',move);cv.addEventListener('touchmove',move,{passive:true});cv.addEventListener('touchstart',move,{passive:true});
-cv.addEventListener('mouseleave',()=>{hover=-1;mouse=null;draw();if(xh&&xh.from===api){xh=null;charts.forEach(h=>{if(h!==api)h.sched()})}});
+cv.addEventListener('pointermove',move);
+cv.addEventListener('pointerleave',()=>{hover=-1;mouse=null;showInfo();draw();if(xh&&xh.from===api){xh=null;charts.forEach(h=>{if(h!==api)h.sched()})}});
 
 function isDiv(x,y){return !!(cfg.tpo&&view&&!boxTool&&!dotTool&&Math.abs(x-(view.x0-5))<=5&&y>=view.top&&y<=view.bot)}
+function at(x){return geo.find(q=>x>=q.x&&x<q.x+q.w)||(x<geo[0].x?geo[0]:geo[geo.length-1])} // candle under x, clamped to the first/last one
 function geoAt(t){let r=null;if(geo)for(const q of geo){if(q.c.t<=t)r=q;else break}return r}
 function snap(x,y){ // magnet: nearest O/H/L/C of the candle under the pointer, within 14px
   const free=view.hi-(y-view.top)/view.ch*(view.hi-view.lo);
-  const o=geo.find(q=>x>=q.x&&x<q.x+q.w)||(x<geo[0].x?geo[0]:geo[geo.length-1]);
+  const o=at(x);
   let best=null,bd=14;
   [o.c.o,o.c.h,o.c.l,o.c.c].forEach(v=>{const d=Math.abs(view.Y(v)-y);if(d<bd){bd=d;best=v}});
   return {p:best!=null?best:free,o};
@@ -467,12 +537,13 @@ function boxClick(e){
   if(y<view.top||y>view.bot)return;
   const p=snap(x,y).p;
   if(boxTool===1){
-    const o=geo.find(q=>x>=q.x&&x<q.x+q.w)||(x<geo[0].x?geo[0]:geo[geo.length-1]);
+    const o=at(x);
     draft={k:'b',t:o.c.t,lo:p,hi:p};lines.push(draft);boxTool=2;
   }else{draft.hi=p;draft=null;boxTool=0}
   draw();
 }
-cv.addEventListener('mousedown',e=>{
+cv.addEventListener('pointerdown',e=>{
+  move(e);try{cv.setPointerCapture(e.pointerId)}catch(err){} // touch has no hover: hit-test at the press point, and keep receiving moves outside the canvas
   if(dotTool){dotClick(e);e.preventDefault();return}
   if(boxTool){boxClick(e);e.preventDefault();return}
   {const rc0=cv.getBoundingClientRect();if(isDiv(e.clientX-rc0.left,e.clientY-rc0.top)){divDrag=true;e.preventDefault();return}}
@@ -482,10 +553,11 @@ cv.addEventListener('mousedown',e=>{
       moveInfo={y:my,lo:hl.lo,hi:hl.hi,si:se?geo.indexOf(se):-1,ci:geo.findIndex(q=>mx>=q.x&&mx<q.x+q.w),rng:view.hi-view.lo,ch:view.ch};
     }
     return}
-  if(view){if(e.clientX-cv.getBoundingClientRect().left>view.px0){sc={y:e.clientY,v:ysc};cv.style.cursor='ns-resize'}else{pan={x:e.clientX,y:e.clientY,off,yp:ypan,rng:view.hi-view.lo,vy:false};cv.style.cursor='grabbing'}e.preventDefault()}
+  if(view){if(e.clientX-cv.getBoundingClientRect().left>view.px0){sc={y:e.clientY,v:ysc};cv.style.cursor='ns-resize'}else{if(!lock&&fit)lock=fit;pan={x:e.clientX,y:e.clientY,off,yp:ypan,rng:view.hi-view.lo,vy:false};cv.style.cursor='grabbing'}e.preventDefault()}
 });
-addEventListener('mouseup',()=>{drag=null;divDrag=false;if(pan||sc){pan=null;sc=null;cv.style.cursor='crosshair'}});
-cv.addEventListener('dblclick',()=>{if(hl){lines=lines.filter(l=>l!==hl);hl=null;cv.style.cursor='crosshair';draw()}else if(mouse&&isDiv(mouse.x,mouse.y)){tpoFrac=null;draw()}else if(view&&mouse&&mouse.x>view.px0){ysc=1;ypan=0;draw()}});
+const release=()=>{drag=null;divDrag=false;if(pan||sc){pan=null;sc=null;cv.style.cursor='crosshair'}};
+addEventListener('pointerup',release);addEventListener('pointercancel',release);
+cv.addEventListener('dblclick',()=>{if(hl){lines=lines.filter(l=>l!==hl);hl=null;cv.style.cursor='crosshair';draw()}else if(mouse&&isDiv(mouse.x,mouse.y)){tpoFrac=null;draw()}else if(view&&mouse&&mouse.x>view.px0){ysc=1;ypan=0;lock=null;draw()}});
 addEventListener('keydown',e=>{
   if(activeChart!==api)return;
   if(e.altKey&&e.code==='KeyH'){e.preventDefault();addLine('h')}
@@ -524,12 +596,12 @@ cv.addEventListener('wheel',e=>{
     }
     return out;
   }
-  function newCandle(a){if(src()===a&&off>0)off++}
-  cv.addEventListener('mouseenter',()=>{activeChart=api});
-  cv.addEventListener('mousemove',()=>{activeChart=api});
+  function newCandle(a){if(mode!=='lb'&&src()===a&&off>0)off++} // line-break views re-anchor on bricks in drawInner
+  cv.addEventListener('pointerenter',()=>{activeChart=api});
+  cv.addEventListener('pointermove',()=>{activeChart=api});
   const api={sched,draw,newCandle,size,
-    resetView:()=>{N=cfg.N;off=0;ysc=1;ypan=0;tpoFrac=null;draft=null;boxTool=0;dotTool=0;hl=null;drag=null;if(cfg.main)ui();draw()},
-    getState:()=>({N,mode,off,ysc,ypan,tpoFrac,TF:cfg.main?TF:undefined,nTpo:cfg.main?nTpo:undefined}),
+    resetView:()=>{N=cfg.N;off=0;ysc=1;ypan=0;lock=null;tpoFrac=null;draft=null;boxTool=0;dotTool=0;hl=null;drag=null;if(cfg.main)ui();draw()},
+    getState:()=>({N,mode,off,ysc,ypan,lock,tpoFrac,TF:cfg.main?TF:undefined,nTpo:cfg.main?nTpo:undefined}),
     setState:st=>{
       if(!st)return;
       if(st.N>=20&&st.N<=3000)N=st.N;
@@ -538,8 +610,9 @@ cv.addEventListener('wheel',e=>{
       if(st.ysc>0)ysc=st.ysc;
       if(st.tpoFrac>0)tpoFrac=st.tpoFrac;
       if(Number.isFinite(st.ypan))ypan=st.ypan;
+      if(st.lock&&st.lock.hi>st.lock.lo)lock={hi:st.lock.hi,lo:st.lock.lo};
       if(cfg.main){
-        if(st.TF==='5m'||st.TF==='15s'){TF=st.TF;$('sym').textContent='BTCFDUSD '+TF}
+        if(st.TF==='5m'||st.TF==='15s'){TF=st.TF;$('sym').textContent=SYM+' '+TF}
         if([1,2,3].includes(st.nTpo))nTpo=st.nTpo;
         ui();
       }
@@ -557,7 +630,7 @@ cv.addEventListener('wheel',e=>{
     mkBtns($('nBtns'),[[40,'40'],[80,'80'],[120,'120'],[160,'160'],[288,'288'],[576,'576']],()=>N,v=>N=v);
   }
   
-  function setTF(v){TF=v;off=0;draft=null;boxTool=0;dotTool=0;$('sym').textContent='BTCFDUSD '+v;draw()}
+  function setTF(v){TF=v;off=0;lock=null;draft=null;boxTool=0;dotTool=0;$('sym').textContent=SYM+' '+v;draw()}
   if(cfg.main)ui();
   if(window.ResizeObserver)new ResizeObserver(()=>size()).observe(cv);
   size();
@@ -635,6 +708,7 @@ $('miniTog').onclick=()=>{mini.style.display=mini.style.display==='none'?'flex':
 addEventListener('keydown',e=>{
   if(e.altKey&&e.code==='KeyR'){
     e.preventDefault();
+    if(lines.length&&!confirm('Reset both charts and delete all '+lines.length+' drawings?'))return;
     lines=[];linesSig='';
     mini.style.display='flex';mini.style.width='';mini.style.height='';  // back to the CSS default size, bottom-right
     {const r=mini.getBoundingClientRect();setMiniBox({x:innerWidth-r.width-12,y:innerHeight-r.height-12,w:r.width,h:r.height})}
@@ -642,8 +716,9 @@ addEventListener('keydown',e=>{
     toast('Charts reset to default, drawings deleted');
   }
 });
+$('sym').textContent=SYM+' '+TF;document.title=SYM;
 restore();
-connect();seed();seedK();load15();
+connect();hist(IV,()=>seedIv(IV));hist('15m',()=>seedIv('15m'));load15(null);
 </script>
 </body>
 </html>
