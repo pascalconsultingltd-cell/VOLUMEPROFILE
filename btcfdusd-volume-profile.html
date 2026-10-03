@@ -200,7 +200,7 @@ const store=iv=>iv==='15m'?k15:k5, setStore=(iv,a)=>{if(iv==='15m')k15=a;else k5
 async function seedIv(iv){ // recent kline history (5m for the chart, 15m for the TPO profiles); merges into what is already loaded, so it also heals gaps after a reconnect
   for(const h of REST){
     try{
-      const j=await fj(`${h}/api/v3/klines?symbol=${SYM}&interval=${iv}&limit=${iv==='15m'?400:700}`);
+      const j=await fj(`${h}/api/v3/klines?symbol=${SYM}&interval=${iv}&limit=${iv==='15m'?1000:700}`);
       if(!Array.isArray(j)||!j.length)continue;
       const arr=j.map(toC),f=arr[0].t,lt=arr[arr.length-1].t,old=store(iv);
       setStore(iv,old.filter(c=>c.t<f).concat(arr,old.filter(c=>c.t>lt)));
@@ -310,8 +310,11 @@ function drawInner(){
   }
 
   // TPO (Market Profile): one brick per 30 min; up to 3 UTC days side by side (oldest left, latest next to the chart)
-  // each day's row size comes from that day's own range, so its POC / value area do not move when the chart is zoomed or panned
-  const gap=10;
+  // a day's row size comes from the average range of the two UTC days before it, so it is fixed for the whole day and does not depend on zoom or pan
+  const gap=10,DAY=86400000,dayR=new Map(); // dayR = high/low of every loaded UTC day
+  if(cfg.tpo)k15.forEach(c=>{if(!okC(c))return;const k=Math.floor(c.t/DAY),q=dayR.get(k);if(!q)dayR.set(k,{h:c.h,l:c.l});else{q.h=Math.max(q.h,c.h);q.l=Math.min(q.l,c.l)}});
+  const prevR=dS=>{const r=[1,2].map(n=>dS-n*DAY).filter(s=>k15.length&&k15[0].t<=s&&dayR.has(s/DAY)).map(s=>dayR.get(s/DAY)).map(q=>q.h-q.l).filter(v=>v>0);
+    return r.length?r.reduce((a,b)=>a+b,0)/r.length:0}; // only fully loaded days count
   const colW=(tpoW-6-(nTpo-1)*gap)/nTpo,cnt=cfg.tpo?Math.max(nTpo,2):0; // always compute at least 2 days so the previous day's POC exists
   profs=[];
   g.save();g.beginPath();g.rect(0,top,x0-5,bot-top);g.clip();
@@ -322,7 +325,7 @@ function drawInner(){
       dh=Math.max(dh,c.h);dl=Math.min(dl,c.l);
       const i=Math.floor((c.t-dS)/TPO_MS),q=per.get(i);
       if(!q)per.set(i,{i,h:c.h,l:c.l});else{q.h=Math.max(q.h,c.h);q.l=Math.min(q.l,c.l)}});
-    const step=dh>dl?Math.max(1,nice((dh-dl)/40)):1,rowH=ch*step/(hi-lo);
+    const rng=prevR(dS)||dh-dl,step=rng>0?Math.max(1,nice(rng/40)):1,rowH=ch*step/(hi-lo); // falls back to the day's own range when no earlier day is loaded
     [...per.values()].sort((m,n)=>m.i-n.i).forEach(q=>{
       for(let r=Math.floor(q.l/step);r<=Math.floor(q.h/step);r++){if(!rows.has(r))rows.set(r,[]);rows.get(r).push(q.i)}});
     const P={d,dS,cx0,show,rows,step,rowH,lw:1,poc:null,a:null,b:null};profs.push(P);
@@ -343,7 +346,7 @@ function drawInner(){
       lst.forEach((idx,k)=>{g.fillStyle=tpoColor(idx,.72);g.fillRect(cx0+k*lw,yT+0.5,Math.max(1,lw-1),Math.max(1,rowH-1))})});
   }
   g.restore();
-  if(cfg.tpo&&seeded['15m']&&k15.length&&dayStart-(cnt-1)*86400000<k15[0].t)older('15m'); // panned back past the loaded 15m history
+  if(cfg.tpo&&seeded['15m']&&k15.length&&dayStart-(cnt+1)*DAY<k15[0].t)older('15m'); // need the shown days plus the two before the oldest one
   if(cfg.tpo){g.strokeStyle='#cfd5dc';g.beginPath();g.moveTo(x0-5,top);g.lineTo(x0-5,bot);g.stroke()}
   // session legend + day labels under each profile
   g.font='10px ui-monospace,Menlo,monospace';g.textBaseline='middle';
@@ -360,9 +363,9 @@ function drawInner(){
     const y=Y(yv);if(y<top||y>bot)return;g.strokeStyle=col;g.lineWidth=wd;g.setLineDash(dash);g.beginPath();g.moveTo(x0,y);g.lineTo(px0,y);g.stroke();g.setLineDash([]);g.lineWidth=1;
     g.fillStyle=col;g.textAlign='right';g.fillText(lbl,px0-4,y-7);
   };
-  const PL=profs[profs.length-1],PP=profs[profs.length-2]; // PP = previous UTC day
-  if(PP&&PP.poc!=null)line((PP.poc+.5)*PP.step,'#e08a00',[],'POC '+((PP.poc+.5)*PP.step).toFixed(DP),3);
-  if(PL&&PL.poc!=null){line((PL.b+1)*PL.step,'#2f80c8',[4,4],'VAH');line(PL.a*PL.step,'#2f80c8',[4,4],'VAL')}
+  const PP=profs[profs.length-2]; // previous UTC day: its POC, VAH and VAL are the levels drawn across the chart
+  if(PP&&PP.poc!=null){line((PP.poc+.5)*PP.step,'#e08a00',[],'POC '+((PP.poc+.5)*PP.step).toFixed(DP),3);
+    line((PP.b+1)*PP.step,'#2f80c8',[4,4],'VAH '+((PP.b+1)*PP.step).toFixed(DP));line(PP.a*PP.step,'#2f80c8',[4,4],'VAL '+(PP.a*PP.step).toFixed(DP))}
 
   // candles
   const vsum=vis.reduce((s,c)=>s+(c.v||0),0)||1,cw=x1-x0,slots=vis.length+Math.max(0,-off),cwE=cw*vis.length/slots;
