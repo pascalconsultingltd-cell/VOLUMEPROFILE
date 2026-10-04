@@ -260,6 +260,8 @@ function makeChart(cv,cfg){
   const src=()=>cfg.main?(TF==='5m'?k5:c15):c15,sec=()=>cfg.main?TF==='15s':true;
   const TS=()=>sec()?{hour:'2-digit',minute:'2-digit',second:'2-digit'}:{hour:'2-digit',minute:'2-digit'};
 let W=0,H=0,raf=0,geo=null,view=null,hl=null,drag=null,hitEdge=null,dragEdge=null,boxTool=0,dotTool=0,draft=null,off=0,pan=null,sc=null,ysc=1,ypan=0,N=cfg.N,mode=cfg.mode,hover=-1,mouse=null,profs=[],arrLen=0,moveInfo=null,tpoFrac=null,divDrag=false,lbT=null,fit=null,lock=null; // fit = auto-fitted price range, lock = range frozen once the chart has been dragged
+const pts=new Map();let pinch=null; // pointers currently down on this canvas; pinch = two-finger zoom in progress
+const pdist=()=>{const [a,b]=[...pts.values()];return Math.max(10,Math.hypot(a.x-b.x,a.y-b.y))};
 function size(){
   const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;
   W=r.width;H=r.height;cv.width=W*d;cv.height=H*d;g.setTransform(d,0,0,d,0,0);draw();
@@ -468,6 +470,10 @@ function showInfo(){
 function move(e){
   if(!geo)return;const r=cv.getBoundingClientRect(),t=e;
   const x=t.clientX-r.left,y=t.clientY-r.top;mouse={x,y};
+  if(pts.has(e.pointerId))pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch){ // two-finger pinch zooms the time axis, same limits as the mouse wheel
+    if(pts.size>=2){const mx=Math.max(20,Math.min(arrLen||src().length,3000));N=Math.max(20,Math.min(mx,Math.round(pinch.N*pinch.d/pdist())));if(cfg.main)ui();draw()}
+    return}
   if(divDrag&&view){tpoFrac=Math.max(80,Math.min(W*0.75,x-5))/W;draw();return}
   if(sc){ysc=Math.max(0.15,Math.min(6,sc.v*Math.exp((t.clientY-sc.y)/200)));draw();return}
   if(pan&&view){off=pan.off+Math.round((t.clientX-pan.x)/view.pc);const dy=t.clientY-pan.y;if(Math.abs(dy)>4)pan.vy=true;if(pan.vy)ypan=pan.yp+dy/view.ch*pan.rng;hover=-1;draw();return}
@@ -546,6 +552,11 @@ function boxClick(e){
   draw();
 }
 cv.addEventListener('pointerdown',e=>{
+  if(e.isPrimary)pts.clear();pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pts.size===2){ // second finger down: start a pinch, drop whatever the first finger had started
+    try{cv.setPointerCapture(e.pointerId)}catch(err){}
+    pinch={d:pdist(),N:Math.min(N,Math.max(20,arrLen))};pan=null;sc=null;drag=null;divDrag=false;e.preventDefault();return}
+  if(pts.size>2)return;
   move(e);try{cv.setPointerCapture(e.pointerId)}catch(err){} // touch has no hover: hit-test at the press point, and keep receiving moves outside the canvas
   if(dotTool){dotClick(e);e.preventDefault();return}
   if(boxTool){boxClick(e);e.preventDefault();return}
@@ -560,6 +571,7 @@ cv.addEventListener('pointerdown',e=>{
 });
 const release=()=>{drag=null;divDrag=false;if(pan||sc){pan=null;sc=null;cv.style.cursor='crosshair'}};
 addEventListener('pointerup',release);addEventListener('pointercancel',release);
+cv.addEventListener('pointerup',e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=null});cv.addEventListener('pointercancel',e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=null});
 cv.addEventListener('dblclick',()=>{if(hl){lines=lines.filter(l=>l!==hl);hl=null;cv.style.cursor='crosshair';draw()}else if(mouse&&isDiv(mouse.x,mouse.y)){tpoFrac=null;draw()}else if(view&&mouse&&mouse.x>view.px0){ysc=1;ypan=0;lock=null;draw()}});
 addEventListener('keydown',e=>{
   if(activeChart!==api)return;
