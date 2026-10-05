@@ -1,739 +1,3084 @@
-<!DOCTYPE html>
+<!doctype html>
+<!--
+  This file is sometimes sent by pasting it into an email,
+  and email wraps text at about 72 characters. To survive
+  that, keep every line at 70 characters or less and use
+  only block comments in the script, never line comments.
+-->
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>BTCFDUSD</title>
-<style>
-:root{--bg:#ffffff;--panel:#f6f7f9;--line:#e3e6ea;--tx:#1a1f26;--mu:#6b7684;--up:#089981;--dn:#000000;--poc:#e08a00;--va:#2f80c8}
-*{box-sizing:border-box}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--tx);font:13px system-ui,-apple-system,Segoe UI,sans-serif}
-body{display:flex;flex-direction:column;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
-header{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--panel)}
-.sym{font-weight:700;font-size:15px}
-.px{font:700 18px ui-monospace,Menlo,Consolas,monospace}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--dn);display:inline-block;margin-right:6px}
-.dot.on{background:var(--up)}
-.ctl{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
-button{background:transparent;color:var(--mu);border:1px solid var(--line);border-radius:5px;padding:5px 9px;font:inherit;cursor:pointer}
-button.a{color:var(--tx);border-color:var(--va);background:#e6f1fb}
-button:focus-visible{outline:2px solid var(--va)}
-.ctl span{display:inline-flex;gap:4px;margin-left:6px}
-#mini{position:fixed;left:0;top:0;width:min(440px,46vw);height:min(300px,42vh);min-width:240px;min-height:160px;background:var(--bg);border:1px solid #c5ccd5;border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden;z-index:5}
-#mhead{display:flex;align-items:center;gap:8px;padding:3px 26px 3px 26px;font-size:11px;color:var(--mu);background:var(--panel);border-bottom:1px solid var(--line);flex:none}
-#mhead{cursor:move;touch-action:none;user-select:none}
-#mhead b{color:var(--tx);font-weight:600}
-#mhead button{margin-left:auto;padding:0 6px;line-height:16px}
-#mbody{flex:1;min-height:0;position:relative}
-.grip{position:absolute;width:20px;height:20px;z-index:6;touch-action:none}
-.grip[data-c=tl]{left:0;top:0;cursor:nwse-resize;background:linear-gradient(135deg,#7d8794 0 2px,transparent 2px 5px,#7d8794 5px 7px,transparent 7px 10px,#7d8794 10px 12px,transparent 12px)}
-.grip[data-c=tr]{right:0;top:0;cursor:nesw-resize;background:linear-gradient(225deg,#7d8794 0 2px,transparent 2px 5px,#7d8794 5px 7px,transparent 7px 10px,#7d8794 10px 12px,transparent 12px)}
-.grip[data-c=bl]{left:0;bottom:0;cursor:nesw-resize;background:linear-gradient(45deg,#7d8794 0 2px,transparent 2px 5px,#7d8794 5px 7px,transparent 7px 10px,#7d8794 10px 12px,transparent 12px)}
-.grip[data-c=br]{right:0;bottom:0;cursor:nwse-resize;background:linear-gradient(315deg,#7d8794 0 2px,transparent 2px 5px,#7d8794 5px 7px,transparent 7px 10px,#7d8794 10px 12px,transparent 12px)}
-#toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:#1a1f26;color:#fff;padding:6px 12px;border-radius:6px;font-size:12px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
-#info{padding:6px 12px;color:var(--mu);font:12px ui-monospace,Menlo,Consolas,monospace;min-height:28px;border-bottom:1px solid var(--line)}
-main{user-select:none;flex:1;min-height:0;position:relative}
-canvas{touch-action:none;cursor:crosshair;position:absolute;inset:0;width:100%;height:100%}
-</style>
-</head>
-<body>
-<header>
-  <span class="sym" id="sym">BTCFDUSD 5m</span>
-  <span class="px" id="px">—</span>
-  <span><i class="dot" id="dot"></i><span id="st">connecting</span></span>
-  <div class="ctl">
-    <button id="miniTog" title="Show / hide the 15s line break window">15s LB</button>
-    <span id="tfBtns"></span><span id="tpoBtns"></span><span id="modeBtns"></span><span id="nBtns"></span>
-  </div>
-</header>
-<div id="info"></div>
-<main><canvas id="c"></canvas></main>
-<div id="toast"></div>
-<div id="mini">
-  <div id="mhead"><b>15s</b><span id="mst"></span><button id="mx" title="Hide">×</button></div>
-  <div id="mbody"><canvas id="mc"></canvas></div>
-  <div class="grip" data-c="tl" title="Drag to resize"></div><div class="grip" data-c="tr" title="Drag to resize"></div><div class="grip" data-c="bl" title="Drag to resize"></div><div class="grip" data-c="br" title="Drag to resize"></div>
-</div>
-<script>
-const SYM='BTCFDUSD', IV='5m', TPO_MS=1800000, DP=0; // DP = decimals shown on prices
-// TPO letter colours by UTC hour: Asia (red) → Europe (blue) → US open (green) → US late (yellow)
-const STOPS=[[0,[229,57,53]],[8,[30,100,230]],[14,[8,153,129]],[21,[225,165,0]]];
-const BIG_WIN=150, BIG_PERC=0.95; // 'big candle + high volume' circles: window length and percentile (nearest-rank, as in the Pine script)
-const LET='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-function tpoColor(i,a=1){const h=Math.min(21,i*0.5);let k=0;
-  while(k<STOPS.length-2&&h>STOPS[k+1][0])k++;
-  const [h0,c0]=STOPS[k],[h1,c1]=STOPS[k+1],f=Math.max(0,Math.min(1,(h-h0)/(h1-h0)));
-  return `rgba(${c0.map((v,j)=>Math.round(v+(c1[j]-v)*f)).join(',')},${a})`}
-const REST=['https://api.binance.com','https://data-api.binance.vision'];
-const WS=['wss://stream.binance.com:9443','wss://data-stream.binance.vision'];
-// k5 = 5m candles (main chart), k15 = 15m candles (TPO profiles), c15 = 15s candles (line-break window / 15s view)
-let k5=[], k15=[], c15=[], charts=[], mid=null, xh=null, activeChart=null, lines=[], linesSig='', nTpo=3, TF='5m', hostI=0, retry=0, ws;
-let conn='connecting', everOpen=false, lastT=null;
-const histFail=new Set(), seeded={}, olderBusy={}, olderEnd={};
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <title>BTCFDUSD</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --panel: #f6f7f9;
+        --line: #e3e6ea;
+        --tx: #1a1f26;
+        --mu: #6b7684;
+        --up: #089981;
+        --dn: #000000;
+        --poc: #e08a00;
+        --va: #2f80c8;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: var(--bg);
+        color: var(--tx);
+        font:
+          13px system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        padding: env(safe-area-inset-top, 0) 0
+          env(safe-area-inset-bottom, 0);
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        align-items: center;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      .sym {
+        font-weight: 700;
+        font-size: 15px;
+      }
+      .px {
+        font:
+          700 18px ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--dn);
+        display: inline-block;
+        margin-right: 6px;
+      }
+      .dot.on {
+        background: var(--up);
+      }
+      .ctl {
+        display: flex;
+        gap: 4px;
+        margin-left: auto;
+        flex-wrap: wrap;
+      }
+      button {
+        background: transparent;
+        color: var(--mu);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 5px 9px;
+        font: inherit;
+        cursor: pointer;
+      }
+      button.a {
+        color: var(--tx);
+        border-color: var(--va);
+        background: #e6f1fb;
+      }
+      button:focus-visible {
+        outline: 2px solid var(--va);
+      }
+      #vol {
+        width: 70px;
+        background: #fff;
+        color: var(--tx);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 5px 7px;
+        font: inherit;
+      }
+      .ctl span {
+        display: inline-flex;
+        gap: 4px;
+        margin-left: 6px;
+      }
+      #mini {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: min(440px, 46vw);
+        height: min(300px, 42vh);
+        min-width: 240px;
+        min-height: 160px;
+        background: var(--bg);
+        border: 1px solid #c5ccd5;
+        border-radius: 6px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        z-index: 5;
+      }
+      #mhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 3px 26px 3px 26px;
+        font-size: 11px;
+        color: var(--mu);
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+        flex: none;
+      }
+      #mhead {
+        cursor: move;
+        touch-action: none;
+        user-select: none;
+      }
+      #mhead b {
+        color: var(--tx);
+        font-weight: 600;
+      }
+      #mhead button {
+        margin-left: auto;
+        padding: 0 6px;
+        line-height: 16px;
+      }
+      #mbody {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+      }
+      .grip {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        z-index: 6;
+        touch-action: none;
+      }
+      .grip[data-c="tl"] {
+        left: 0;
+        top: 0;
+        cursor: nwse-resize;
+        background: linear-gradient(
+          135deg,
+          #7d8794 0 2px,
+          transparent 2px 5px,
+          #7d8794 5px 7px,
+          transparent 7px 10px,
+          #7d8794 10px 12px,
+          transparent 12px
+        );
+      }
+      .grip[data-c="tr"] {
+        right: 0;
+        top: 0;
+        cursor: nesw-resize;
+        background: linear-gradient(
+          225deg,
+          #7d8794 0 2px,
+          transparent 2px 5px,
+          #7d8794 5px 7px,
+          transparent 7px 10px,
+          #7d8794 10px 12px,
+          transparent 12px
+        );
+      }
+      .grip[data-c="bl"] {
+        left: 0;
+        bottom: 0;
+        cursor: nesw-resize;
+        background: linear-gradient(
+          45deg,
+          #7d8794 0 2px,
+          transparent 2px 5px,
+          #7d8794 5px 7px,
+          transparent 7px 10px,
+          #7d8794 10px 12px,
+          transparent 12px
+        );
+      }
+      .grip[data-c="br"] {
+        right: 0;
+        bottom: 0;
+        cursor: nwse-resize;
+        background: linear-gradient(
+          315deg,
+          #7d8794 0 2px,
+          transparent 2px 5px,
+          #7d8794 5px 7px,
+          transparent 7px 10px,
+          #7d8794 10px 12px,
+          transparent 12px
+        );
+      }
+      #toast {
+        position: fixed;
+        left: 50%;
+        top: 64px;
+        transform: translateX(-50%);
+        background: #1a1f26;
+        color: #fff;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+        z-index: 20;
+      }
+      #info {
+        padding: 6px 12px;
+        color: var(--mu);
+        font:
+          12px ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
+        min-height: 28px;
+        border-bottom: 1px solid var(--line);
+      }
+      main {
+        user-select: none;
+        flex: 1;
+        min-height: 0;
+        position: relative;
+      }
+      canvas {
+        touch-action: none;
+        cursor: crosshair;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="sym" id="sym">BTCFDUSD 5m</span>
+      <span class="px" id="px">—</span>
+      <span
+        ><i class="dot" id="dot"></i
+        ><span id="st">connecting</span></span
+      >
+      <div class="ctl">
+        <input
+          id="vol"
+          value="295"
+          inputmode="decimal"
+          autocomplete="off"
+          placeholder="vol"
+          title="Step for lines around yesterday's POC: 250 or 0.3%"
+        />
+        <button
+          id="boxTog"
+          class="a"
+          title="Automatic box on the last high-volume candle"
+        >
+          B
+        </button>
+        <button
+          id="miniTog"
+          title="Show / hide the 15s line break window"
+        >
+          15s LB
+        </button>
+        <span id="tfBtns"></span><span id="tpoBtns"></span
+        ><span id="modeBtns"></span><span id="nBtns"></span>
+      </div>
+    </header>
+    <div id="info"></div>
+    <main><canvas id="c"></canvas></main>
+    <div id="toast"></div>
+    <div id="mini">
+      <div id="mhead">
+        <b>15s</b><span id="mst"></span
+        ><button id="mx" title="Hide">×</button>
+      </div>
+      <div id="mbody"><canvas id="mc"></canvas></div>
+      <div class="grip" data-c="tl" title="Drag to resize"></div>
+      <div class="grip" data-c="tr" title="Drag to resize"></div>
+      <div class="grip" data-c="bl" title="Drag to resize"></div>
+      <div class="grip" data-c="br" title="Drag to resize"></div>
+    </div>
+    <script>
+      /* DP = decimals shown on prices */
+      const SYM = "BTCFDUSD",
+        IV = "5m",
+        TPO_MS = 1800000,
+        DP = 0;
+      /*
+       * TPO letter colours by UTC hour: Asia (red) →
+       * Europe (blue) → US open (green) → US late (yellow)
+       */
 
-const $=id=>document.getElementById(id);
-const HELP=$('info').textContent;
-const toC=a=>({t:a[0],o:+a[1],h:+a[2],l:+a[3],c:+a[4],v:+a[5],bv:+a[9]});
+      const STOPS = [
+        [0, [229, 57, 53]],
+        [8, [30, 100, 230]],
+        [14, [8, 153, 129]],
+        [21, [225, 165, 0]],
+      ];
+      /*
+       * 'big candle + high volume' circles: window length
+       * and percentile (nearest-rank, as in the Pine
+       * script)
+       */
+      const BIG_WIN = 150,
+        BIG_PERC = 0.95;
+      const LET =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+      function tpoColor(i, a = 1) {
+        const h = Math.min(21, i * 0.5);
+        let k = 0;
+        while (k < STOPS.length - 2 && h > STOPS[k + 1][0]) k++;
+        const [h0, c0] = STOPS[k],
+          [h1, c1] = STOPS[k + 1],
+          f = Math.max(0, Math.min(1, (h - h0) / (h1 - h0)));
+        const rgb = c0.map((v, j) =>
+          Math.round(v + (c1[j] - v) * f),
+        );
+        return "rgba(" + rgb.join(",") + "," + a + ")";
+      }
+      function kl(h, q) {
+        return h + "/api/v3/klines?symbol=" + SYM + "&" + q;
+      } /* klines URL */
+      const REST = [
+        "https://api.binance.com",
+        "https://data-api.binance.vision",
+      ];
+      const WS = [
+        "wss://stream.binance.com:9443",
+        "wss://data-stream.binance.vision",
+      ];
+      /*
+       * k5 = 5m candles (main chart), k15 = 15m candles
+       * (TPO profiles), c15 = 15s candles (line-break
+       * window / 15s view)
+       */
 
-function stat(){ // connection state + any history that could not be loaded
-  $('dot').className=conn==='live'?'dot on':'dot';
-  $('st').textContent=conn+(histFail.size?' · history failed: '+[...histFail].join(', '):'');
-}
-// vol=false for the kline-backed stores: trades only move the price there, volume comes from the kline stream (no double counting)
-function feed(arr,ms,p,q,T,m,vol){
-  const t=Math.floor(T/ms)*ms;
-  let c=arr[arr.length-1];
-  if(!c||t>c.t){
-    c={t,o:p,h:p,l:p,c:p,v:0,bv:0};arr.push(c);charts.forEach(h=>h.newCandle(arr));
-    if(arr.length>8000)arr.shift();
-  }else if(t<c.t){return}
-  c.h=Math.max(c.h,p);c.l=Math.min(c.l,p);c.c=p;if(vol){c.v+=q;if(!m)c.bv+=q}
-}
-// Join between 1s history and live trades for the 15s store: history owns every second before `cut`,
-// the trade stream owns everything from `cut` on. `seam` collects the live part of the 15s bucket that contains `cut`.
-let cut=null, seam=null, cutArm=false, cutDone=null;
-function armCut(){
-  cut=null;seam=null;cutArm=true;
-  return new Promise(res=>{
-    const t=setTimeout(()=>{cutDone=null;cutArm=false;if(cut!=null)setTimeout(res,1500);else res()},4000); // no trades: carry on without a cut
-    cutDone=()=>{clearTimeout(t);cutDone=null;res()};
-  });
-}
-function addTrade(p,q,T,m){
-  if(!Number.isFinite(p)||!Number.isFinite(q)||!Number.isFinite(T))return; // ignore malformed trades
-  lastT=T;
-  if(cutArm){cut=Math.floor(T/1000)*1000+1000;cutArm=false}
-  if(cut!=null){
-    if(T>=cut&&T<Math.floor(cut/15000)*15000+15000){
-      if(!seam)seam={h:p,l:p,c:p,v:0,bv:0};
-      seam.h=Math.max(seam.h,p);seam.l=Math.min(seam.l,p);seam.c=p;seam.v+=q;if(!m)seam.bv+=q;
-    }
-    if(cutDone&&T>=cut+1000)cutDone(); // the seconds before the cut are now closed on the exchange
-  }
-  feed(k5,300000,p,q,T,m,false);feed(k15,900000,p,q,T,m,false);
-  feed(c15,15000,p,q,T,m,true);
-  if(mid==null)$('px').textContent=document.title=p.toFixed(DP);schedule();
-}
-function onKline(k){ // 5m store feeds the 5m view, 15m store feeds the TPO profiles
-  const A=k.i==='15m'?k15:k5;
-  if(![k.t,k.o,k.h,k.l,k.c,k.v,k.V].every(v=>Number.isFinite(+v)))return; // ignore malformed klines
-  let c=A.find(x=>x.t===k.t);
-  if(!c){c={t:k.t};A.push(c);charts.forEach(h=>h.newCandle(A));A.sort((a,b)=>a.t-b.t)}
-  Object.assign(c,{o:+k.o,h:+k.h,l:+k.l,c:+k.c,v:+k.v,bv:+k.V});
-  schedule();
-}
-async function fetch1s(end){
-  for(let tr=0;tr<2;tr++)for(const h of REST){
-    try{const j=await fj(`${h}/api/v3/klines?symbol=${SYM}&interval=1s&limit=1000&endTime=${end}`);if(Array.isArray(j))return j}catch(e){}
-  }
-  return null;
-}
-// 15s candles from 1s klines ending at `end`: `pages` pages of 1000s, fetched 11 at a time, newest first; stops as soon as the callback returns true
-async function seed15(m,end,pages,lim,cb){
-  const B=11,seen=new Set();
-  for(let i=0;i<pages;i+=B){
-    const res=await Promise.all(Array.from({length:Math.min(B,pages-i)},(_,k)=>fetch1s(end-(i+k)*1000000)));
-    let any=false;
-    res.forEach(j=>{if(!j)return;j.forEach(a=>{
-      if(seen.has(a[0])||(lim!=null&&a[0]>=lim))return;seen.add(a[0]);any=true;
-      const t=Math.floor(a[0]/15000)*15000;let c=m.get(t);
-      if(!c){c={t,o:+a[1],h:+a[2],l:+a[3],c:+a[4],v:0,bv:0,fo:a[0],lt:a[0]};m.set(t,c)}
-      c.h=Math.max(c.h,+a[2]);c.l=Math.min(c.l,+a[3]);
-      if(a[0]<c.fo){c.fo=a[0];c.o=+a[1]}
-      if(a[0]>=c.lt){c.lt=a[0];c.c=+a[4]}
-      c.v+=+a[5];c.bv+=+a[9];
-    })});
-    if(cb()===true)break;
-    if(!any)break;
-  }
-}
-function schedule(){charts.forEach(h=>h.sched())}
-// since==null: first load, adaptive (keeps fetching older 1s history until the 15s line-break chart has enough bricks, up to ≈18h)
-// since=time: backfill after a reconnect, from that time up to now
-async function fill15(since){
-  await armCut();
-  const lim=cut,end=lim!=null?lim-1:Date.now(),first=since==null,TARGET=450;
-  const pages=first?66:Math.max(1,Math.min(66,Math.ceil((end-since)/1000000)+1));
-  const m=new Map();let bricks=0,joined=false;
-  await seed15(m,end,pages,lim,()=>{
-    if(!joined){ // add the live part of the bucket that straddles the cut, once
-      joined=true;
-      const b=lim!=null&&seam?m.get(Math.floor(lim/15000)*15000):null;
-      if(b){b.h=Math.max(b.h,seam.h);b.l=Math.min(b.l,seam.l);b.c=seam.c;b.v+=seam.v;b.bv+=seam.bv}
-      cut=null;seam=null;
-    }
-    let lo=Infinity;m.forEach((c,t)=>{if(t<lo)lo=t});
-    const all=new Map(c15.map(c=>[c.t,c]));
-    m.forEach((c,t)=>{if(!first&&t===lo&&all.has(t))return;all.set(t,c)}); // a backfill's oldest bucket may be partial: keep the one we have
-    c15=[...all.values()].sort((x,y)=>x.t-y.t).slice(-8000);
-    if(first){bricks=lbBars(c15).length;$('mst').textContent=bricks>=TARGET?'':'loading 15s '+bricks+'/'+TARGET}
-    schedule();return first&&bricks>=TARGET;
-  });
-  cut=null;seam=null;
-  if(first)$('mst').textContent=m.size&&bricks<TARGET?'15s history: only '+bricks+' bricks available':'';
-  return m.size>0;
-}
-let q15=Promise.resolve(); // 15s fills run one at a time
-const load15=since=>hist('15s',()=>(q15=q15.then(()=>fill15(since)).catch(e=>{console.error(e);return false})));
-// Three-line break bricks built from candle closes; each brick carries the volume since the previous brick
-function lbBars(arr){
-  const out=[];let av=0,ab=0;
-  arr.forEach(c=>{
-    if(c.c==null)return;
-    av+=c.v||0;ab+=c.bv||0;const x=c.c;
-    if(!out.length){if(x!==c.o){out.push({t:c.t,o:c.o,c:x,h:Math.max(c.o,x),l:Math.min(c.o,x),v:av,bv:ab});av=ab=0}return}
-    const L=out[out.length-1],last3=out.slice(-3);let nb=null;
-    if(L.c>L.o){
-      if(x>L.c)nb={o:L.c,c:x};else if(x<Math.min(...last3.map(q=>q.l)))nb={o:L.o,c:x};
-    }else{
-      if(x<L.c)nb={o:L.c,c:x};else if(x>Math.max(...last3.map(q=>q.h)))nb={o:L.o,c:x};
-    }
-    if(nb){nb.t=c.t;nb.h=Math.max(nb.o,nb.c);nb.l=Math.min(nb.o,nb.c);nb.v=av;nb.bv=ab;out.push(nb);av=ab=0}
-  });
-  return out;
-}
-async function fj(url,ms=10000){
-  const ac=new AbortController(),t=setTimeout(()=>ac.abort(),ms);
-  try{const r=await fetch(url,{signal:ac.signal});return await r.json()}finally{clearTimeout(t)}
-}
-const store=iv=>iv==='15m'?k15:k5, setStore=(iv,a)=>{if(iv==='15m')k15=a;else k5=a};
-async function seedIv(iv){ // recent kline history (5m for the chart, 15m for the TPO profiles); merges into what is already loaded, so it also heals gaps after a reconnect
-  for(const h of REST){
-    try{
-      const j=await fj(`${h}/api/v3/klines?symbol=${SYM}&interval=${iv}&limit=${iv==='15m'?1000:700}`);
-      if(!Array.isArray(j)||!j.length)continue;
-      const arr=j.map(toC),f=arr[0].t,lt=arr[arr.length-1].t,old=store(iv);
-      setStore(iv,old.filter(c=>c.t<f).concat(arr,old.filter(c=>c.t>lt)));
-      seeded[iv]=true;
-      if(iv===IV&&mid==null)$('px').textContent=k5[k5.length-1].c.toFixed(DP);
-      schedule();return true;
-    }catch(e){}
-  }
-  return false;
-}
-async function older(iv){ // lazy history: one more page of older klines when the view reaches the start of what is loaded
-  if(olderBusy[iv]||olderEnd[iv]||!store(iv).length)return;
-  olderBusy[iv]=true;let ok=false;
-  for(const h of REST){
-    try{
-      const j=await fj(`${h}/api/v3/klines?symbol=${SYM}&interval=${iv}&limit=1000&endTime=${store(iv)[0].t-1}`);
-      if(!Array.isArray(j))continue;
-      const cur=store(iv),arr=j.map(toC).filter(c=>c.t<cur[0].t);
-      if(arr.length)setStore(iv,arr.concat(cur));
-      if(!arr.length||store(iv).length>=6000)olderEnd[iv]=true;
-      ok=true;schedule();break;
-    }catch(e){}
-  }
-  setTimeout(()=>{olderBusy[iv]=false},ok?0:10000);
-}
-async function hist(name,fn){ // run a history load, show it in the status while it is failing, retry a few times
-  for(let i=0;;i++){
-    if(await fn()){histFail.delete(name);stat();return}
-    histFail.add(name);stat();
-    if(i>=5)return;
-    await new Promise(r=>setTimeout(r,5000*(i+1)));
-  }
-}
-function resync(){ // after a reconnect: refetch what was missed while the stream was down
-  hist(IV,()=>seedIv(IV));hist('15m',()=>seedIv('15m'));load15(lastT!=null?lastT-60000:null);
-}
-function connect(){
-  const s=`${SYM.toLowerCase()}@aggTrade/${SYM.toLowerCase()}@kline_${IV}/${SYM.toLowerCase()}@kline_15m/${SYM.toLowerCase()}@bookTicker`;
-  ws=new WebSocket(`${WS[hostI%WS.length]}/stream?streams=${s}`);
-  ws.onopen=()=>{retry=0;conn='live';stat();if(everOpen)resync();everOpen=true};
-  ws.onmessage=e=>{
-    let m;try{m=JSON.parse(e.data).data}catch(err){return}
-    if(!m)return;
-    if(m.e==='aggTrade')addTrade(+m.p,+m.q,m.T,m.m);
-    else if(m.e==='kline'&&m.k)onKline(m.k);
-    else if(m.b!==undefined&&m.a!==undefined){mid=(+m.b+ +m.a)/2;$('px').textContent=document.title=mid.toFixed(DP);schedule()} // bookTicker: mid = (bid+ask)/2
-  };
-  ws.onclose=()=>{
-    conn='reconnecting…';stat();
-    hostI++;setTimeout(connect,Math.min(1000*2**retry++,15000));
-  };
-  ws.onerror=()=>ws.close();
-}
+      let k5 = [],
+        k15 = [],
+        c15 = [],
+        charts = [],
+        mid = null,
+        xh = null,
+        activeChart = null,
+        lines = [],
+        linesSig = "",
+        nTpo = 3,
+        TF = "5m",
+        hostI = 0,
+        retry = 0,
+        ws;
+      let conn = "connecting",
+        everOpen = false,
+        lastT = null;
+      const histFail = new Set(),
+        seeded = {},
+        olderBusy = {},
+        olderEnd = {};
+      /*
+       * automatic box on the latest high-volume candle (B
+       * button)
+       */
+      let autoBox = true;
+      function setAutoBox(v) {
+        autoBox = !!v;
+        $("boxTog").className = autoBox ? "a" : "";
+        schedule();
+      }
+      /*
+       * vol step typed in the header: a price amount, or a
+       * percent of yesterday's POC when it ends with %
+       */
+      let volN = 0,
+        volPct = false;
+      function setVol(s) {
+        s = String(s || "")
+          .trim()
+          .replace(",", ".");
+        const n = parseFloat(s);
+        volN = Number.isFinite(n) && n > 0 ? n : 0;
+        volPct = s.endsWith("%");
+        schedule();
+      }
 
-function makeChart(cv,cfg){
-  const g=cv.getContext('2d');
-  const src=()=>cfg.main?(TF==='5m'?k5:c15):c15,sec=()=>cfg.main?TF==='15s':true;
-  const TS=()=>sec()?{hour:'2-digit',minute:'2-digit',second:'2-digit'}:{hour:'2-digit',minute:'2-digit'};
-let W=0,H=0,raf=0,geo=null,view=null,hl=null,drag=null,hitEdge=null,dragEdge=null,boxTool=0,dotTool=0,draft=null,off=0,pan=null,sc=null,ysc=1,ypan=0,N=cfg.N,mode=cfg.mode,hover=-1,mouse=null,profs=[],arrLen=0,moveInfo=null,tpoFrac=null,divDrag=false,lbT=null,fit=null,lock=null; // fit = auto-fitted price range, lock = range frozen once the chart has been dragged
-const pts=new Map();let pinch=null; // pointers currently down on this canvas; pinch = two-finger zoom in progress
-const pdist=()=>{const [a,b]=[...pts.values()];return Math.max(10,Math.hypot(a.x-b.x,a.y-b.y))};
-function size(){
-  const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;
-  W=r.width;H=r.height;cv.width=W*d;cv.height=H*d;g.setTransform(d,0,0,d,0,0);draw();
-}
-addEventListener('resize',size);
-function sched(){if(!raf)raf=requestAnimationFrame(()=>{raf=0;draw()})}
-function nice(x){const e=Math.pow(10,Math.floor(Math.log10(x))),f=x/e;return (f<1.5?1:f<3.5?2:f<7.5?5:10)*e}
+      const $ = (id) => document.getElementById(id);
+      const HELP = $("info").textContent;
+      const toC = (a) => ({
+        t: a[0],
+        o: +a[1],
+        h: +a[2],
+        l: +a[3],
+        c: +a[4],
+        v: +a[5],
+        bv: +a[9],
+      });
 
-const okC=c=>!!c&&Number.isFinite(c.h)&&Number.isFinite(c.l)&&Number.isFinite(c.o)&&Number.isFinite(c.c);
-function draw(){
-  try{drawInner();if(cfg.main)$('info').style.color=''}
-  catch(e){
-    console.error(e);
-    const d=devicePixelRatio||1;cv.width=cv.width;g.setTransform(d,0,0,d,0,0); // reset canvas state (clip stack)
-    if(cfg.main){const el=$('info');el.style.color='#c0392b';el.textContent='Draw error: '+e.message}
-  }
-}
-function drawInner(){
-  g.clearRect(0,0,W,H);
-  const arr=mode==='lb'?lbBars(src()):src();arrLen=arr.length;
-  if(mode==='lb'){ // a panned line-break view is counted in bricks: stay on the same bricks when new ones print
-    if(off>0&&lbT!=null)for(let i=arr.length-1;i>=0&&arr[i].t>lbT;i--)off++;
-    lbT=arr.length?arr[arr.length-1].t:null;
-  }else lbT=null;
-  off=Math.max(-(N-3),Math.min(off,Math.max(0,arr.length-N)));
-  if(cfg.main&&TF==='5m'&&seeded[IV]&&arr.length-off-N<=0)older(IV); // view reaches the oldest loaded candle: load more
-  const vis=arr.slice(Math.max(0,arr.length-off-N),arr.length-off).filter(okC);
-  if(!vis.length||!W)return;
-  const dayStart=Math.floor(vis[vis.length-1].t/86400000)*86400000;
-  const dayC=cfg.tpo?k15.filter(c=>c.t>=dayStart&&okC(c)):[];
-  let hi=-1e12,lo=1e12;vis.concat(dayC).forEach(c=>{hi=Math.max(hi,c.h);lo=Math.min(lo,c.l)});
-  const pad=(hi-lo)*0.06||1;hi+=pad;lo-=pad;fit={hi,lo};if(lock){hi=lock.hi;lo=lock.lo}
-  const hi0=hi,lo0=lo,mid0=(hi+lo)/2+ypan;hi=mid0+(hi0-lo0)/2*ysc;lo=mid0-(hi0-lo0)/2*ysc;
-  const axW=62,tpoW=cfg.tpo?(tpoFrac!=null?Math.max(80,Math.min(W*0.75,tpoFrac*W)):Math.max(80,W*0.20-5)):0,legendH=cfg.main?22:0,timeH=16,px0=W-axW; // legendH = room for the TPO session legend and day labels
-  const x0=tpoW+10,x1=W-axW-Math.max(cfg.main?60:24,W*(cfg.main?0.07:0.04)),top=8,bot=H-legendH-timeH-6,ch=bot-top;
-  const Y=p=>top+(hi-p)/(hi-lo)*ch;
-  // price tag in the axis column / time tag under the chart
-  const ptag=(y,txt,bg,fg='#fff')=>{g.fillStyle=bg;g.fillRect(px0,y-9,axW,18);g.fillStyle=fg;g.textAlign='left';g.textBaseline='middle';g.fillText(txt,px0+5,y)};
-  const ttag=(cx,txt,bg,fg='#fff')=>{const tw=g.measureText(txt).width+12,bx=Math.max(4,Math.min(px0-tw,cx-tw/2));
-    g.fillStyle=bg;g.fillRect(bx,bot+2,tw,16);g.fillStyle=fg;g.textAlign='center';g.textBaseline='middle';g.fillText(txt,bx+tw/2,bot+10)};
-  const dlabel=t=>{const d=new Date(t);return d.toLocaleDateString([],{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString([],TS())};
+      /*
+       * connection state + any history that could not be
+       * loaded
+       */
+      function stat() {
+        $("dot").className = conn.startsWith("live")
+          ? "dot on"
+          : "dot";
+        $("st").textContent =
+          conn +
+          (histFail.size
+            ? " · history failed: " + [...histFail].join(", ")
+            : "");
+      }
+      /*
+       * vol=false for the kline-backed stores: trades only
+       * move the price there, volume comes from the kline
+       * stream (no double counting)
+       */
 
-  // grid + price axis
-  const gs=Math.max(1,nice((hi-lo)/6));g.font='11px ui-monospace,Menlo,monospace';g.textBaseline='middle';
-  for(let p=Math.ceil(lo/gs)*gs;p<hi;p+=gs){
-    g.strokeStyle='#eef0f3';g.beginPath();g.moveTo(4,Y(p));g.lineTo(W-axW,Y(p));g.stroke();
-    g.fillStyle='#6b7684';g.textAlign='left';g.fillText(p.toFixed(DP),W-axW+6,Y(p));
-  }
-
-  // TPO (Market Profile): one brick per 30 min; up to 3 UTC days side by side (oldest left, latest next to the chart)
-  // a day's row size comes from the average range of the two UTC days before it, so it is fixed for the whole day and does not depend on zoom or pan
-  const gap=10,DAY=86400000,dayR=new Map(); // dayR = high/low of every loaded UTC day
-  if(cfg.tpo)k15.forEach(c=>{if(!okC(c))return;const k=Math.floor(c.t/DAY),q=dayR.get(k);if(!q)dayR.set(k,{h:c.h,l:c.l});else{q.h=Math.max(q.h,c.h);q.l=Math.min(q.l,c.l)}});
-  const prevR=dS=>{const r=[1,2].map(n=>dS-n*DAY).filter(s=>k15.length&&k15[0].t<=s&&dayR.has(s/DAY)).map(s=>dayR.get(s/DAY)).map(q=>q.h-q.l).filter(v=>v>0);
-    return r.length?r.reduce((a,b)=>a+b,0)/r.length:0}; // only fully loaded days count
-  const colW=(tpoW-6-(nTpo-1)*gap)/nTpo,cnt=cfg.tpo?Math.max(nTpo,2):0; // always compute at least 2 days so the previous day's POC exists
-  profs=[];
-  g.save();g.beginPath();g.rect(0,top,x0-5,bot-top);g.clip();
-  for(let d=0;d<cnt;d++){
-    const show=d>=cnt-nTpo,dS=dayStart-(cnt-1-d)*86400000,cx0=6+(d-(cnt-nTpo))*(colW+gap);
-    const rows=new Map(),per=new Map();let dh=-Infinity,dl=Infinity;
-    k15.forEach(c=>{if(!okC(c)||c.t<dS||c.t>=dS+86400000)return;
-      dh=Math.max(dh,c.h);dl=Math.min(dl,c.l);
-      const i=Math.floor((c.t-dS)/TPO_MS),q=per.get(i);
-      if(!q)per.set(i,{i,h:c.h,l:c.l});else{q.h=Math.max(q.h,c.h);q.l=Math.min(q.l,c.l)}});
-    const rng=prevR(dS)||dh-dl,step=rng>0?Math.max(1,nice(rng/40)):1,rowH=ch*step/(hi-lo); // falls back to the day's own range when no earlier day is loaded
-    [...per.values()].sort((m,n)=>m.i-n.i).forEach(q=>{
-      for(let r=Math.floor(q.l/step);r<=Math.floor(q.h/step);r++){if(!rows.has(r))rows.set(r,[]);rows.get(r).push(q.i)}});
-    const P={d,dS,cx0,show,rows,step,rowH,lw:1,poc:null,a:null,b:null};profs.push(P);
-    const keys=[...rows.keys()];if(!keys.length)continue;
-    const kmin=Math.min(...keys),kmax=Math.max(...keys),L=r=>rows.has(r)?rows.get(r).length:0;
-    let tot=0,maxC=1;keys.forEach(r=>{tot+=L(r);maxC=Math.max(maxC,L(r))});
-    const rmid=(kmin+kmax)/2;let poc=kmin;
-    for(let r=kmin;r<=kmax;r++)if(L(r)>L(poc)||(L(r)===L(poc)&&Math.abs(r-rmid)<Math.abs(poc-rmid)))poc=r;
-    let a=poc,b=poc,acc=L(poc);
-    while(acc<tot*0.7&&(a>kmin||b<kmax)){ // 70% value area: compare the two rows above with the two rows below and take the heavier pair
-      const up=b<kmax?L(b+1)+L(b+2):-1,dn=a>kmin?L(a-1)+L(a-2):-1;
-      if(up>=dn)for(let n=Math.min(2,kmax-b);n>0;n--){b++;acc+=L(b)}
-      else for(let n=Math.min(2,a-kmin);n>0;n--){a--;acc+=L(a)}
-    }
-    const lw=Math.min(11,(colW-2)/maxC);Object.assign(P,{poc,a,b,lw});
-    if(show)for(let r=a;r<=b;r++){g.fillStyle=r===poc?'rgba(224,138,0,.2)':'rgba(47,128,200,.08)';g.fillRect(cx0-2,Y((r+1)*step),colW+2,rowH)}
-    if(show)rows.forEach((lst,r)=>{const yT=Y((r+1)*step);if(yT>bot||yT+rowH<top)return;
-      lst.forEach((idx,k)=>{g.fillStyle=tpoColor(idx,.72);g.fillRect(cx0+k*lw,yT+0.5,Math.max(1,lw-1),Math.max(1,rowH-1))})});
-  }
-  g.restore();
-  if(cfg.tpo&&seeded['15m']&&k15.length&&dayStart-(cnt+1)*DAY<k15[0].t)older('15m'); // need the shown days plus the two before the oldest one
-  if(cfg.tpo){g.strokeStyle='#cfd5dc';g.beginPath();g.moveTo(x0-5,top);g.lineTo(x0-5,bot);g.stroke()}
-  // session legend + day labels under each profile
-  g.font='10px ui-monospace,Menlo,monospace';g.textBaseline='middle';
-  profs.forEach(P=>{
-    if(!P.show)return;
-    const gr=g.createLinearGradient(P.cx0,0,P.cx0+colW,0);STOPS.forEach(([h,c])=>gr.addColorStop(h/21,`rgb(${c})`));
-    g.fillStyle=gr;g.fillRect(P.cx0,bot+6,colW,5);
-    g.fillStyle='#6b7684';g.textAlign='left';
-    if(P.d===cnt-1)[['Asia',0],['EU',8],['US',14]].forEach(([t,h])=>g.fillText(t,P.cx0+colW*h/21,bot+19));
-    g.fillText(new Date(P.dS).toLocaleDateString([],{weekday:'short',day:'2-digit',timeZone:'UTC'})+(colW>150?' · TPO 30m UTC':''),P.cx0,bot+32);
-  });
-  g.font='11px ui-monospace,Menlo,monospace';
-  const line=(yv,col,dash,lbl,wd=1)=>{
-    const y=Y(yv);if(y<top||y>bot)return;g.strokeStyle=col;g.lineWidth=wd;g.setLineDash(dash);g.beginPath();g.moveTo(x0,y);g.lineTo(px0,y);g.stroke();g.setLineDash([]);g.lineWidth=1;
-    g.fillStyle=col;g.textAlign='right';g.fillText(lbl,px0-4,y-7);
-  };
-  const PP=profs[profs.length-2]; // previous UTC day: its POC, VAH and VAL are the levels drawn across the chart
-  if(PP&&PP.poc!=null){line((PP.poc+.5)*PP.step,'#e08a00',[],'POC '+((PP.poc+.5)*PP.step).toFixed(DP),3);
-    line((PP.b+1)*PP.step,'#2f80c8',[4,4],'VAH '+((PP.b+1)*PP.step).toFixed(DP));line(PP.a*PP.step,'#2f80c8',[4,4],'VAL '+(PP.a*PP.step).toFixed(DP))}
-
-  // candles
-  const vsum=vis.reduce((s,c)=>s+(c.v||0),0)||1,cw=x1-x0,slots=vis.length+Math.max(0,-off),cwE=cw*vis.length/slots;
-  let x=x0;geo=[];
-  vis.forEach(c=>{
-    const nV=vis.length,minW=Math.min(3,cwE/nV*0.4),w=mode==='eq'?minW+(cwE-nV*minW)*(c.v||0)/vsum:cw/slots;
-    geo.push({x,w,c});
-    const col=c.c>=c.o?'#089981':'#000000',xm=x+w/2;
-    g.save();g.beginPath();g.rect(x0,top,cw,bot-top);g.clip();
-    g.strokeStyle=col;g.fillStyle=col;
-    g.beginPath();g.moveTo(xm,Y(c.h));g.lineTo(xm,Y(c.l));g.stroke();
-    const yo=Y(c.o),yc=Y(c.c);g.fillRect(x+1,Math.min(yo,yc),Math.max(1,w-2),Math.max(1,Math.abs(yo-yc)));
-    g.restore();
-    x+=w;
-  });
-  if(cfg.main){ // circles: green below bullish bars, black above bearish bars
-    const fl=bigFlags(arr,Math.max(0,arr.length-off-N),Math.min(arr.length,arr.length-off));
-    geo.forEach(o=>{const f=fl.get(o.c);if(!f)return;const c=o.c;if(c.c===c.o)return;
-      const bull=c.c>c.o,y=bull?Y(c.l)+12:Y(c.h)-12;if(y<top||y>bot)return;
-      g.fillStyle=bull?'#4caf50':'#000000';g.beginPath();g.arc(o.x+o.w/2,y,5,0,6.2832);g.fill()});
-  }
-  // time labels
-  g.fillStyle='#6b7684';g.textAlign='center';
-  const every=Math.ceil(vis.length/8);
-  geo.forEach((o,i)=>{if(i%every===0){const d=new Date(o.c.t);
-    g.fillText(d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0')+(sec()?':'+d.getSeconds().toString().padStart(2,'0'):''),o.x+o.w/2,bot+10)}});
-  // user lines (Alt+H / Alt+V)
-  view={hi,lo,top,bot,ch,px0,x0,Y,pc:cw/slots};
-  lines.forEach(l=>{
-    const sel=l===hl||l===drag;g.strokeStyle=g.fillStyle='#8e44ad';g.lineWidth=sel?2:1;g.setLineDash([]);g.beginPath();
-    if(l.k==='h'){g.strokeStyle='#7d8794';g.lineWidth=sel?6:4;const y=Y(l.p);if(y>=top&&y<=bot){g.moveTo(4,y);g.lineTo(px0,y);g.globalAlpha=.5;g.stroke();g.globalAlpha=1;
-      ptag(y,l.p.toFixed(DP),'#7d8794')}}
-    else if(l.k==='v'){g.strokeStyle='#7d8794';g.lineWidth=sel?6:4;const o=geoAt(l.t);if(o){const cx=o.x+o.w/2;
-      g.moveTo(cx,top);g.lineTo(cx,bot);g.globalAlpha=.5;g.stroke();g.globalAlpha=1;ttag(cx,dlabel(l.t),'#7d8794')}}
-    else if(l.k==='d'){
-      const o=geoAt(l.t),xs=o?o.x+o.w/2:x0,y=Y(l.p);
-      if(y>=top&&y<=bot){
-        g.strokeStyle=g.fillStyle='#388e3c';g.lineWidth=sel?3:2;g.beginPath();g.moveTo(xs,y);g.lineTo(px0,y);g.globalAlpha=.5;g.stroke();g.globalAlpha=1;
-        g.beginPath();g.arc(xs,y,sel?2.5:1.5,0,6.2832);g.fill();
-        ptag(y,l.p.toFixed(DP),'#388e3c')}
-    }
-    else if(l.k==='b'){
-      const mx=Math.max(l.lo,l.hi),mn=Math.min(l.lo,l.hi),yT=Y(mx),yB=Y(mn),o=geoAt(l.t),xs=o?o.x+o.w/2:x0,p66=l.hi+0.66*(l.lo-l.hi),y66=Y(p66) /* l.lo = first point, l.hi = second point: line sits 34% from the first point */;
-      g.save();g.beginPath();g.rect(xs,top,px0-xs,bot-top);g.clip();
-      g.fillStyle='rgba(120,130,145,.18)';g.fillRect(xs,yT,px0-xs,yB-yT);
-      g.strokeStyle='rgba(91,107,125,.5)';g.lineWidth=sel?2:1;g.strokeRect(xs,yT,px0-xs,yB-yT);
-      g.setLineDash([5,4]);g.beginPath();g.moveTo(xs,y66);g.lineTo(px0,y66);g.stroke();g.setLineDash([]);
-      g.restore();
-      [[mx,yT],[p66,y66],[mn,yB]].forEach(([pv,yy])=>{if(yy>=top&&yy<=bot)ptag(yy,pv.toFixed(DP),'#5b6b7d')});
-    }
-    g.lineWidth=1;
-  });
-  if(dotTool){g.font='11px ui-monospace,Menlo,monospace';g.fillStyle='#388e3c';g.textAlign='left';g.textBaseline='middle';g.fillText('Dot: click a point (Esc cancels)',x0+8,top+10)}
-  if(boxTool){g.font='11px ui-monospace,Menlo,monospace';g.fillStyle='#5b6b7d';g.textAlign='left';g.textBaseline='middle';
-    g.fillText(boxTool===1?'Box: click the bottom level':'Box: click the top level (Esc cancels)',x0+8,top+10)}
-  // last price
-  const last=vis[vis.length-1],lp=mid!=null?mid:last.c,ly=Math.max(top,Math.min(bot,Y(lp)));
-  g.strokeStyle='#000000';g.setLineDash([2,3]);g.beginPath();g.moveTo(4,ly);g.lineTo(px0,ly);g.stroke();g.setLineDash([]);
-  {const lt=lp.toFixed(DP),lw=g.measureText(lt).width+10; // tag sits left of the axis so it does not cover the level tags of drawings
-    g.fillStyle='#000000';g.fillRect(px0-lw,ly-9,lw,18);g.fillStyle='#ffffff';g.textAlign='left';g.textBaseline='middle';g.fillText(lt,px0-lw+5,ly)}
-  // hover
-  const XH='rgba(184,134,11,.8)',XB='#ffe58a',XF='#1a1f26'; // crosshair line / tag background / tag text
-  if(mouse&&mouse.x>=4&&mouse.x<=px0&&mouse.y>=top&&mouse.y<=bot){
-    const inTpo=mouse.x<x0-5,o=!inTpo&&hover>=0&&geo[hover],cx=o?o.x+o.w/2:mouse.x,pv=hi-(mouse.y-top)/ch*(hi-lo);
-    g.strokeStyle=XH;g.setLineDash([4,4]);g.beginPath();
-    g.moveTo(cx,top);g.lineTo(cx,bot);g.moveTo(4,mouse.y);g.lineTo(px0,mouse.y);g.stroke();g.setLineDash([]);
-    ptag(mouse.y,pv.toFixed(DP),XB,XF);
-    let lbl=null;
-    if(o)lbl=dlabel(o.c.t);
-    else if(inTpo){
-      const P=profs.find(q=>q.show&&mouse.x>=q.cx0-2&&mouse.x<=q.cx0+colW);
-      if(P&&P.poc!=null){
-        const ri=Math.floor(pv/P.step),k=Math.floor((mouse.x-P.cx0)/P.lw),lst=P.rows.get(ri),idx=lst&&lst[k];
-        if(idx!=null){ // TPO periods are UTC half-hours, so the label says so
-          const f=t=>new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}),t0=P.dS+idx*TPO_MS;
-          lbl=f(t0)+'–'+f(t0+TPO_MS)+' UTC';
-          g.strokeStyle='#1a1f26';g.lineWidth=1.2;g.strokeRect(P.cx0+k*P.lw,Y((ri+1)*P.step)+0.5,Math.max(1,P.lw-1),Math.max(1,P.rowH-1));g.lineWidth=1;
+      function feed(arr, ms, p, q, T, m, vol) {
+        const t = Math.floor(T / ms) * ms;
+        let c = arr[arr.length - 1];
+        if (!c || t > c.t) {
+          c = { t, o: p, h: p, l: p, c: p, v: 0, bv: 0 };
+          arr.push(c);
+          charts.forEach((h) => h.newCandle(arr));
+          if (arr.length > 8000) arr.shift();
+        } else if (t < c.t) {
+          return;
+        }
+        c.h = Math.max(c.h, p);
+        c.l = Math.min(c.l, p);
+        c.c = p;
+        if (vol) {
+          c.v += q;
+          if (!m) c.bv += q;
         }
       }
-    }
-    if(lbl)ttag(cx,lbl,XB,XF);
-  }
-  if(xh&&xh.from!==api&&!(mouse&&mouse.x>=4&&mouse.x<=px0&&mouse.y>=top&&mouse.y<=bot)){ // crosshair mirrored from the other chart
-    const ry=Y(xh.p),ro=xh.t!=null?geoAt(xh.t):null,okY=ry>=top&&ry<=bot;
-    g.strokeStyle=XH;g.lineWidth=1;g.setLineDash([4,4]);g.beginPath();
-    if(okY){g.moveTo(4,ry);g.lineTo(px0,ry)}
-    if(ro){const rx=ro.x+ro.w/2;g.moveTo(rx,top);g.lineTo(rx,bot)}
-    g.stroke();g.setLineDash([]);
-    if(okY)ptag(ry,xh.p.toFixed(DP),XB,XF);
-    if(ro)ttag(ro.x+ro.w/2,dlabel(ro.c.t),XB,XF);
-  }
-  {const sg=JSON.stringify(lines);if(sg!==linesSig){linesSig=sg;schedule()}} // lines are shared: redraw the other chart when they change
-}
-function showInfo(){
-  if(!cfg.main)return;
-  const o=geo&&geo[hover];if(!o){$('info').textContent=HELP;return}
-  const c=o.c,d=c.bv-(c.v-c.bv),t=new Date(c.t);
-  $('info').textContent=`${t.toLocaleTimeString([],TS())}  O ${c.o.toFixed(DP)}  H ${c.h.toFixed(DP)}  L ${c.l.toFixed(DP)}  C ${c.c.toFixed(DP)}  Vol ${c.v.toFixed(0)}  Δ ${d.toFixed(0)}`;
-}
-function move(e){
-  if(!geo)return;const r=cv.getBoundingClientRect(),t=e;
-  const x=t.clientX-r.left,y=t.clientY-r.top;mouse={x,y};
-  if(pts.has(e.pointerId))pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(pinch){ // two-finger pinch zooms the time axis, same limits as the mouse wheel
-    if(pts.size>=2){const mx=Math.max(20,Math.min(arrLen||src().length,3000));N=Math.max(20,Math.min(mx,Math.round(pinch.N*pinch.d/pdist())));if(cfg.main)ui();draw()}
-    return}
-  if(divDrag&&view){tpoFrac=Math.max(80,Math.min(W*0.75,x-5))/W;draw();return}
-  if(sc){ysc=Math.max(0.15,Math.min(6,sc.v*Math.exp((t.clientY-sc.y)/200)));draw();return}
-  if(pan&&view){off=pan.off+Math.round((t.clientX-pan.x)/view.pc);const dy=t.clientY-pan.y;if(Math.abs(dy)>4)pan.vy=true;if(pan.vy)ypan=pan.yp+dy/view.ch*pan.rng;hover=-1;draw();return}
-  if(boxTool===2&&draft&&view&&geo&&geo.length)draft.hi=snap(x,y).p;
-  if(drag&&view){
-    if(drag.k==='h')drag.p=snap(x,y).p;
-    else if(drag.k==='d'){const sn=snap(x,y);drag.p=sn.p;drag.t=sn.o.c.t}
-    else if(drag.k==='b'){
-      if(dragEdge==='move'&&moveInfo){
-        const dp=-(y-moveInfo.y)/moveInfo.ch*moveInfo.rng;drag.lo=moveInfo.lo+dp;drag.hi=moveInfo.hi+dp;
-        let ci=geo.findIndex(q=>x>=q.x&&x<q.x+q.w);if(ci<0)ci=x<geo[0].x?0:geo.length-1;
-        if(moveInfo.si>=0&&moveInfo.ci>=0)drag.t=geo[Math.max(0,Math.min(geo.length-1,moveInfo.si+ci-moveInfo.ci))].c.t;
-      }else drag[dragEdge]=snap(x,y).p;
-    }
-    else{const o=at(x);drag.t=o.c.t}
-  }else{const onDiv=isDiv(x,y);hl=onDiv?null:hit(x,y);cv.style.cursor=onDiv?'ew-resize':hl?(hl.k==='b'&&hitEdge==='move'?'move':hl.k==='h'||hl.k==='d'||hl.k==='b'?'ns-resize':'ew-resize'):(view&&x>view.px0?'ns-resize':'crosshair')}
-  hover=geo.findIndex(o=>x>=o.x&&x<o.x+o.w);showInfo();draw();
-  // publish the crosshair (price + candle time) so the other chart can mirror it
-  xh=(view&&x>=4&&x<=view.px0&&y>=view.top&&y<=view.bot)?{p:view.hi-(y-view.top)/view.ch*(view.hi-view.lo),t:hover>=0&&geo[hover]?geo[hover].c.t:null,from:api}:null;
-  charts.forEach(h=>{if(h!==api)h.sched()});
-}
-cv.addEventListener('pointermove',move);
-cv.addEventListener('pointerleave',()=>{hover=-1;mouse=null;showInfo();draw();if(xh&&xh.from===api){xh=null;charts.forEach(h=>{if(h!==api)h.sched()})}});
+      /*
+       * Join between 1s history and live trades for the
+       * 15s store: history owns every second before `cut`,
+       */
 
-function isDiv(x,y){return !!(cfg.tpo&&view&&!boxTool&&!dotTool&&Math.abs(x-(view.x0-5))<=5&&y>=view.top&&y<=view.bot)}
-function at(x){return geo.find(q=>x>=q.x&&x<q.x+q.w)||(x<geo[0].x?geo[0]:geo[geo.length-1])} // candle under x, clamped to the first/last one
-function geoAt(t){let r=null;if(geo)for(const q of geo){if(q.c.t<=t)r=q;else break}return r}
-function snap(x,y){ // magnet: nearest O/H/L/C of the candle under the pointer, within 14px
-  const free=view.hi-(y-view.top)/view.ch*(view.hi-view.lo);
-  const o=at(x);
-  let best=null,bd=14;
-  [o.c.o,o.c.h,o.c.l,o.c.c].forEach(v=>{const d=Math.abs(view.Y(v)-y);if(d<bd){bd=d;best=v}});
-  return {p:best!=null?best:free,o};
-}
-function mouseAt(){
-  if(!view||!geo||!geo.length||!mouse||mouse.x<4||mouse.x>view.px0||mouse.y<view.top||mouse.y>view.bot)return null;
-  return snap(mouse.x,mouse.y);
-}
-function dotClick(e){
-  if(!view||!geo||!geo.length)return;
-  const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
-  if(y<view.top||y>view.bot)return;
-  const sn=snap(x,y);lines.push({k:'d',t:sn.o.c.t,p:sn.p});dotTool=0;draw();
-}
-function hit(x,y){
-  if(!view||!geo||boxTool||dotTool)return null;
-  for(let i=lines.length-1;i>=0;i--){const l=lines[i];
-    if(l.k==='h'){if(Math.abs(y-view.Y(l.p))<=5&&x>=4&&x<=view.px0)return l}
-    else if(l.k==='v'){const o=geoAt(l.t);if(o&&Math.abs(x-(o.x+o.w/2))<=Math.max(5,o.w/2)&&y>=view.top&&y<=view.bot)return l}
-    else if(l.k==='d'){const o=geoAt(l.t),xs=o?o.x+o.w/2:view.x0;
-      if(Math.abs(y-view.Y(l.p))<=6&&x>=xs-6&&x<=view.px0)return l}
-    else{const o=geoAt(l.t),xs=o?o.x+o.w/2:view.x0;
-      for(const e of ['hi','lo'])if(Math.abs(y-view.Y(l[e]))<=5&&x>=xs&&x<=view.px0){hitEdge=e;return l}}
-  }
-  for(let i=lines.length-1;i>=0;i--){const l=lines[i];if(l.k!=='b')continue;
-    const o=geoAt(l.t),xs=o?o.x+o.w/2:view.x0,y1=view.Y(Math.max(l.lo,l.hi)),y2=view.Y(Math.min(l.lo,l.hi));
-    if(x>=xs&&x<=view.px0&&y>=y1&&y<=y2){hitEdge='move';return l}}
-  return null;
-}
-function addLine(k){
-  if(!view||!geo||!geo.length)return;
-  const inChart=mouse&&mouse.y>=view.top&&mouse.y<=view.bot;
-  if(k==='h')lines.push({k:'h',p:inChart?snap(mouse.x,mouse.y).p:src()[src().length-1].c});
-  else{const o=(mouse&&geo.find(q=>mouse.x>=q.x&&mouse.x<q.x+q.w))||geo[geo.length-1];lines.push({k:'v',t:o.c.t})}
-  draw();
-}
-function boxClick(e){
-  if(!view||!geo||!geo.length)return;
-  const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
-  if(y<view.top||y>view.bot)return;
-  const p=snap(x,y).p;
-  if(boxTool===1){
-    const o=at(x);
-    draft={k:'b',t:o.c.t,lo:p,hi:p};lines.push(draft);boxTool=2;
-  }else{draft.hi=p;draft=null;boxTool=0}
-  draw();
-}
-cv.addEventListener('pointerdown',e=>{
-  if(e.isPrimary)pts.clear();pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(pts.size===2){ // second finger down: start a pinch, drop whatever the first finger had started
-    try{cv.setPointerCapture(e.pointerId)}catch(err){}
-    pinch={d:pdist(),N:Math.min(N,Math.max(20,arrLen))};pan=null;sc=null;drag=null;divDrag=false;e.preventDefault();return}
-  if(pts.size>2)return;
-  move(e);try{cv.setPointerCapture(e.pointerId)}catch(err){} // touch has no hover: hit-test at the press point, and keep receiving moves outside the canvas
-  if(dotTool){dotClick(e);e.preventDefault();return}
-  if(boxTool){boxClick(e);e.preventDefault();return}
-  {const rc0=cv.getBoundingClientRect();if(isDiv(e.clientX-rc0.left,e.clientY-rc0.top)){divDrag=true;e.preventDefault();return}}
-  if(hl){drag=hl;dragEdge=hitEdge;e.preventDefault();
-    if(dragEdge==='move'){
-      const rc=cv.getBoundingClientRect(),mx=e.clientX-rc.left,my=e.clientY-rc.top,se=geoAt(hl.t);
-      moveInfo={y:my,lo:hl.lo,hi:hl.hi,si:se?geo.indexOf(se):-1,ci:geo.findIndex(q=>mx>=q.x&&mx<q.x+q.w),rng:view.hi-view.lo,ch:view.ch};
-    }
-    return}
-  if(view){if(e.clientX-cv.getBoundingClientRect().left>view.px0){sc={y:e.clientY,v:ysc};cv.style.cursor='ns-resize'}else{if(!lock&&fit)lock=fit;pan={x:e.clientX,y:e.clientY,off,yp:ypan,rng:view.hi-view.lo,vy:false};cv.style.cursor='grabbing'}e.preventDefault()}
-});
-const release=()=>{drag=null;divDrag=false;if(pan||sc){pan=null;sc=null;cv.style.cursor='crosshair'}};
-addEventListener('pointerup',release);addEventListener('pointercancel',release);
-cv.addEventListener('pointerup',e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=null});cv.addEventListener('pointercancel',e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=null});
-cv.addEventListener('dblclick',()=>{if(hl){lines=lines.filter(l=>l!==hl);hl=null;cv.style.cursor='crosshair';draw()}else if(mouse&&isDiv(mouse.x,mouse.y)){tpoFrac=null;draw()}else if(view&&mouse&&mouse.x>view.px0){ysc=1;ypan=0;lock=null;draw()}});
-addEventListener('keydown',e=>{
-  if(activeChart!==api)return;
-  if(e.altKey&&e.code==='KeyH'){e.preventDefault();addLine('h')}
-  else if(e.altKey&&e.code==='KeyV'){e.preventDefault();addLine('v')}
-  else if(e.altKey&&e.code==='KeyB'){e.preventDefault();if(draft)lines=lines.filter(l=>l!==draft);draft=null;dotTool=0;boxTool=1;const m=mouseAt();if(m){draft={k:'b',t:m.o.c.t,lo:m.p,hi:m.p};lines.push(draft);boxTool=2}draw()}
-  else if(e.altKey&&e.code==='KeyJ'){e.preventDefault();if(draft)lines=lines.filter(l=>l!==draft);draft=null;boxTool=0;dotTool=1;const m=mouseAt();if(m){lines.push({k:'d',t:m.o.c.t,p:m.p});dotTool=0}draw()}
-  else if(e.key==='Escape'&&(boxTool||dotTool)){if(draft)lines=lines.filter(l=>l!==draft);draft=null;boxTool=0;dotTool=0;draw()}
-  else if((e.key==='Delete'||e.key==='Backspace')&&hl){lines=lines.filter(l=>l!==hl);hl=null;draw()}
-});
+      /*
+       * the trade stream owns everything from `cut` on.
+       * `seam` collects the live part of the 15s bucket
+       * that contains `cut`.
+       */
 
-cv.addEventListener('wheel',e=>{
-  e.preventDefault();
-  // zoom relative to what is actually shown (line-break charts have fewer bricks than candles, so N can exceed what exists)
-  const sg=Math.sign(e.deltaY),mx=Math.max(20,Math.min(arrLen||src().length,3000)),b0=Math.min(N,mx);
-  let n=Math.round(b0*(sg>0?1.12:1/1.12));if(n===b0)n+=sg;
-  N=Math.max(20,Math.min(mx,n));if(cfg.main)ui();draw();
-},{passive:false});
-
-  const fcache=new Map();
-  // flag = body size > percentile of last BIG_WIN bodies AND volume > percentile of last BIG_WIN volumes (current bar included)
-  function bigFlags(arr,i0,i1){
-    const out=new Map(),tag=(cfg.main?TF:'')+mode;
-    if(fcache.size>30000)fcache.clear();
-    const r=Math.ceil(BIG_PERC*BIG_WIN)-1;
-    for(let k=Math.max(i0,BIG_WIN-1);k<i1;k++){
-      const c=arr[k];if(!c||c.h==null)continue;
-      const key=tag+'|'+c.t+'|'+c.o+'|'+c.c+'|'+c.v+'|'+arr[k-BIG_WIN+1].t;
-      let f=fcache.get(key);
-      if(f===undefined){
-        const bs=new Float64Array(BIG_WIN),vs=new Float64Array(BIG_WIN);
-        for(let j=0;j<BIG_WIN;j++){const q=arr[k-BIG_WIN+1+j];bs[j]=Math.abs(q.c-q.o);vs[j]=q.v}
-        bs.sort();vs.sort();
-        f=Math.abs(c.c-c.o)>bs[r]&&c.v>vs[r];fcache.set(key,f);
+      let cut = null,
+        seam = null,
+        cutArm = false,
+        cutDone = null;
+      function armCut() {
+        cut = null;
+        seam = null;
+        cutArm = true;
+        return new Promise((res) => {
+          /* no trades: carry on without a cut */
+          const t = setTimeout(() => {
+            cutDone = null;
+            cutArm = false;
+            if (cut != null) setTimeout(res, 1500);
+            else res();
+          }, 4000);
+          cutDone = () => {
+            clearTimeout(t);
+            cutDone = null;
+            res();
+          };
+        });
       }
-      if(f)out.set(c,true);
-    }
-    return out;
-  }
-  function newCandle(a){if(mode!=='lb'&&src()===a&&off>0)off++} // line-break views re-anchor on bricks in drawInner
-  cv.addEventListener('pointerenter',()=>{activeChart=api});
-  cv.addEventListener('pointermove',()=>{activeChart=api});
-  const api={sched,draw,newCandle,size,
-    resetView:()=>{N=cfg.N;off=0;ysc=1;ypan=0;lock=null;tpoFrac=null;draft=null;boxTool=0;dotTool=0;hl=null;drag=null;if(cfg.main)ui();draw()},
-    getState:()=>({N,mode,off,ysc,ypan,lock,tpoFrac,TF:cfg.main?TF:undefined,nTpo:cfg.main?nTpo:undefined}),
-    setState:st=>{
-      if(!st)return;
-      if(st.N>=20&&st.N<=3000)N=st.N;
-      if(['eq','std','lb'].includes(st.mode))mode=st.mode;
-      if(Number.isFinite(st.off))off=st.off;
-      if(st.ysc>0)ysc=st.ysc;
-      if(st.tpoFrac>0)tpoFrac=st.tpoFrac;
-      if(Number.isFinite(st.ypan))ypan=st.ypan;
-      if(st.lock&&st.lock.hi>st.lock.lo)lock={hi:st.lock.hi,lo:st.lock.lo};
-      if(cfg.main){
-        if(st.TF==='5m'||st.TF==='15s'){TF=st.TF;$('sym').textContent=SYM+' '+TF}
-        if([1,2,3].includes(st.nTpo))nTpo=st.nTpo;
-        ui();
+      function addTrade(p, q, T, m) {
+        /* ignore malformed trades */
+        if (
+          !Number.isFinite(p) ||
+          !Number.isFinite(q) ||
+          !Number.isFinite(T)
+        )
+          return;
+        lastT = T;
+        if (cutArm) {
+          cut = Math.floor(T / 1000) * 1000 + 1000;
+          cutArm = false;
+        }
+        if (cut != null) {
+          if (
+            T >= cut &&
+            T < Math.floor(cut / 15000) * 15000 + 15000
+          ) {
+            if (!seam) seam = { h: p, l: p, c: p, v: 0, bv: 0 };
+            seam.h = Math.max(seam.h, p);
+            seam.l = Math.min(seam.l, p);
+            seam.c = p;
+            seam.v += q;
+            if (!m) seam.bv += q;
+          }
+          /*
+           * the seconds before the cut are now closed on the
+           * exchange
+           */
+          if (cutDone && T >= cut + 1000) cutDone();
+        }
+        feed(k5, 300000, p, q, T, m, false);
+        feed(k15, 900000, p, q, T, m, false);
+        feed(c15, 15000, p, q, T, m, true);
+        if (mid == null)
+          $("px").textContent = document.title = p.toFixed(DP);
+        schedule();
       }
-      draw();
-    }};
-  function mkBtns(el,opts,get,set){
-    el.innerHTML='';
-    opts.forEach(([v,l])=>{const b=document.createElement('button');b.textContent=l;
-      b.className=get()===v?'a':'';b.onclick=()=>{set(v);mkBtns(el,opts,get,set);draw()};el.appendChild(b)});
-  }
-  function ui(){
-    mkBtns($('modeBtns'),[['eq','Volume candles'],['std','Standard'],['lb','Line break']],()=>mode,v=>mode=v);
-    mkBtns($('tfBtns'),[['15s','15s'],['5m','5m']],()=>TF,v=>setTF(v));
-    mkBtns($('tpoBtns'),[[1,'1d'],[2,'2d'],[3,'3d']],()=>nTpo,v=>nTpo=v);
-    mkBtns($('nBtns'),[[40,'40'],[80,'80'],[120,'120'],[160,'160'],[288,'288'],[576,'576']],()=>N,v=>N=v);
-  }
-  
-  function setTF(v){TF=v;off=0;lock=null;draft=null;boxTool=0;dotTool=0;$('sym').textContent=SYM+' '+v;draw()}
-  if(cfg.main)ui();
-  if(window.ResizeObserver)new ResizeObserver(()=>size()).observe(cv);
-  size();
-  return api;
-}
-const mainChart=makeChart($('c'),{main:true,mode:'eq',N:288,tpo:true});
-const miniChart=makeChart($('mc'),{main:false,mode:'lb',N:200,tpo:false});
-charts=[mainChart,miniChart];
+      /*
+       * 5m store feeds the 5m view, 15m store feeds the
+       * TPO profiles
+       */
+      function onKline(k) {
+        const A = k.i === "15m" ? k15 : k5;
+        /* ignore malformed klines */
+        if (
+          ![k.t, k.o, k.h, k.l, k.c, k.v, k.V].every((v) =>
+            Number.isFinite(+v),
+          )
+        )
+          return;
+        let c = A.find((x) => x.t === k.t);
+        if (!c) {
+          c = { t: k.t };
+          A.push(c);
+          charts.forEach((h) => h.newCandle(A));
+          A.sort((a, b) => a.t - b.t);
+        }
+        Object.assign(c, {
+          o: +k.o,
+          h: +k.h,
+          l: +k.l,
+          c: +k.c,
+          v: +k.v,
+          bv: +k.V,
+        });
+        schedule();
+      }
+      async function fetch1s(end) {
+        for (let tr = 0; tr < 2; tr++)
+          for (const h of REST) {
+            try {
+              const j = await fj(
+                kl(h, "interval=1s&limit=1000&endTime=" + end),
+              );
+              if (Array.isArray(j)) return j;
+            } catch (e) {}
+          }
+        return null;
+      }
+      /*
+       * 15s candles from 1s klines ending at `end`:
+       * `pages` pages of 1000s, fetched 11 at a time,
+       * newest first; stops as soon as the callback
+       * returns true
+       */
 
-// Ctrl+S (or Cmd+S) saves drawings + all settings in this browser's localStorage; restored on reload
-const SAVE_KEY='btcfdusd-state-v2';
-function toast(t){const el=$('toast');el.textContent=t;el.style.opacity=1;clearTimeout(toast.h);toast.h=setTimeout(()=>{el.style.opacity=0},1800)}
-let miniBox=null;
-function snapshot(){
-  const r=mini.getBoundingClientRect();
-  if(r.width>0)miniBox={x:Math.round(r.left),y:Math.round(r.top),w:Math.round(r.width),h:Math.round(r.height)};
-  return {v:2,lines:lines.filter(l=>!(l.k==='b'&&l.lo===l.hi)),main:mainChart.getState(),mini:miniChart.getState(),
-    win:Object.assign({hidden:mini.style.display==='none'},miniBox||{})};
-}
-function restore(){
-  let st=null;
-  try{st=JSON.parse(localStorage.getItem(SAVE_KEY)||'null')}catch(e){}
-  if(!st){try{const old=JSON.parse(localStorage.getItem('btcfdusd-drawings-v1')||'null');if(Array.isArray(old))st={lines:old}}catch(e){}}
-  if(!st)return;
-  if(Array.isArray(st.lines))lines.push(...st.lines.filter(l=>l&&l.k));
-  if(st.win){
-    if(st.win.w>0&&st.win.h>0){
-      const w=st.win.w,h=st.win.h;
-      miniBox={x:st.win.x!=null?st.win.x:innerWidth-w-12,y:st.win.y!=null?st.win.y:innerHeight-h-12,w,h};setMiniBox(miniBox);
-    }
-    if(st.win.hidden)mini.style.display='none';
-  }
-  mainChart.setState(st.main);miniChart.setState(st.mini);schedule();
-}
-addEventListener('keydown',e=>{
-  if((e.ctrlKey||e.metaKey)&&!e.altKey&&String(e.key).toLowerCase()==='s'){
-    e.preventDefault();
-    try{const snap=snapshot();localStorage.setItem(SAVE_KEY,JSON.stringify(snap));toast('Layout, settings and drawings saved ('+snap.lines.length+' drawings)')}
-    catch(err){toast('Could not save: browser storage is blocked')}
-  }
-});
+      async function seed15(m, end, pages, lim, cb) {
+        const B = 11,
+          seen = new Set();
+        for (let i = 0; i < pages; i += B) {
+          const res = await Promise.all(
+            Array.from(
+              { length: Math.min(B, pages - i) },
+              (_, k) => fetch1s(end - (i + k) * 1000000),
+            ),
+          );
+          let any = false;
+          res.forEach((j) => {
+            if (!j) return;
+            j.forEach((a) => {
+              if (seen.has(a[0]) || (lim != null && a[0] >= lim))
+                return;
+              seen.add(a[0]);
+              any = true;
+              const t = Math.floor(a[0] / 15000) * 15000;
+              let c = m.get(t);
+              if (!c) {
+                c = {
+                  t,
+                  o: +a[1],
+                  h: +a[2],
+                  l: +a[3],
+                  c: +a[4],
+                  v: 0,
+                  bv: 0,
+                  fo: a[0],
+                  lt: a[0],
+                };
+                m.set(t, c);
+              }
+              c.h = Math.max(c.h, +a[2]);
+              c.l = Math.min(c.l, +a[3]);
+              if (a[0] < c.fo) {
+                c.fo = a[0];
+                c.o = +a[1];
+              }
+              if (a[0] >= c.lt) {
+                c.lt = a[0];
+                c.c = +a[4];
+              }
+              c.v += +a[5];
+              c.bv += +a[9];
+            });
+          });
+          if (cb() === true) break;
+          if (!any) break;
+        }
+      }
+      function schedule() {
+        charts.forEach((h) => h.sched());
+      }
+      /*
+       * since==null: first load, adaptive (keeps fetching
+       * older 1s history until the 15s line-break chart
+       * has enough bricks, up to ≈18h)
+       */
 
-// floating 15s line-break window: drag the top-left grip to resize (anchored bottom-right)
-const mini=$('mini');
-function setMiniBox(bx){ // keep the window inside the viewport
-  const w=Math.max(240,Math.min(innerWidth,bx.w)),h=Math.max(160,Math.min(innerHeight,bx.h));
-  mini.style.left=Math.max(0,Math.min(innerWidth-w,bx.x))+'px';mini.style.top=Math.max(0,Math.min(innerHeight-h,bx.y))+'px';
-  mini.style.width=w+'px';mini.style.height=h+'px';
-}
-{const r0=mini.getBoundingClientRect();setMiniBox({x:innerWidth-r0.width-12,y:innerHeight-r0.height-12,w:r0.width,h:r0.height})} // default: bottom-right
-addEventListener('resize',()=>{const r=mini.getBoundingClientRect();if(r.width>0)setMiniBox({x:r.left,y:r.top,w:r.width,h:r.height})});
-document.querySelectorAll('#mini .grip').forEach(gp=>gp.addEventListener('pointerdown',e=>{ // resize from any corner; the opposite corner stays put
-  const c=gp.dataset.c,r=mini.getBoundingClientRect(),sx=e.clientX,sy=e.clientY;
-  gp.setPointerCapture(e.pointerId);e.preventDefault();
-  const mv=ev=>{
-    const dx=ev.clientX-sx,dy=ev.clientY-sy;let x1=r.left,x2=r.right,y1=r.top,y2=r.bottom;
-    if(c[1]==='l')x1=Math.max(0,Math.min(r.right-240,r.left+dx));else x2=Math.min(innerWidth,Math.max(r.left+240,r.right+dx));
-    if(c[0]==='t')y1=Math.max(0,Math.min(r.bottom-160,r.top+dy));else y2=Math.min(innerHeight,Math.max(r.top+160,r.bottom+dy));
-    setMiniBox({x:x1,y:y1,w:x2-x1,h:y2-y1});
-  };
-  const up=()=>{gp.removeEventListener('pointermove',mv);gp.removeEventListener('pointerup',up)};
-  gp.addEventListener('pointermove',mv);gp.addEventListener('pointerup',up);
-}));
-$('mhead').addEventListener('pointerdown',e=>{ // title bar: move the window
-  if(e.target.closest&&e.target.closest('button'))return;
-  const hd=$('mhead'),r=mini.getBoundingClientRect(),sx=e.clientX,sy=e.clientY;
-  hd.setPointerCapture(e.pointerId);e.preventDefault();
-  const mv=ev=>setMiniBox({x:r.left+ev.clientX-sx,y:r.top+ev.clientY-sy,w:r.width,h:r.height});
-  const up=()=>{hd.removeEventListener('pointermove',mv);hd.removeEventListener('pointerup',up)};
-  hd.addEventListener('pointermove',mv);hd.addEventListener('pointerup',up);
-});
-$('mx').onclick=()=>{mini.style.display='none'};
-$('miniTog').onclick=()=>{mini.style.display=mini.style.display==='none'?'flex':'none';miniChart.size()};
+      /*
+       * since=time: backfill after a reconnect, from that
+       * time up to now
+       */
 
-addEventListener('keydown',e=>{
-  if(e.altKey&&e.code==='KeyR'){
-    e.preventDefault();
-    if(lines.length&&!confirm('Reset both charts and delete all '+lines.length+' drawings?'))return;
-    lines=[];linesSig='';
-    mini.style.display='flex';mini.style.width='';mini.style.height='';  // back to the CSS default size, bottom-right
-    {const r=mini.getBoundingClientRect();setMiniBox({x:innerWidth-r.width-12,y:innerHeight-r.height-12,w:r.width,h:r.height})}
-    mainChart.resetView();miniChart.resetView();schedule();
-    toast('Charts reset to default, drawings deleted');
-  }
-});
-$('sym').textContent=SYM+' '+TF;document.title=SYM;
-restore();
-connect();hist(IV,()=>seedIv(IV));hist('15m',()=>seedIv('15m'));load15(null);
-</script>
-</body>
+      async function fill15(since) {
+        await armCut();
+        const lim = cut,
+          end = lim != null ? lim - 1 : Date.now(),
+          first = since == null,
+          TARGET = 450;
+        const pages = first
+          ? 66
+          : Math.max(
+              1,
+              Math.min(
+                66,
+                Math.ceil((end - since) / 1000000) + 1,
+              ),
+            );
+        const m = new Map();
+        let bricks = 0,
+          joined = false;
+        await seed15(m, end, pages, lim, () => {
+          /*
+           * add the live part of the bucket that straddles the
+           * cut, once
+           */
+          if (!joined) {
+            joined = true;
+            const b =
+              lim != null && seam
+                ? m.get(Math.floor(lim / 15000) * 15000)
+                : null;
+            if (b) {
+              b.h = Math.max(b.h, seam.h);
+              b.l = Math.min(b.l, seam.l);
+              b.c = seam.c;
+              b.v += seam.v;
+              b.bv += seam.bv;
+            }
+            cut = null;
+            seam = null;
+          }
+          let lo = Infinity;
+          m.forEach((c, t) => {
+            if (t < lo) lo = t;
+          });
+          const all = new Map(c15.map((c) => [c.t, c]));
+          /*
+           * a backfill's oldest bucket may be partial: keep
+           * the one we have
+           */
+          m.forEach((c, t) => {
+            if (!first && t === lo && all.has(t)) return;
+            all.set(t, c);
+          });
+          c15 = [...all.values()]
+            .sort((x, y) => x.t - y.t)
+            .slice(-8000);
+          if (first) {
+            bricks = lbBars(c15).length;
+            $("mst").textContent =
+              bricks >= TARGET
+                ? ""
+                : "loading 15s " + bricks + "/" + TARGET;
+          }
+          schedule();
+          return first && bricks >= TARGET;
+        });
+        cut = null;
+        seam = null;
+        if (first)
+          $("mst").textContent =
+            m.size && bricks < TARGET
+              ? "15s history: only " +
+                bricks +
+                " bricks available"
+              : "";
+        return m.size > 0;
+      }
+      /* 15s fills run one at a time */
+      let q15 = Promise.resolve();
+      const load15 = (since) =>
+        hist(
+          "15s",
+          () =>
+            (q15 = q15
+              .then(() => fill15(since))
+              .catch((e) => {
+                console.error(e);
+                return false;
+              })),
+        );
+      /*
+       * Three-line break bricks built from candle closes;
+       * each brick carries the volume since the previous
+       * brick
+       */
+
+      function lbBars(arr) {
+        const out = [];
+        let av = 0,
+          ab = 0;
+        arr.forEach((c) => {
+          if (c.c == null) return;
+          av += c.v || 0;
+          ab += c.bv || 0;
+          const x = c.c;
+          if (!out.length) {
+            if (x !== c.o) {
+              out.push({
+                t: c.t,
+                o: c.o,
+                c: x,
+                h: Math.max(c.o, x),
+                l: Math.min(c.o, x),
+                v: av,
+                bv: ab,
+              });
+              av = ab = 0;
+            }
+            return;
+          }
+          const L = out[out.length - 1],
+            last3 = out.slice(-3);
+          let nb = null;
+          if (L.c > L.o) {
+            if (x > L.c) nb = { o: L.c, c: x };
+            else if (x < Math.min(...last3.map((q) => q.l)))
+              nb = { o: L.o, c: x };
+          } else {
+            if (x < L.c) nb = { o: L.c, c: x };
+            else if (x > Math.max(...last3.map((q) => q.h)))
+              nb = { o: L.o, c: x };
+          }
+          if (nb) {
+            nb.t = c.t;
+            nb.h = Math.max(nb.o, nb.c);
+            nb.l = Math.min(nb.o, nb.c);
+            nb.v = av;
+            nb.bv = ab;
+            out.push(nb);
+            av = ab = 0;
+          }
+        });
+        return out;
+      }
+      async function fj(url, ms = 10000) {
+        const ac = new AbortController(),
+          t = setTimeout(() => ac.abort(), ms);
+        try {
+          const r = await fetch(url, { signal: ac.signal });
+          return await r.json();
+        } finally {
+          clearTimeout(t);
+        }
+      }
+      const store = (iv) => (iv === "15m" ? k15 : k5),
+        setStore = (iv, a) => {
+          if (iv === "15m") k15 = a;
+          else k5 = a;
+        };
+      /*
+       * recent kline history (5m for the chart, 15m for
+       * the TPO profiles); merges into what is already
+       * loaded, so it also heals gaps after a reconnect
+       */
+      async function seedIv(iv) {
+        for (const h of REST) {
+          try {
+            const lim = iv === "15m" ? 1000 : 700;
+            const j = await fj(
+              kl(h, "interval=" + iv + "&limit=" + lim),
+            );
+            if (!Array.isArray(j) || !j.length) continue;
+            const arr = j.map(toC),
+              f = arr[0].t,
+              lt = arr[arr.length - 1].t,
+              old = store(iv);
+            setStore(
+              iv,
+              old
+                .filter((c) => c.t < f)
+                .concat(
+                  arr,
+                  old.filter((c) => c.t > lt),
+                ),
+            );
+            seeded[iv] = true;
+            if (iv === IV && mid == null)
+              $("px").textContent =
+                k5[k5.length - 1].c.toFixed(DP);
+            schedule();
+            return true;
+          } catch (e) {}
+        }
+        return false;
+      }
+      /*
+       * lazy history: one more page of older klines when
+       * the view reaches the start of what is loaded
+       */
+      async function older(iv) {
+        if (olderBusy[iv] || olderEnd[iv] || !store(iv).length)
+          return;
+        olderBusy[iv] = true;
+        let ok = false;
+        for (const h of REST) {
+          try {
+            const end = store(iv)[0].t - 1;
+            const j = await fj(
+              kl(
+                h,
+                "interval=" + iv + "&limit=1000&endTime=" + end,
+              ),
+            );
+            if (!Array.isArray(j)) continue;
+            const cur = store(iv),
+              arr = j.map(toC).filter((c) => c.t < cur[0].t);
+            if (arr.length) setStore(iv, arr.concat(cur));
+            if (!arr.length || store(iv).length >= 6000)
+              olderEnd[iv] = true;
+            ok = true;
+            schedule();
+            break;
+          } catch (e) {}
+        }
+        setTimeout(
+          () => {
+            olderBusy[iv] = false;
+          },
+          ok ? 0 : 10000,
+        );
+      }
+      /*
+       * run a history load, show it in the status while it
+       * is failing, retry a few times
+       */
+      async function hist(name, fn) {
+        for (let i = 0; ; i++) {
+          if (await fn()) {
+            histFail.delete(name);
+            stat();
+            return;
+          }
+          histFail.add(name);
+          stat();
+          if (i >= 5) return;
+          await new Promise((r) => setTimeout(r, 5000 * (i + 1)));
+        }
+      }
+      /*
+       * after a reconnect (or when polling takes over):
+       * refetch what was missed while the stream was down
+       */
+      function resync() {
+        hist(IV, () => seedIv(IV));
+        hist("15m", () => seedIv("15m"));
+        load15(
+          lastT != null ? lastT - 60000 : Date.now() - 120000,
+        );
+      }
+      /* mid = (bid+ask)/2 */
+      function setMid(b, a) {
+        const m = (+b + +a) / 2;
+        if (!Number.isFinite(m)) return;
+        mid = m;
+        $("px").textContent = document.title = mid.toFixed(DP);
+        schedule();
+      }
+      /*
+       * Fallback for networks that block WebSocket: poll
+       * the REST API every 2s for trades, the current
+       * klines and the best bid/ask.
+       */
+
+      /*
+       * It starts when the stream has been down for 5s and
+       * stops as soon as the stream connects (the stream
+       * keeps being retried).
+       */
+
+      let polling = false,
+        pollT = null,
+        pollId = null,
+        restI = 0,
+        lastMsg = 0;
+      async function pollOnce() {
+        const h = REST[restI % REST.length],
+          q = `symbol=${SYM}`;
+        try {
+          const [bt, a5, a15, tr] = await Promise.all([
+            fj(`${h}/api/v3/ticker/bookTicker?${q}`, 5000),
+            fj(
+              `${h}/api/v3/klines?${q}&interval=${IV}&limit=2`,
+              5000,
+            ),
+            fj(
+              `${h}/api/v3/klines?${q}&interval=15m&limit=2`,
+              5000,
+            ),
+            fj(
+              `${h}/api/v3/aggTrades?${q}&` +
+                (pollId == null
+                  ? "limit=1"
+                  : `fromId=${pollId + 1}&limit=1000`),
+              5000,
+            ),
+          ]);
+          if (!polling) return;
+          if (!Array.isArray(a5) || !Array.isArray(tr))
+            throw new Error("bad reply");
+          [
+            [a5, IV],
+            [a15, "15m"],
+          ].forEach(([a, i]) => {
+            if (Array.isArray(a))
+              a.forEach((r) =>
+                onKline({
+                  i,
+                  t: r[0],
+                  o: r[1],
+                  h: r[2],
+                  l: r[3],
+                  c: r[4],
+                  v: r[5],
+                  V: r[9],
+                }),
+              );
+          });
+          /*
+           * trade ids are sequential: nothing is skipped or
+           * counted twice
+           */
+          tr.forEach((t) => {
+            if (pollId == null || t.a > pollId) {
+              pollId = t.a;
+              addTrade(+t.p, +t.q, t.T, t.m);
+            }
+          });
+          if (bt && bt.bidPrice != null)
+            setMid(bt.bidPrice, bt.askPrice);
+          conn = "live (polling)";
+          stat();
+        } catch (e) {
+          if (polling) {
+            restI++;
+            conn = "reconnecting…";
+            stat();
+          }
+        }
+      }
+      async function pollLoop() {
+        while (polling) {
+          const t0 = Date.now();
+          await pollOnce();
+          await new Promise((r) =>
+            setTimeout(
+              r,
+              Math.max(200, 2000 - (Date.now() - t0)),
+            ),
+          );
+        }
+      }
+      function startPoll() {
+        pollT = null;
+        if (polling || conn === "live") return;
+        polling = true;
+        pollId = null;
+        resync();
+        pollLoop();
+      }
+      function connect() {
+        const sy = SYM.toLowerCase();
+        const s = [
+          "aggTrade",
+          "kline_" + IV,
+          "kline_15m",
+          "bookTicker",
+        ]
+          .map((x) => sy + "@" + x)
+          .join("/");
+        const again = () => {
+          hostI++;
+          setTimeout(
+            connect,
+            Math.min(
+              1000 * 2 ** retry++,
+              polling ? 60000 : 15000,
+            ),
+          );
+        };
+        if (!polling && !pollT)
+          pollT = setTimeout(startPoll, 5000);
+        let w;
+        try {
+          w = ws = new WebSocket(
+            `${WS[hostI % WS.length]}/stream?streams=${s}`,
+          );
+        } catch (e) {
+          again();
+          return;
+        }
+        /* stuck connecting (some proxies never answer) */
+        setTimeout(() => {
+          if (w.readyState === 0) w.close();
+        }, 10000);
+        w.onopen = () => {
+          const was = everOpen || polling;
+          retry = 0;
+          lastMsg = Date.now();
+          clearTimeout(pollT);
+          pollT = null;
+          polling = false;
+          conn = "live";
+          stat();
+          if (was) resync();
+          everOpen = true;
+        };
+        w.onmessage = (e) => {
+          lastMsg = Date.now();
+          let m;
+          try {
+            m = JSON.parse(e.data).data;
+          } catch (err) {
+            return;
+          }
+          if (!m) return;
+          if (m.e === "aggTrade") addTrade(+m.p, +m.q, m.T, m.m);
+          else if (m.e === "kline" && m.k) onKline(m.k);
+          /* bookTicker */
+          else if (m.b !== undefined && m.a !== undefined)
+            setMid(m.b, m.a);
+        };
+        w.onclose = () => {
+          if (!polling) {
+            conn = "reconnecting…";
+            stat();
+          }
+          again();
+        };
+        w.onerror = () => w.close();
+      }
+      /* open but silent for 20s: treat as dead */
+      setInterval(() => {
+        if (
+          ws &&
+          ws.readyState === 1 &&
+          Date.now() - lastMsg > 20000
+        )
+          ws.close();
+      }, 5000);
+
+      function makeChart(cv, cfg) {
+        const g = cv.getContext("2d");
+        const src = () =>
+            cfg.main ? (TF === "5m" ? k5 : c15) : c15,
+          sec = () => (cfg.main ? TF === "15s" : true);
+        const TS = () =>
+          sec()
+            ? {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              }
+            : { hour: "2-digit", minute: "2-digit" };
+        /*
+         * fit = auto-fitted price range, lock = range frozen
+         * once the chart has been dragged
+         */
+        let W = 0,
+          H = 0,
+          raf = 0,
+          geo = null,
+          view = null,
+          hl = null,
+          drag = null,
+          hitEdge = null,
+          dragEdge = null,
+          boxTool = 0,
+          dotTool = 0,
+          draft = null,
+          off = 0,
+          pan = null,
+          sc = null,
+          ysc = 1,
+          ypan = 0,
+          N = cfg.N,
+          mode = cfg.mode,
+          hover = -1,
+          mouse = null,
+          profs = [],
+          arrLen = 0,
+          moveInfo = null,
+          tpoFrac = null,
+          divDrag = false,
+          lbT = null,
+          fit = null,
+          lock = null;
+        /*
+         * pointers currently down on this canvas; pinch =
+         * two-finger zoom in progress
+         */
+        const pts = new Map();
+        let pinch = null;
+        const pdist = () => {
+          const [a, b] = [...pts.values()];
+          return Math.max(10, Math.hypot(a.x - b.x, a.y - b.y));
+        };
+        function size() {
+          const r = cv.getBoundingClientRect(),
+            d = devicePixelRatio || 1;
+          W = r.width;
+          H = r.height;
+          cv.width = W * d;
+          cv.height = H * d;
+          g.setTransform(d, 0, 0, d, 0, 0);
+          draw();
+        }
+        addEventListener("resize", size);
+        function sched() {
+          if (!raf)
+            raf = requestAnimationFrame(() => {
+              raf = 0;
+              draw();
+            });
+        }
+        function nice(x) {
+          const e = Math.pow(10, Math.floor(Math.log10(x))),
+            f = x / e;
+          return (
+            (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * e
+          );
+        }
+
+        const okC = (c) =>
+          !!c &&
+          Number.isFinite(c.h) &&
+          Number.isFinite(c.l) &&
+          Number.isFinite(c.o) &&
+          Number.isFinite(c.c);
+        function draw() {
+          try {
+            drawInner();
+            if (cfg.main) $("info").style.color = "";
+          } catch (e) {
+            console.error(e);
+            /* reset canvas state (clip stack) */
+            const d = devicePixelRatio || 1;
+            cv.width = cv.width;
+            g.setTransform(d, 0, 0, d, 0, 0);
+            if (cfg.main) {
+              const el = $("info");
+              el.style.color = "#c0392b";
+              el.textContent = "Draw error: " + e.message;
+            }
+          }
+        }
+        function drawInner() {
+          g.clearRect(0, 0, W, H);
+          const arr = mode === "lb" ? lbBars(src()) : src();
+          arrLen = arr.length;
+          /*
+           * a panned line-break view is counted in bricks:
+           * stay on the same bricks when new ones print
+           */
+          if (mode === "lb") {
+            if (off > 0 && lbT != null)
+              for (
+                let i = arr.length - 1;
+                i >= 0 && arr[i].t > lbT;
+                i--
+              )
+                off++;
+            lbT = arr.length ? arr[arr.length - 1].t : null;
+          } else lbT = null;
+          off = Math.max(
+            -(N - 3),
+            Math.min(off, Math.max(0, arr.length - N)),
+          );
+          /* view reaches the oldest loaded candle: load more */
+          if (
+            cfg.main &&
+            TF === "5m" &&
+            seeded[IV] &&
+            arr.length - off - N <= 0
+          )
+            older(IV);
+          const vis = arr
+            .slice(
+              Math.max(0, arr.length - off - N),
+              arr.length - off,
+            )
+            .filter(okC);
+          if (!vis.length || !W) return;
+          const dayStart =
+            Math.floor(vis[vis.length - 1].t / 86400000) *
+            86400000;
+          const dayC = cfg.tpo
+            ? k15.filter((c) => c.t >= dayStart && okC(c))
+            : [];
+          let hi = -1e12,
+            lo = 1e12;
+          vis.concat(dayC).forEach((c) => {
+            hi = Math.max(hi, c.h);
+            lo = Math.min(lo, c.l);
+          });
+          const pad = (hi - lo) * 0.06 || 1;
+          hi += pad;
+          lo -= pad;
+          fit = { hi, lo };
+          if (lock) {
+            hi = lock.hi;
+            lo = lock.lo;
+          }
+          const hi0 = hi,
+            lo0 = lo,
+            mid0 = (hi + lo) / 2 + ypan;
+          hi = mid0 + ((hi0 - lo0) / 2) * ysc;
+          lo = mid0 - ((hi0 - lo0) / 2) * ysc;
+          /*
+           * legendH = room for the TPO session legend and day
+           * labels
+           */
+          const axW = 62,
+            tpoW = cfg.tpo
+              ? tpoFrac != null
+                ? Math.max(80, Math.min(W * 0.75, tpoFrac * W))
+                : Math.max(80, W * 0.2 - 5)
+              : 0,
+            legendH = cfg.main ? 22 : 0,
+            timeH = 16,
+            px0 = W - axW;
+          const x0 = tpoW + 10,
+            x1 =
+              W -
+              axW -
+              Math.max(
+                cfg.main ? 60 : 24,
+                W * (cfg.main ? 0.07 : 0.04),
+              ),
+            top = 8,
+            bot = H - legendH - timeH - 6,
+            ch = bot - top;
+          const Y = (p) => top + ((hi - p) / (hi - lo)) * ch;
+          /*
+           * price tag in the axis column / time tag under the
+           * chart
+           */
+
+          const ptag = (y, txt, bg, fg = "#fff") => {
+            g.fillStyle = bg;
+            g.fillRect(px0, y - 9, axW, 18);
+            g.fillStyle = fg;
+            g.textAlign = "left";
+            g.textBaseline = "middle";
+            g.fillText(txt, px0 + 5, y);
+          };
+          const ttag = (cx, txt, bg, fg = "#fff") => {
+            const tw = g.measureText(txt).width + 12,
+              bx = Math.max(4, Math.min(px0 - tw, cx - tw / 2));
+            g.fillStyle = bg;
+            g.fillRect(bx, bot + 2, tw, 16);
+            g.fillStyle = fg;
+            g.textAlign = "center";
+            g.textBaseline = "middle";
+            g.fillText(txt, bx + tw / 2, bot + 10);
+          };
+          const dlabel = (t) => {
+            const d = new Date(t);
+            return (
+              d.toLocaleDateString([], {
+                day: "2-digit",
+                month: "short",
+              }) +
+              " " +
+              d.toLocaleTimeString([], TS())
+            );
+          };
+
+          /* grid + price axis */
+
+          const gs = Math.max(1, nice((hi - lo) / 6));
+          g.font = "11px ui-monospace,Menlo,monospace";
+          g.textBaseline = "middle";
+          for (let p = Math.ceil(lo / gs) * gs; p < hi; p += gs) {
+            g.strokeStyle = "#eef0f3";
+            g.beginPath();
+            g.moveTo(4, Y(p));
+            g.lineTo(W - axW, Y(p));
+            g.stroke();
+            g.fillStyle = "#6b7684";
+            g.textAlign = "left";
+            g.fillText(p.toFixed(DP), W - axW + 6, Y(p));
+          }
+
+          /*
+           * TPO (Market Profile): one brick per 30 min; up to
+           * 3 UTC days side by side (oldest left, latest next
+           * to the chart)
+           */
+
+          /*
+           * a day's row size comes from the average range of
+           * the two UTC days before it, so it is fixed for the
+           * whole day and does not depend on zoom or pan
+           */
+
+          /* dayR = high/low of every loaded UTC day */
+          const gap = 10,
+            DAY = 86400000,
+            dayR = new Map();
+          if (cfg.tpo)
+            k15.forEach((c) => {
+              if (!okC(c)) return;
+              const k = Math.floor(c.t / DAY),
+                q = dayR.get(k);
+              if (!q) dayR.set(k, { h: c.h, l: c.l });
+              else {
+                q.h = Math.max(q.h, c.h);
+                q.l = Math.min(q.l, c.l);
+              }
+            });
+          const prevR = (dS) => {
+            const r = [1, 2]
+              .map((n) => dS - n * DAY)
+              .filter(
+                (s) =>
+                  k15.length &&
+                  k15[0].t <= s &&
+                  dayR.has(s / DAY),
+              )
+              .map((s) => dayR.get(s / DAY))
+              .map((q) => q.h - q.l)
+              .filter((v) => v > 0);
+            /* only fully loaded days count */
+            return r.length
+              ? r.reduce((a, b) => a + b, 0) / r.length
+              : 0;
+          };
+          /*
+           * always compute at least 2 days so the previous
+           * day's POC exists
+           */
+          const colW = (tpoW - 6 - (nTpo - 1) * gap) / nTpo,
+            cnt = cfg.tpo ? Math.max(nTpo, 2) : 0;
+          profs = [];
+          g.save();
+          g.beginPath();
+          g.rect(0, top, x0 - 5, bot - top);
+          g.clip();
+          for (let d = 0; d < cnt; d++) {
+            const show = d >= cnt - nTpo,
+              dS = dayStart - (cnt - 1 - d) * 86400000,
+              cx0 = 6 + (d - (cnt - nTpo)) * (colW + gap);
+            const rows = new Map(),
+              per = new Map();
+            let dh = -Infinity,
+              dl = Infinity;
+            k15.forEach((c) => {
+              if (!okC(c) || c.t < dS || c.t >= dS + 86400000)
+                return;
+              dh = Math.max(dh, c.h);
+              dl = Math.min(dl, c.l);
+              const i = Math.floor((c.t - dS) / TPO_MS),
+                q = per.get(i);
+              if (!q) per.set(i, { i, h: c.h, l: c.l });
+              else {
+                q.h = Math.max(q.h, c.h);
+                q.l = Math.min(q.l, c.l);
+              }
+            });
+            /*
+             * falls back to the day's own range when no earlier
+             * day is loaded
+             */
+            const rng = prevR(dS) || dh - dl,
+              step = rng > 0 ? Math.max(1, nice(rng / 40)) : 1,
+              rowH = (ch * step) / (hi - lo);
+            [...per.values()]
+              .sort((m, n) => m.i - n.i)
+              .forEach((q) => {
+                for (
+                  let r = Math.floor(q.l / step);
+                  r <= Math.floor(q.h / step);
+                  r++
+                ) {
+                  if (!rows.has(r)) rows.set(r, []);
+                  rows.get(r).push(q.i);
+                }
+              });
+            const P = {
+              d,
+              dS,
+              cx0,
+              show,
+              rows,
+              step,
+              rowH,
+              lw: 1,
+              poc: null,
+              a: null,
+              b: null,
+            };
+            profs.push(P);
+            const keys = [...rows.keys()];
+            if (!keys.length) continue;
+            const kmin = Math.min(...keys),
+              kmax = Math.max(...keys),
+              L = (r) => (rows.has(r) ? rows.get(r).length : 0);
+            let tot = 0,
+              maxC = 1;
+            keys.forEach((r) => {
+              tot += L(r);
+              maxC = Math.max(maxC, L(r));
+            });
+            const rmid = (kmin + kmax) / 2;
+            let poc = kmin;
+            for (let r = kmin; r <= kmax; r++)
+              if (
+                L(r) > L(poc) ||
+                (L(r) === L(poc) &&
+                  Math.abs(r - rmid) < Math.abs(poc - rmid))
+              )
+                poc = r;
+            let a = poc,
+              b = poc,
+              acc = L(poc);
+            /*
+             * 70% value area: compare the two rows above with
+             * the two rows below and take the heavier pair
+             */
+            while (acc < tot * 0.7 && (a > kmin || b < kmax)) {
+              const up = b < kmax ? L(b + 1) + L(b + 2) : -1,
+                dn = a > kmin ? L(a - 1) + L(a - 2) : -1;
+              if (up >= dn)
+                for (let n = Math.min(2, kmax - b); n > 0; n--) {
+                  b++;
+                  acc += L(b);
+                }
+              else
+                for (let n = Math.min(2, a - kmin); n > 0; n--) {
+                  a--;
+                  acc += L(a);
+                }
+            }
+            const lw = Math.min(11, (colW - 2) / maxC);
+            Object.assign(P, { poc, a, b, lw });
+            if (show)
+              for (let r = a; r <= b; r++) {
+                g.fillStyle =
+                  r === poc
+                    ? "rgba(224,138,0,.2)"
+                    : "rgba(47,128,200,.08)";
+                g.fillRect(
+                  cx0 - 2,
+                  Y((r + 1) * step),
+                  colW + 2,
+                  rowH,
+                );
+              }
+            if (show)
+              rows.forEach((lst, r) => {
+                const yT = Y((r + 1) * step);
+                if (yT > bot || yT + rowH < top) return;
+                lst.forEach((idx, k) => {
+                  g.fillStyle = tpoColor(idx, 0.72);
+                  g.fillRect(
+                    cx0 + k * lw,
+                    yT + 0.5,
+                    Math.max(1, lw - 1),
+                    Math.max(1, rowH - 1),
+                  );
+                });
+              });
+          }
+          g.restore();
+          /*
+           * need the shown days plus the two before the oldest
+           * one
+           */
+          if (
+            cfg.tpo &&
+            seeded["15m"] &&
+            k15.length &&
+            dayStart - (cnt + 1) * DAY < k15[0].t
+          )
+            older("15m");
+          if (cfg.tpo) {
+            g.strokeStyle = "#cfd5dc";
+            g.beginPath();
+            g.moveTo(x0 - 5, top);
+            g.lineTo(x0 - 5, bot);
+            g.stroke();
+          }
+          /* session legend + day labels under each profile */
+
+          g.font = "10px ui-monospace,Menlo,monospace";
+          g.textBaseline = "middle";
+          profs.forEach((P) => {
+            if (!P.show) return;
+            const gr = g.createLinearGradient(
+              P.cx0,
+              0,
+              P.cx0 + colW,
+              0,
+            );
+            STOPS.forEach(([h, c]) =>
+              gr.addColorStop(h / 21, `rgb(${c})`),
+            );
+            g.fillStyle = gr;
+            g.fillRect(P.cx0, bot + 6, colW, 5);
+            g.fillStyle = "#6b7684";
+            g.textAlign = "left";
+            if (P.d === cnt - 1)
+              [
+                ["Asia", 0],
+                ["EU", 8],
+                ["US", 14],
+              ].forEach(([t, h]) =>
+                g.fillText(t, P.cx0 + (colW * h) / 21, bot + 19),
+              );
+            g.fillText(
+              new Date(P.dS).toLocaleDateString([], {
+                weekday: "short",
+                day: "2-digit",
+                timeZone: "UTC",
+              }) + (colW > 150 ? " · TPO 30m UTC" : ""),
+              P.cx0,
+              bot + 32,
+            );
+          });
+          g.font = "11px ui-monospace,Menlo,monospace";
+          const line = (yv, col, dash, lbl, wd = 1) => {
+            const y = Y(yv);
+            if (y < top || y > bot) return;
+            g.strokeStyle = col;
+            g.lineWidth = wd;
+            g.setLineDash(dash);
+            g.beginPath();
+            g.moveTo(x0, y);
+            g.lineTo(px0, y);
+            g.stroke();
+            g.setLineDash([]);
+            g.lineWidth = 1;
+            g.fillStyle = col;
+            g.textAlign = "right";
+            g.fillText(lbl, px0 - 4, y - 7);
+          };
+          /*
+           * previous UTC day: its POC, VAH and VAL are the
+           * levels drawn across the chart
+           */
+          const PP = profs[profs.length - 2];
+          if (PP && PP.poc != null) {
+            line(
+              (PP.poc + 0.5) * PP.step,
+              "#e08a00",
+              [],
+              "POC " + ((PP.poc + 0.5) * PP.step).toFixed(DP),
+              3,
+            );
+            line(
+              (PP.b + 1) * PP.step,
+              "#2f80c8",
+              [4, 4],
+              "VAH " + ((PP.b + 1) * PP.step).toFixed(DP),
+            );
+            line(
+              PP.a * PP.step,
+              "#2f80c8",
+              [4, 4],
+              "VAL " + (PP.a * PP.step).toFixed(DP),
+            );
+          }
+          /*
+           * vol ladder: a line every 1x, 2x, 3x... the vol
+           * step above and below yesterday's POC
+           */
+          if (PP && PP.poc != null && volN > 0) {
+            /*
+             * kS thins the ladder when lines would be closer
+             * than 8px
+             */
+            const pc = (PP.poc + 0.5) * PP.step,
+              v = volPct ? (pc * volN) / 100 : volN,
+              sp = (v * ch) / (hi - lo),
+              kS = Math.max(1, Math.ceil(8 / sp));
+            for (
+              let k = kS;
+              k < 5000 && (pc + k * v <= hi || pc - k * v >= lo);
+              k += kS
+            ) {
+              line(
+                pc + k * v,
+                "#e08a00",
+                [1, 3],
+                "+" + k + "  " + (pc + k * v).toFixed(DP),
+              );
+              line(
+                pc - k * v,
+                "#e08a00",
+                [1, 3],
+                "−" + k + "  " + (pc - k * v).toFixed(DP),
+              );
+            }
+          }
+
+          /* candles */
+
+          const vsum =
+              vis.reduce((s, c) => s + (c.v || 0), 0) || 1,
+            cw = x1 - x0,
+            slots = vis.length + Math.max(0, -off),
+            cwE = (cw * vis.length) / slots;
+          let x = x0;
+          geo = [];
+          vis.forEach((c) => {
+            const nV = vis.length,
+              minW = Math.min(3, (cwE / nV) * 0.4),
+              w =
+                mode === "eq"
+                  ? minW + ((cwE - nV * minW) * (c.v || 0)) / vsum
+                  : cw / slots;
+            geo.push({ x, w, c });
+            const col = c.c >= c.o ? "#089981" : "#000000",
+              xm = x + w / 2;
+            g.save();
+            g.beginPath();
+            g.rect(x0, top, cw, bot - top);
+            g.clip();
+            g.strokeStyle = col;
+            g.fillStyle = col;
+            g.beginPath();
+            g.moveTo(xm, Y(c.h));
+            g.lineTo(xm, Y(c.l));
+            g.stroke();
+            const yo = Y(c.o),
+              yc = Y(c.c);
+            g.fillRect(
+              x + 1,
+              Math.min(yo, yc),
+              Math.max(1, w - 2),
+              Math.max(1, Math.abs(yo - yc)),
+            );
+            g.restore();
+            x += w;
+          });
+          /*
+           * circles: green below bullish bars, black above
+           * bearish bars
+           */
+          if (cfg.main) {
+            const fl = bigFlags(
+              arr,
+              Math.max(0, arr.length - off - N),
+              Math.min(arr.length, arr.length - off),
+            );
+            geo.forEach((o) => {
+              const f = fl.get(o.c);
+              if (!f) return;
+              const c = o.c;
+              if (c.c === c.o) return;
+              const bull = c.c > c.o,
+                y = bull ? Y(c.l) + 12 : Y(c.h) - 12;
+              if (y < top || y > bot) return;
+              g.fillStyle = bull ? "#4caf50" : "#000000";
+              g.beginPath();
+              g.arc(o.x + o.w / 2, y, 5, 0, 6.2832);
+              g.fill();
+            });
+          }
+          /* time labels */
+
+          g.fillStyle = "#6b7684";
+          g.textAlign = "center";
+          const every = Math.ceil(vis.length / 8);
+          geo.forEach((o, i) => {
+            if (i % every === 0) {
+              const d = new Date(o.c.t);
+              g.fillText(
+                d.getHours().toString().padStart(2, "0") +
+                  ":" +
+                  d.getMinutes().toString().padStart(2, "0") +
+                  (sec()
+                    ? ":" +
+                      d.getSeconds().toString().padStart(2, "0")
+                    : ""),
+                o.x + o.w / 2,
+                bot + 10,
+              );
+            }
+          });
+          /* user lines (Alt+H / Alt+V) */
+
+          view = {
+            hi,
+            lo,
+            top,
+            bot,
+            ch,
+            px0,
+            x0,
+            Y,
+            pc: cw / slots,
+          };
+          /*
+           * l.lo = first point, l.hi = second point: the
+           * dashed line sits 34% from the first point
+           */
+          const drawBox = (l, sel) => {
+            const mx = Math.max(l.lo, l.hi),
+              mn = Math.min(l.lo, l.hi),
+              yT = Y(mx),
+              yB = Y(mn),
+              o = geoAt(l.t),
+              xs = o ? o.x + o.w / 2 : x0,
+              p66 = l.hi + 0.66 * (l.lo - l.hi),
+              y66 = Y(p66);
+            g.save();
+            g.beginPath();
+            g.rect(xs, top, px0 - xs, bot - top);
+            g.clip();
+            g.fillStyle = "rgba(120,130,145,.18)";
+            g.fillRect(xs, yT, px0 - xs, yB - yT);
+            g.strokeStyle = "rgba(91,107,125,.5)";
+            g.lineWidth = sel ? 2 : 1;
+            g.setLineDash([]);
+            g.strokeRect(xs, yT, px0 - xs, yB - yT);
+            g.setLineDash([5, 4]);
+            g.beginPath();
+            g.moveTo(xs, y66);
+            g.lineTo(px0, y66);
+            g.stroke();
+            g.setLineDash([]);
+            g.restore();
+            [
+              [mx, yT],
+              [p66, y66],
+              [mn, yB],
+            ].forEach(([pv, yy]) => {
+              if (yy >= top && yy <= bot)
+                ptag(yy, pv.toFixed(DP), "#5b6b7d");
+            });
+          };
+          /*
+           * automatic box on the latest big-volume candle: as
+           * tall as that candle (high to low), and it trails
+           * the market —
+           */
+          if (cfg.main && autoBox) {
+            /*
+             * after a down candle its bottom follows every new
+             * low, after an up candle its top follows every new
+             * high
+             */
+
+            let k = arr.length - 1;
+            for (; k >= BIG_WIN - 1; k--) {
+              const c = arr[k];
+              if (okC(c) && c.c !== c.o && isBig(arr, k)) break;
+            }
+            if (
+              k >= BIG_WIN - 1 &&
+              arr[k].t <= vis[vis.length - 1].t
+            ) {
+              const A = arr[k],
+                ht = A.h - A.l,
+                dn = A.c < A.o;
+              let ext = dn ? A.l : A.h;
+              for (let j = k + 1; j < arr.length; j++) {
+                const q = arr[j];
+                if (okC(q))
+                  ext = dn
+                    ? Math.min(ext, q.l)
+                    : Math.max(ext, q.h);
+              }
+              drawBox(
+                { t: A.t, lo: ext, hi: dn ? ext + ht : ext - ht },
+                false,
+              );
+              g.lineWidth = 1;
+            }
+          }
+          lines.forEach((l) => {
+            const sel = l === hl || l === drag;
+            g.strokeStyle = g.fillStyle = "#8e44ad";
+            g.lineWidth = sel ? 2 : 1;
+            g.setLineDash([]);
+            g.beginPath();
+            if (l.k === "h") {
+              g.strokeStyle = "#7d8794";
+              g.lineWidth = sel ? 6 : 4;
+              const y = Y(l.p);
+              if (y >= top && y <= bot) {
+                g.moveTo(4, y);
+                g.lineTo(px0, y);
+                g.globalAlpha = 0.5;
+                g.stroke();
+                g.globalAlpha = 1;
+                ptag(y, l.p.toFixed(DP), "#7d8794");
+              }
+            } else if (l.k === "v") {
+              g.strokeStyle = "#7d8794";
+              g.lineWidth = sel ? 6 : 4;
+              const o = geoAt(l.t);
+              if (o) {
+                const cx = o.x + o.w / 2;
+                g.moveTo(cx, top);
+                g.lineTo(cx, bot);
+                g.globalAlpha = 0.5;
+                g.stroke();
+                g.globalAlpha = 1;
+                ttag(cx, dlabel(l.t), "#7d8794");
+              }
+            } else if (l.k === "d") {
+              const o = geoAt(l.t),
+                xs = o ? o.x + o.w / 2 : x0,
+                y = Y(l.p);
+              if (y >= top && y <= bot) {
+                g.strokeStyle = g.fillStyle = "#388e3c";
+                g.lineWidth = sel ? 3 : 2;
+                g.beginPath();
+                g.moveTo(xs, y);
+                g.lineTo(px0, y);
+                g.globalAlpha = 0.5;
+                g.stroke();
+                g.globalAlpha = 1;
+                g.beginPath();
+                g.arc(xs, y, sel ? 2.5 : 1.5, 0, 6.2832);
+                g.fill();
+                ptag(y, l.p.toFixed(DP), "#388e3c");
+              }
+            } else if (l.k === "b") drawBox(l, sel);
+            g.lineWidth = 1;
+          });
+          if (dotTool) {
+            g.font = "11px ui-monospace,Menlo,monospace";
+            g.fillStyle = "#388e3c";
+            g.textAlign = "left";
+            g.textBaseline = "middle";
+            g.fillText(
+              "Dot: click a point (Esc cancels)",
+              x0 + 8,
+              top + 10,
+            );
+          }
+          if (boxTool) {
+            g.font = "11px ui-monospace,Menlo,monospace";
+            g.fillStyle = "#5b6b7d";
+            g.textAlign = "left";
+            g.textBaseline = "middle";
+            g.fillText(
+              boxTool === 1
+                ? "Box: click the bottom level"
+                : "Box: click the top level (Esc cancels)",
+              x0 + 8,
+              top + 10,
+            );
+          }
+          /* last price */
+
+          const last = vis[vis.length - 1],
+            lp = mid != null ? mid : last.c,
+            ly = Math.max(top, Math.min(bot, Y(lp)));
+          g.strokeStyle = "#000000";
+          g.setLineDash([2, 3]);
+          g.beginPath();
+          g.moveTo(4, ly);
+          g.lineTo(px0, ly);
+          g.stroke();
+          g.setLineDash([]);
+          /*
+           * tag sits left of the axis so it does not cover the
+           * level tags of drawings
+           */
+          {
+            const lt = lp.toFixed(DP),
+              lw = g.measureText(lt).width + 10;
+            g.fillStyle = "#000000";
+            g.fillRect(px0 - lw, ly - 9, lw, 18);
+            g.fillStyle = "#ffffff";
+            g.textAlign = "left";
+            g.textBaseline = "middle";
+            g.fillText(lt, px0 - lw + 5, ly);
+          }
+          /* hover */
+
+          /* crosshair line / tag background / tag text */
+          const XH = "rgba(184,134,11,.8)",
+            XB = "#ffe58a",
+            XF = "#1a1f26";
+          if (
+            mouse &&
+            mouse.x >= 4 &&
+            mouse.x <= px0 &&
+            mouse.y >= top &&
+            mouse.y <= bot
+          ) {
+            const inTpo = mouse.x < x0 - 5,
+              o = !inTpo && hover >= 0 && geo[hover],
+              cx = o ? o.x + o.w / 2 : mouse.x,
+              pv = hi - ((mouse.y - top) / ch) * (hi - lo);
+            g.strokeStyle = XH;
+            g.setLineDash([4, 4]);
+            g.beginPath();
+            g.moveTo(cx, top);
+            g.lineTo(cx, bot);
+            g.moveTo(4, mouse.y);
+            g.lineTo(px0, mouse.y);
+            g.stroke();
+            g.setLineDash([]);
+            ptag(mouse.y, pv.toFixed(DP), XB, XF);
+            let lbl = null;
+            if (o) lbl = dlabel(o.c.t);
+            else if (inTpo) {
+              const P = profs.find(
+                (q) =>
+                  q.show &&
+                  mouse.x >= q.cx0 - 2 &&
+                  mouse.x <= q.cx0 + colW,
+              );
+              if (P && P.poc != null) {
+                const ri = Math.floor(pv / P.step),
+                  k = Math.floor((mouse.x - P.cx0) / P.lw),
+                  lst = P.rows.get(ri),
+                  idx = lst && lst[k];
+                /*
+                 * TPO periods are UTC half-hours, so the label says
+                 * so
+                 */
+                if (idx != null) {
+                  const f = (t) =>
+                      new Date(t).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "UTC",
+                      }),
+                    t0 = P.dS + idx * TPO_MS;
+                  lbl = f(t0) + "–" + f(t0 + TPO_MS) + " UTC";
+                  g.strokeStyle = "#1a1f26";
+                  g.lineWidth = 1.2;
+                  g.strokeRect(
+                    P.cx0 + k * P.lw,
+                    Y((ri + 1) * P.step) + 0.5,
+                    Math.max(1, P.lw - 1),
+                    Math.max(1, P.rowH - 1),
+                  );
+                  g.lineWidth = 1;
+                }
+              }
+            }
+            if (lbl) ttag(cx, lbl, XB, XF);
+          }
+          /* crosshair mirrored from the other chart */
+          if (
+            xh &&
+            xh.from !== api &&
+            !(
+              mouse &&
+              mouse.x >= 4 &&
+              mouse.x <= px0 &&
+              mouse.y >= top &&
+              mouse.y <= bot
+            )
+          ) {
+            const ry = Y(xh.p),
+              ro = xh.t != null ? geoAt(xh.t) : null,
+              okY = ry >= top && ry <= bot;
+            g.strokeStyle = XH;
+            g.lineWidth = 1;
+            g.setLineDash([4, 4]);
+            g.beginPath();
+            if (okY) {
+              g.moveTo(4, ry);
+              g.lineTo(px0, ry);
+            }
+            if (ro) {
+              const rx = ro.x + ro.w / 2;
+              g.moveTo(rx, top);
+              g.lineTo(rx, bot);
+            }
+            g.stroke();
+            g.setLineDash([]);
+            if (okY) ptag(ry, xh.p.toFixed(DP), XB, XF);
+            if (ro) ttag(ro.x + ro.w / 2, dlabel(ro.c.t), XB, XF);
+          }
+          /*
+           * lines are shared: redraw the other chart when they
+           * change
+           */
+          {
+            const sg = JSON.stringify(lines);
+            if (sg !== linesSig) {
+              linesSig = sg;
+              schedule();
+            }
+          }
+        }
+        function showInfo() {
+          if (!cfg.main) return;
+          const o = geo && geo[hover];
+          if (!o) {
+            $("info").textContent = HELP;
+            return;
+          }
+          const c = o.c,
+            d = c.bv - (c.v - c.bv),
+            t = new Date(c.t);
+          const f = (v) => v.toFixed(DP);
+          $("info").textContent = [
+            t.toLocaleTimeString([], TS()),
+            "O " + f(c.o),
+            "H " + f(c.h),
+            "L " + f(c.l),
+            "C " + f(c.c),
+            "Vol " + c.v.toFixed(0),
+            "Δ " + d.toFixed(0),
+          ].join("  ");
+        }
+        function move(e) {
+          if (!geo) return;
+          const r = cv.getBoundingClientRect(),
+            t = e;
+          const x = t.clientX - r.left,
+            y = t.clientY - r.top;
+          mouse = { x, y };
+          if (pts.has(e.pointerId))
+            pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          /*
+           * two-finger pinch zooms the time axis, same limits
+           * as the mouse wheel
+           */
+          if (pinch) {
+            if (pts.size >= 2) {
+              const mx = Math.max(
+                20,
+                Math.min(arrLen || src().length, 3000),
+              );
+              N = Math.max(
+                20,
+                Math.min(
+                  mx,
+                  Math.round((pinch.N * pinch.d) / pdist()),
+                ),
+              );
+              if (cfg.main) ui();
+              draw();
+            }
+            return;
+          }
+          if (divDrag && view) {
+            tpoFrac = Math.max(80, Math.min(W * 0.75, x - 5)) / W;
+            draw();
+            return;
+          }
+          if (sc) {
+            ysc = Math.max(
+              0.15,
+              Math.min(
+                6,
+                sc.v * Math.exp((t.clientY - sc.y) / 200),
+              ),
+            );
+            draw();
+            return;
+          }
+          if (pan && view) {
+            off =
+              pan.off + Math.round((t.clientX - pan.x) / view.pc);
+            const dy = t.clientY - pan.y;
+            if (Math.abs(dy) > 4) pan.vy = true;
+            if (pan.vy) ypan = pan.yp + (dy / view.ch) * pan.rng;
+            hover = -1;
+            draw();
+            return;
+          }
+          if (boxTool === 2 && draft && view && geo && geo.length)
+            draft.hi = snap(x, y).p;
+          if (drag && view) {
+            if (drag.k === "h") drag.p = snap(x, y).p;
+            else if (drag.k === "d") {
+              const sn = snap(x, y);
+              drag.p = sn.p;
+              drag.t = sn.o.c.t;
+            } else if (drag.k === "b") {
+              if (dragEdge === "move" && moveInfo) {
+                const dp =
+                  (-(y - moveInfo.y) / moveInfo.ch) *
+                  moveInfo.rng;
+                drag.lo = moveInfo.lo + dp;
+                drag.hi = moveInfo.hi + dp;
+                let ci = geo.findIndex(
+                  (q) => x >= q.x && x < q.x + q.w,
+                );
+                if (ci < 0)
+                  ci = x < geo[0].x ? 0 : geo.length - 1;
+                if (moveInfo.si >= 0 && moveInfo.ci >= 0)
+                  drag.t =
+                    geo[
+                      Math.max(
+                        0,
+                        Math.min(
+                          geo.length - 1,
+                          moveInfo.si + ci - moveInfo.ci,
+                        ),
+                      )
+                    ].c.t;
+              } else drag[dragEdge] = snap(x, y).p;
+            } else {
+              const o = at(x);
+              drag.t = o.c.t;
+            }
+          } else {
+            const onDiv = isDiv(x, y);
+            hl = onDiv ? null : hit(x, y);
+            cv.style.cursor = onDiv
+              ? "ew-resize"
+              : hl
+                ? hl.k === "b" && hitEdge === "move"
+                  ? "move"
+                  : hl.k === "h" || hl.k === "d" || hl.k === "b"
+                    ? "ns-resize"
+                    : "ew-resize"
+                : view && x > view.px0
+                  ? "ns-resize"
+                  : "crosshair";
+          }
+          hover = geo.findIndex((o) => x >= o.x && x < o.x + o.w);
+          showInfo();
+          draw();
+          /*
+           * publish the crosshair (price + candle time) so the
+           * other chart can mirror it
+           */
+
+          xh =
+            view &&
+            x >= 4 &&
+            x <= view.px0 &&
+            y >= view.top &&
+            y <= view.bot
+              ? {
+                  p:
+                    view.hi -
+                    ((y - view.top) / view.ch) *
+                      (view.hi - view.lo),
+                  t:
+                    hover >= 0 && geo[hover]
+                      ? geo[hover].c.t
+                      : null,
+                  from: api,
+                }
+              : null;
+          charts.forEach((h) => {
+            if (h !== api) h.sched();
+          });
+        }
+        cv.addEventListener("pointermove", move);
+        cv.addEventListener("pointerleave", () => {
+          hover = -1;
+          mouse = null;
+          showInfo();
+          draw();
+          if (xh && xh.from === api) {
+            xh = null;
+            charts.forEach((h) => {
+              if (h !== api) h.sched();
+            });
+          }
+        });
+
+        function isDiv(x, y) {
+          return !!(
+            cfg.tpo &&
+            view &&
+            !boxTool &&
+            !dotTool &&
+            Math.abs(x - (view.x0 - 5)) <= 5 &&
+            y >= view.top &&
+            y <= view.bot
+          );
+        }
+        /* candle under x, clamped to the first/last one */
+        function at(x) {
+          return (
+            geo.find((q) => x >= q.x && x < q.x + q.w) ||
+            (x < geo[0].x ? geo[0] : geo[geo.length - 1])
+          );
+        }
+        function geoAt(t) {
+          let r = null;
+          if (geo)
+            for (const q of geo) {
+              if (q.c.t <= t) r = q;
+              else break;
+            }
+          return r;
+        }
+        /*
+         * magnet: nearest O/H/L/C of the candle under the
+         * pointer, within 14px
+         */
+        function snap(x, y) {
+          const free =
+            view.hi -
+            ((y - view.top) / view.ch) * (view.hi - view.lo);
+          const o = at(x);
+          let best = null,
+            bd = 14;
+          [o.c.o, o.c.h, o.c.l, o.c.c].forEach((v) => {
+            const d = Math.abs(view.Y(v) - y);
+            if (d < bd) {
+              bd = d;
+              best = v;
+            }
+          });
+          return { p: best != null ? best : free, o };
+        }
+        function mouseAt() {
+          if (
+            !view ||
+            !geo ||
+            !geo.length ||
+            !mouse ||
+            mouse.x < 4 ||
+            mouse.x > view.px0 ||
+            mouse.y < view.top ||
+            mouse.y > view.bot
+          )
+            return null;
+          return snap(mouse.x, mouse.y);
+        }
+        function dotClick(e) {
+          if (!view || !geo || !geo.length) return;
+          const r = cv.getBoundingClientRect(),
+            x = e.clientX - r.left,
+            y = e.clientY - r.top;
+          if (y < view.top || y > view.bot) return;
+          const sn = snap(x, y);
+          lines.push({ k: "d", t: sn.o.c.t, p: sn.p });
+          dotTool = 0;
+          draw();
+        }
+        function hit(x, y) {
+          if (!view || !geo || boxTool || dotTool) return null;
+          for (let i = lines.length - 1; i >= 0; i--) {
+            const l = lines[i];
+            if (l.k === "h") {
+              if (
+                Math.abs(y - view.Y(l.p)) <= 5 &&
+                x >= 4 &&
+                x <= view.px0
+              )
+                return l;
+            } else if (l.k === "v") {
+              const o = geoAt(l.t);
+              if (
+                o &&
+                Math.abs(x - (o.x + o.w / 2)) <=
+                  Math.max(5, o.w / 2) &&
+                y >= view.top &&
+                y <= view.bot
+              )
+                return l;
+            } else if (l.k === "d") {
+              const o = geoAt(l.t),
+                xs = o ? o.x + o.w / 2 : view.x0;
+              if (
+                Math.abs(y - view.Y(l.p)) <= 6 &&
+                x >= xs - 6 &&
+                x <= view.px0
+              )
+                return l;
+            } else {
+              const o = geoAt(l.t),
+                xs = o ? o.x + o.w / 2 : view.x0;
+              for (const e of ["hi", "lo"])
+                if (
+                  Math.abs(y - view.Y(l[e])) <= 5 &&
+                  x >= xs &&
+                  x <= view.px0
+                ) {
+                  hitEdge = e;
+                  return l;
+                }
+            }
+          }
+          for (let i = lines.length - 1; i >= 0; i--) {
+            const l = lines[i];
+            if (l.k !== "b") continue;
+            const o = geoAt(l.t),
+              xs = o ? o.x + o.w / 2 : view.x0,
+              y1 = view.Y(Math.max(l.lo, l.hi)),
+              y2 = view.Y(Math.min(l.lo, l.hi));
+            if (x >= xs && x <= view.px0 && y >= y1 && y <= y2) {
+              hitEdge = "move";
+              return l;
+            }
+          }
+          return null;
+        }
+        function addLine(k) {
+          if (!view || !geo || !geo.length) return;
+          const inChart =
+            mouse && mouse.y >= view.top && mouse.y <= view.bot;
+          if (k === "h")
+            lines.push({
+              k: "h",
+              p: inChart
+                ? snap(mouse.x, mouse.y).p
+                : src()[src().length - 1].c,
+            });
+          else {
+            const o =
+              (mouse &&
+                geo.find(
+                  (q) => mouse.x >= q.x && mouse.x < q.x + q.w,
+                )) ||
+              geo[geo.length - 1];
+            lines.push({ k: "v", t: o.c.t });
+          }
+          draw();
+        }
+        function boxClick(e) {
+          if (!view || !geo || !geo.length) return;
+          const r = cv.getBoundingClientRect(),
+            x = e.clientX - r.left,
+            y = e.clientY - r.top;
+          if (y < view.top || y > view.bot) return;
+          const p = snap(x, y).p;
+          if (boxTool === 1) {
+            const o = at(x);
+            draft = { k: "b", t: o.c.t, lo: p, hi: p };
+            lines.push(draft);
+            boxTool = 2;
+          } else {
+            draft.hi = p;
+            draft = null;
+            boxTool = 0;
+          }
+          draw();
+        }
+        cv.addEventListener("pointerdown", (e) => {
+          if (e.isPrimary) pts.clear();
+          pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          /*
+           * second finger down: start a pinch, drop whatever
+           * the first finger had started
+           */
+          if (pts.size === 2) {
+            try {
+              cv.setPointerCapture(e.pointerId);
+            } catch (err) {}
+            pinch = {
+              d: pdist(),
+              N: Math.min(N, Math.max(20, arrLen)),
+            };
+            pan = null;
+            sc = null;
+            drag = null;
+            divDrag = false;
+            e.preventDefault();
+            return;
+          }
+          if (pts.size > 2) return;
+          /*
+           * touch has no hover: hit-test at the press point,
+           * and keep receiving moves outside the canvas
+           */
+          move(e);
+          try {
+            cv.setPointerCapture(e.pointerId);
+          } catch (err) {}
+          if (dotTool) {
+            dotClick(e);
+            e.preventDefault();
+            return;
+          }
+          if (boxTool) {
+            boxClick(e);
+            e.preventDefault();
+            return;
+          }
+          {
+            const rc0 = cv.getBoundingClientRect();
+            if (
+              isDiv(e.clientX - rc0.left, e.clientY - rc0.top)
+            ) {
+              divDrag = true;
+              e.preventDefault();
+              return;
+            }
+          }
+          if (hl) {
+            drag = hl;
+            dragEdge = hitEdge;
+            e.preventDefault();
+            if (dragEdge === "move") {
+              const rc = cv.getBoundingClientRect(),
+                mx = e.clientX - rc.left,
+                my = e.clientY - rc.top,
+                se = geoAt(hl.t);
+              moveInfo = {
+                y: my,
+                lo: hl.lo,
+                hi: hl.hi,
+                si: se ? geo.indexOf(se) : -1,
+                ci: geo.findIndex(
+                  (q) => mx >= q.x && mx < q.x + q.w,
+                ),
+                rng: view.hi - view.lo,
+                ch: view.ch,
+              };
+            }
+            return;
+          }
+          if (view) {
+            if (
+              e.clientX - cv.getBoundingClientRect().left >
+              view.px0
+            ) {
+              sc = { y: e.clientY, v: ysc };
+              cv.style.cursor = "ns-resize";
+            } else {
+              if (!lock && fit) lock = fit;
+              pan = {
+                x: e.clientX,
+                y: e.clientY,
+                off,
+                yp: ypan,
+                rng: view.hi - view.lo,
+                vy: false,
+              };
+              cv.style.cursor = "grabbing";
+            }
+            e.preventDefault();
+          }
+        });
+        const release = () => {
+          drag = null;
+          divDrag = false;
+          if (pan || sc) {
+            pan = null;
+            sc = null;
+            cv.style.cursor = "crosshair";
+          }
+        };
+        addEventListener("pointerup", release);
+        addEventListener("pointercancel", release);
+        cv.addEventListener("pointerup", (e) => {
+          pts.delete(e.pointerId);
+          if (pts.size < 2) pinch = null;
+        });
+        cv.addEventListener("pointercancel", (e) => {
+          pts.delete(e.pointerId);
+          if (pts.size < 2) pinch = null;
+        });
+        cv.addEventListener("dblclick", () => {
+          if (hl) {
+            lines = lines.filter((l) => l !== hl);
+            hl = null;
+            cv.style.cursor = "crosshair";
+            draw();
+          } else if (mouse && isDiv(mouse.x, mouse.y)) {
+            tpoFrac = null;
+            draw();
+          } else if (view && mouse && mouse.x > view.px0) {
+            ysc = 1;
+            ypan = 0;
+            lock = null;
+            draw();
+          }
+        });
+        addEventListener("keydown", (e) => {
+          /*
+           * typing in the vol box must not trigger chart
+           * shortcuts
+           */
+          if (
+            activeChart !== api ||
+            (e.target && e.target.tagName === "INPUT")
+          )
+            return;
+          if (e.altKey && e.code === "KeyH") {
+            e.preventDefault();
+            addLine("h");
+          } else if (e.altKey && e.code === "KeyV") {
+            e.preventDefault();
+            addLine("v");
+          } else if (e.altKey && e.code === "KeyB") {
+            e.preventDefault();
+            if (draft) lines = lines.filter((l) => l !== draft);
+            draft = null;
+            dotTool = 0;
+            boxTool = 1;
+            const m = mouseAt();
+            if (m) {
+              draft = { k: "b", t: m.o.c.t, lo: m.p, hi: m.p };
+              lines.push(draft);
+              boxTool = 2;
+            }
+            draw();
+          } else if (e.altKey && e.code === "KeyJ") {
+            e.preventDefault();
+            if (draft) lines = lines.filter((l) => l !== draft);
+            draft = null;
+            boxTool = 0;
+            dotTool = 1;
+            const m = mouseAt();
+            if (m) {
+              lines.push({ k: "d", t: m.o.c.t, p: m.p });
+              dotTool = 0;
+            }
+            draw();
+          } else if (e.key === "Escape" && (boxTool || dotTool)) {
+            if (draft) lines = lines.filter((l) => l !== draft);
+            draft = null;
+            boxTool = 0;
+            dotTool = 0;
+            draw();
+          } else if (
+            (e.key === "Delete" || e.key === "Backspace") &&
+            hl
+          ) {
+            lines = lines.filter((l) => l !== hl);
+            hl = null;
+            draw();
+          }
+        });
+
+        cv.addEventListener(
+          "wheel",
+          (e) => {
+            e.preventDefault();
+            /*
+             * zoom relative to what is actually shown
+             * (line-break charts have fewer bricks than candles,
+             * so N can exceed what exists)
+             */
+
+            const sg = Math.sign(e.deltaY),
+              mx = Math.max(
+                20,
+                Math.min(arrLen || src().length, 3000),
+              ),
+              b0 = Math.min(N, mx);
+            let n = Math.round(b0 * (sg > 0 ? 1.12 : 1 / 1.12));
+            if (n === b0) n += sg;
+            N = Math.max(20, Math.min(mx, n));
+            if (cfg.main) ui();
+            draw();
+          },
+          { passive: false },
+        );
+
+        const fcache = new Map();
+        /*
+         * flag = body size > percentile of last BIG_WIN
+         * bodies AND volume > percentile of last BIG_WIN
+         * volumes (current bar included)
+         */
+
+        /* needs k>=BIG_WIN-1 */
+        function isBig(arr, k) {
+          const c = arr[k];
+          if (!c || c.h == null) return false;
+          const key =
+            (cfg.main ? TF : "") +
+            mode +
+            "|" +
+            c.t +
+            "|" +
+            c.o +
+            "|" +
+            c.c +
+            "|" +
+            c.v +
+            "|" +
+            arr[k - BIG_WIN + 1].t;
+          let f = fcache.get(key);
+          if (f === undefined) {
+            const r = Math.ceil(BIG_PERC * BIG_WIN) - 1,
+              bs = new Float64Array(BIG_WIN),
+              vs = new Float64Array(BIG_WIN);
+            for (let j = 0; j < BIG_WIN; j++) {
+              const q = arr[k - BIG_WIN + 1 + j];
+              bs[j] = Math.abs(q.c - q.o);
+              vs[j] = q.v;
+            }
+            bs.sort();
+            vs.sort();
+            f = Math.abs(c.c - c.o) > bs[r] && c.v > vs[r];
+            fcache.set(key, f);
+          }
+          return f;
+        }
+        function bigFlags(arr, i0, i1) {
+          const out = new Map();
+          if (fcache.size > 30000) fcache.clear();
+          for (let k = Math.max(i0, BIG_WIN - 1); k < i1; k++)
+            if (isBig(arr, k)) out.set(arr[k], true);
+          return out;
+        }
+        /* line-break views re-anchor on bricks in drawInner */
+        function newCandle(a) {
+          if (mode !== "lb" && src() === a && off > 0) off++;
+        }
+        cv.addEventListener("pointerenter", () => {
+          activeChart = api;
+        });
+        cv.addEventListener("pointermove", () => {
+          activeChart = api;
+        });
+        const api = {
+          sched,
+          draw,
+          newCandle,
+          size,
+          resetView: () => {
+            N = cfg.N;
+            off = 0;
+            ysc = 1;
+            ypan = 0;
+            lock = null;
+            tpoFrac = null;
+            draft = null;
+            boxTool = 0;
+            dotTool = 0;
+            hl = null;
+            drag = null;
+            if (cfg.main) ui();
+            draw();
+          },
+          getState: () => ({
+            N,
+            mode,
+            off,
+            ysc,
+            ypan,
+            lock,
+            tpoFrac,
+            TF: cfg.main ? TF : undefined,
+            nTpo: cfg.main ? nTpo : undefined,
+          }),
+          setState: (st) => {
+            if (!st) return;
+            if (st.N >= 20 && st.N <= 3000) N = st.N;
+            if (["eq", "std", "lb"].includes(st.mode))
+              mode = st.mode;
+            if (Number.isFinite(st.off)) off = st.off;
+            if (st.ysc > 0) ysc = st.ysc;
+            if (st.tpoFrac > 0) tpoFrac = st.tpoFrac;
+            if (Number.isFinite(st.ypan)) ypan = st.ypan;
+            if (st.lock && st.lock.hi > st.lock.lo)
+              lock = { hi: st.lock.hi, lo: st.lock.lo };
+            if (cfg.main) {
+              if (st.TF === "5m" || st.TF === "15s") {
+                TF = st.TF;
+                $("sym").textContent = SYM + " " + TF;
+              }
+              if ([1, 2, 3].includes(st.nTpo)) nTpo = st.nTpo;
+              ui();
+            }
+            draw();
+          },
+        };
+        function mkBtns(el, opts, get, set) {
+          el.innerHTML = "";
+          opts.forEach(([v, l]) => {
+            const b = document.createElement("button");
+            b.textContent = l;
+            b.className = get() === v ? "a" : "";
+            b.onclick = () => {
+              set(v);
+              mkBtns(el, opts, get, set);
+              draw();
+            };
+            el.appendChild(b);
+          });
+        }
+        function ui() {
+          mkBtns(
+            $("modeBtns"),
+            [
+              ["eq", "Volume candles"],
+              ["std", "Standard"],
+              ["lb", "Line break"],
+            ],
+            () => mode,
+            (v) => (mode = v),
+          );
+          mkBtns(
+            $("tfBtns"),
+            [
+              ["15s", "15s"],
+              ["5m", "5m"],
+            ],
+            () => TF,
+            (v) => setTF(v),
+          );
+          mkBtns(
+            $("tpoBtns"),
+            [
+              [1, "1d"],
+              [2, "2d"],
+              [3, "3d"],
+            ],
+            () => nTpo,
+            (v) => (nTpo = v),
+          );
+          mkBtns(
+            $("nBtns"),
+            [
+              [40, "40"],
+              [80, "80"],
+              [120, "120"],
+              [160, "160"],
+              [288, "288"],
+              [576, "576"],
+            ],
+            () => N,
+            (v) => (N = v),
+          );
+        }
+
+        function setTF(v) {
+          TF = v;
+          off = 0;
+          lock = null;
+          draft = null;
+          boxTool = 0;
+          dotTool = 0;
+          $("sym").textContent = SYM + " " + v;
+          draw();
+        }
+        if (cfg.main) ui();
+        if (window.ResizeObserver)
+          new ResizeObserver(() => size()).observe(cv);
+        size();
+        return api;
+      }
+      const mainChart = makeChart($("c"), {
+        main: true,
+        mode: "eq",
+        N: 288,
+        tpo: true,
+      });
+      const miniChart = makeChart($("mc"), {
+        main: false,
+        mode: "lb",
+        N: 200,
+        tpo: false,
+      });
+      charts = [mainChart, miniChart];
+
+      /*
+       * Ctrl+S (or Cmd+S) saves drawings + all settings in
+       * this browser's localStorage; restored on reload
+       */
+
+      const SAVE_KEY = "btcfdusd-state-v2";
+      function toast(t) {
+        const el = $("toast");
+        el.textContent = t;
+        el.style.opacity = 1;
+        clearTimeout(toast.h);
+        toast.h = setTimeout(() => {
+          el.style.opacity = 0;
+        }, 1800);
+      }
+      let miniBox = null;
+      function snapshot() {
+        const r = mini.getBoundingClientRect();
+        if (r.width > 0)
+          miniBox = {
+            x: Math.round(r.left),
+            y: Math.round(r.top),
+            w: Math.round(r.width),
+            h: Math.round(r.height),
+          };
+        return {
+          v: 2,
+          vol: $("vol").value,
+          autoBox,
+          lines: lines.filter(
+            (l) => !(l.k === "b" && l.lo === l.hi),
+          ),
+          main: mainChart.getState(),
+          mini: miniChart.getState(),
+          win: Object.assign(
+            { hidden: mini.style.display === "none" },
+            miniBox || {},
+          ),
+        };
+      }
+      function restore() {
+        let st = null;
+        try {
+          st = JSON.parse(
+            localStorage.getItem(SAVE_KEY) || "null",
+          );
+        } catch (e) {}
+        if (!st) {
+          try {
+            const old = JSON.parse(
+              localStorage.getItem("btcfdusd-drawings-v1") ||
+                "null",
+            );
+            if (Array.isArray(old)) st = { lines: old };
+          } catch (e) {}
+        }
+        if (!st) return;
+        if (Array.isArray(st.lines))
+          lines.push(...st.lines.filter((l) => l && l.k));
+        if (typeof st.autoBox === "boolean")
+          setAutoBox(st.autoBox);
+        if (typeof st.vol === "string") {
+          $("vol").value = st.vol;
+          setVol(st.vol);
+        }
+        if (st.win) {
+          if (st.win.w > 0 && st.win.h > 0) {
+            const w = st.win.w,
+              h = st.win.h;
+            miniBox = {
+              x:
+                st.win.x != null ? st.win.x : innerWidth - w - 12,
+              y:
+                st.win.y != null
+                  ? st.win.y
+                  : innerHeight - h - 12,
+              w,
+              h,
+            };
+            setMiniBox(miniBox);
+          }
+          if (st.win.hidden) mini.style.display = "none";
+        }
+        mainChart.setState(st.main);
+        miniChart.setState(st.mini);
+        schedule();
+      }
+      addEventListener("keydown", (e) => {
+        if (
+          (e.ctrlKey || e.metaKey) &&
+          !e.altKey &&
+          String(e.key).toLowerCase() === "s"
+        ) {
+          e.preventDefault();
+          try {
+            const snap = snapshot();
+            localStorage.setItem(SAVE_KEY, JSON.stringify(snap));
+            toast(
+              "Layout, settings and drawings saved (" +
+                snap.lines.length +
+                " drawings)",
+            );
+          } catch (err) {
+            toast("Could not save: browser storage is blocked");
+          }
+        }
+      });
+
+      /*
+       * floating 15s line-break window: drag the top-left
+       * grip to resize (anchored bottom-right)
+       */
+
+      const mini = $("mini");
+      /* keep the window inside the viewport */
+      function setMiniBox(bx) {
+        const w = Math.max(240, Math.min(innerWidth, bx.w)),
+          h = Math.max(160, Math.min(innerHeight, bx.h));
+        mini.style.left =
+          Math.max(0, Math.min(innerWidth - w, bx.x)) + "px";
+        mini.style.top =
+          Math.max(0, Math.min(innerHeight - h, bx.y)) + "px";
+        mini.style.width = w + "px";
+        mini.style.height = h + "px";
+      }
+      /* default: bottom-right */
+      {
+        const r0 = mini.getBoundingClientRect();
+        setMiniBox({
+          x: innerWidth - r0.width - 12,
+          y: innerHeight - r0.height - 12,
+          w: r0.width,
+          h: r0.height,
+        });
+      }
+      addEventListener("resize", () => {
+        const r = mini.getBoundingClientRect();
+        if (r.width > 0)
+          setMiniBox({
+            x: r.left,
+            y: r.top,
+            w: r.width,
+            h: r.height,
+          });
+      });
+      /*
+       * resize from any corner; the opposite corner stays
+       * put
+       */
+      document.querySelectorAll("#mini .grip").forEach((gp) =>
+        gp.addEventListener("pointerdown", (e) => {
+          const c = gp.dataset.c,
+            r = mini.getBoundingClientRect(),
+            sx = e.clientX,
+            sy = e.clientY;
+          gp.setPointerCapture(e.pointerId);
+          e.preventDefault();
+          const mv = (ev) => {
+            const dx = ev.clientX - sx,
+              dy = ev.clientY - sy;
+            let x1 = r.left,
+              x2 = r.right,
+              y1 = r.top,
+              y2 = r.bottom;
+            if (c[1] === "l")
+              x1 = Math.max(
+                0,
+                Math.min(r.right - 240, r.left + dx),
+              );
+            else
+              x2 = Math.min(
+                innerWidth,
+                Math.max(r.left + 240, r.right + dx),
+              );
+            if (c[0] === "t")
+              y1 = Math.max(
+                0,
+                Math.min(r.bottom - 160, r.top + dy),
+              );
+            else
+              y2 = Math.min(
+                innerHeight,
+                Math.max(r.top + 160, r.bottom + dy),
+              );
+            setMiniBox({ x: x1, y: y1, w: x2 - x1, h: y2 - y1 });
+          };
+          const up = () => {
+            gp.removeEventListener("pointermove", mv);
+            gp.removeEventListener("pointerup", up);
+          };
+          gp.addEventListener("pointermove", mv);
+          gp.addEventListener("pointerup", up);
+        }),
+      );
+      /* title bar: move the window */
+      $("mhead").addEventListener("pointerdown", (e) => {
+        if (e.target.closest && e.target.closest("button"))
+          return;
+        const hd = $("mhead"),
+          r = mini.getBoundingClientRect(),
+          sx = e.clientX,
+          sy = e.clientY;
+        hd.setPointerCapture(e.pointerId);
+        e.preventDefault();
+        const mv = (ev) =>
+          setMiniBox({
+            x: r.left + ev.clientX - sx,
+            y: r.top + ev.clientY - sy,
+            w: r.width,
+            h: r.height,
+          });
+        const up = () => {
+          hd.removeEventListener("pointermove", mv);
+          hd.removeEventListener("pointerup", up);
+        };
+        hd.addEventListener("pointermove", mv);
+        hd.addEventListener("pointerup", up);
+      });
+      $("mx").onclick = () => {
+        mini.style.display = "none";
+      };
+      $("miniTog").onclick = () => {
+        mini.style.display =
+          mini.style.display === "none" ? "flex" : "none";
+        miniChart.size();
+      };
+
+      addEventListener("keydown", (e) => {
+        if (e.altKey && e.code === "KeyR") {
+          e.preventDefault();
+          if (
+            lines.length &&
+            !confirm(
+              "Reset both charts and delete all " +
+                lines.length +
+                " drawings?",
+            )
+          )
+            return;
+          lines = [];
+          linesSig = "";
+          /* back to the CSS default size, bottom-right */
+          mini.style.display = "flex";
+          mini.style.width = "";
+          mini.style.height = "";
+          {
+            const r = mini.getBoundingClientRect();
+            setMiniBox({
+              x: innerWidth - r.width - 12,
+              y: innerHeight - r.height - 12,
+              w: r.width,
+              h: r.height,
+            });
+          }
+          mainChart.resetView();
+          miniChart.resetView();
+          schedule();
+          toast("Charts reset to default, drawings deleted");
+        }
+      });
+      $("sym").textContent = SYM + " " + TF;
+      document.title = SYM;
+      /* default vol step, overridden by a saved layout */
+      setVol($("vol").value);
+      restore();
+      $("boxTog").onclick = () => setAutoBox(!autoBox);
+      $("vol").addEventListener("input", (e) =>
+        setVol(e.target.value),
+      );
+      connect();
+      hist(IV, () => seedIv(IV));
+      hist("15m", () => seedIv("15m"));
+      load15(null);
+    </script>
+  </body>
 </html>
