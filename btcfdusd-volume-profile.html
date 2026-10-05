@@ -22,7 +22,7 @@
         --mu: #6b7684;
         --up: #089981;
         --dn: #000000;
-        --poc: #e08a00;
+        --poc: #5a6473;
         --va: #2f80c8;
       }
       * {
@@ -277,7 +277,7 @@
       <div class="ctl">
         <input
           id="vol"
-          value="295"
+          value="330"
           inputmode="decimal"
           autocomplete="off"
           placeholder="vol"
@@ -289,6 +289,20 @@
           title="Automatic box on the last high-volume candle"
         >
           B
+        </button>
+        <button
+          id="ordTog"
+          class=""
+          title="Show / hide my orders (from orders.js)"
+        >
+          O
+        </button>
+        <button
+          id="ordLineTog"
+          class="a"
+          title="Order lines; off = executions only"
+        >
+          L
         </button>
         <button
           id="miniTog"
@@ -400,10 +414,75 @@
         $("boxTog").className = autoBox ? "a" : "";
         schedule();
       }
+      /* own orders on the chart (O button) */
+      let showOrders = false;
+      function setShowOrders(v) {
+        showOrders = !!v;
+        $("ordTog").className = showOrders ? "a" : "";
+        schedule();
+      }
+      /* order lines (L button): off keeps only the
+         execution dots */
+      let showLines = true;
+      function setShowLines(v) {
+        showLines = !!v;
+        $("ordLineTog").className = showLines ? "a" : "";
+        schedule();
+      }
       /*
        * vol step typed in the header: a price amount, or a
        * percent of yesterday's POC when it ends with %
        */
+      /*
+       * Own orders. A Python job may keep a file orders.js
+       * next to this page, of the form
+       *   window.ORDERS = [ ...Binance order objects... ];
+       * using Binance's own fields: side, price, origQty,
+       * executedQty, cummulativeQuoteQty, status, time,
+       * updateTime. It is loaded as a script because a page
+       * opened by double-click may not read a data file.
+       * No file: nothing is drawn and the chart is unchanged.
+       */
+      let orders = [];
+      function readOrder(o) {
+        const live =
+          o.status === "NEW" || o.status === "PARTIALLY_FILLED";
+        const avg = +o.cummulativeQuoteQty / +o.executedQty;
+        return {
+          buy: String(o.side).toUpperCase() === "BUY",
+          price: +o.price || avg,
+          qty: +o.origQty,
+          t0: +o.time,
+          t1: live ? null : +o.updateTime,
+          filled: o.status === "FILLED",
+        };
+      }
+      function loadOrders() {
+        const s = document.createElement("script");
+        const next = (ok) => {
+          s.remove();
+          setTimeout(loadOrders, ok ? 3000 : 20000);
+        };
+        window.ORDERS = undefined;
+        s.onload = () => {
+          const a = window.ORDERS;
+          if (Array.isArray(a)) {
+            orders = a
+              .map(readOrder)
+              .filter(
+                (o) =>
+                  Number.isFinite(o.price) &&
+                  o.qty > 0 &&
+                  Number.isFinite(o.t0),
+              );
+            schedule();
+          }
+          next(Array.isArray(a));
+        };
+        s.onerror = () => next(false);
+        s.src = "orders.js?t=" + Date.now();
+        document.head.appendChild(s);
+      }
       let volN = 0,
         volPct = false;
       function setVol(s) {
@@ -1336,14 +1415,18 @@
           g.font = "11px ui-monospace,Menlo,monospace";
           g.textBaseline = "middle";
           for (let p = Math.ceil(lo / gs) * gs; p < hi; p += gs) {
-            g.strokeStyle = "#eef0f3";
-            g.beginPath();
-            g.moveTo(4, Y(p));
-            g.lineTo(W - axW, Y(p));
-            g.stroke();
-            g.fillStyle = "#6b7684";
-            g.textAlign = "left";
-            g.fillText(p.toFixed(DP), W - axW + 6, Y(p));
+            /* the main chart has no grid at all, lines or
+               prices: its only horizontals are the vol steps */
+            if (!cfg.main) {
+              g.strokeStyle = "#eef0f3";
+              g.beginPath();
+              g.moveTo(4, Y(p));
+              g.lineTo(W - axW, Y(p));
+              g.stroke();
+              g.fillStyle = "#6b7684";
+              g.textAlign = "left";
+              g.fillText(p.toFixed(DP), W - axW + 6, Y(p));
+            }
           }
 
           /*
@@ -1502,7 +1585,7 @@
               for (let r = a; r <= b; r++) {
                 g.fillStyle =
                   r === poc
-                    ? "rgba(224,138,0,.2)"
+                    ? "rgba(90,100,115,.25)"
                     : "rgba(47,128,200,.08)";
                 g.fillRect(
                   cx0 - 2,
@@ -1583,14 +1666,14 @@
             );
           });
           g.font = "11px ui-monospace,Menlo,monospace";
-          const line = (yv, col, dash, lbl, wd = 1) => {
+          const line = (yv, col, dash, lbl, wd = 1, xa = x0) => {
             const y = Y(yv);
             if (y < top || y > bot) return;
             g.strokeStyle = col;
             g.lineWidth = wd;
             g.setLineDash(dash);
             g.beginPath();
-            g.moveTo(x0, y);
+            g.moveTo(xa, y);
             g.lineTo(px0, y);
             g.stroke();
             g.setLineDash([]);
@@ -1605,25 +1688,48 @@
            */
           const PP = profs[profs.length - 2];
           if (PP && PP.poc != null) {
-            line(
-              (PP.poc + 0.5) * PP.step,
-              "#e08a00",
-              [],
-              "POC " + ((PP.poc + 0.5) * PP.step).toFixed(DP),
-              3,
-            );
-            line(
-              (PP.b + 1) * PP.step,
-              "#2f80c8",
-              [4, 4],
-              "VAH " + ((PP.b + 1) * PP.step).toFixed(DP),
-            );
-            line(
-              PP.a * PP.step,
-              "#2f80c8",
-              [4, 4],
-              "VAL " + (PP.a * PP.step).toFixed(DP),
-            );
+            {
+              /* POC: a band one TPO row tall, 30% grey,
+                 across the TPO profiles and the chart */
+              const yT = Y((PP.poc + 1) * PP.step),
+                yB = Y(PP.poc * PP.step),
+                pm = (PP.poc + 0.5) * PP.step;
+              g.save();
+              g.beginPath();
+              g.rect(0, top, px0, bot - top);
+              g.clip();
+              g.fillStyle = "rgba(90,100,115,.3)";
+              g.fillRect(0, yT, px0, yB - yT);
+              g.restore();
+              if (yB >= top && yT <= bot) {
+                const ym = (yT + yB) / 2;
+                if (ym >= top && ym <= bot)
+                  ptag(ym, pm.toFixed(DP), "#fff", "#4a5461");
+              }
+            }
+            {
+              /* value area: a very pale blue shade from VAL
+                 to VAH, with the two values in the axis */
+              const vah = (PP.b + 1) * PP.step,
+                val = PP.a * PP.step;
+              g.save();
+              g.beginPath();
+              g.rect(x0, top, px0 - x0, bot - top);
+              g.clip();
+              g.fillStyle = "rgba(47,128,200,.07)";
+              g.fillRect(x0, Y(vah), px0 - x0, Y(val) - Y(vah));
+              g.restore();
+              g.fillStyle = "#2f80c8";
+              g.textAlign = "right";
+              [
+                vah,
+                val,
+              ].forEach((p) => {
+                const y = Y(p);
+                if (y < top || y > bot) return;
+                ptag(y, p.toFixed(DP), "#fff", "#2f80c8");
+              });
+            }
           }
           /*
            * vol ladder: a line every 1x, 2x, 3x... the vol
@@ -1632,29 +1738,33 @@
           if (PP && PP.poc != null && volN > 0) {
             /*
              * kS thins the ladder when lines would be closer
-             * than 8px
+             * than 16px
              */
             const pc = (PP.poc + 0.5) * PP.step,
               v = volPct ? (pc * volN) / 100 : volN,
               sp = (v * ch) / (hi - lo),
-              kS = Math.max(1, Math.ceil(8 / sp));
+              kS = Math.max(1, Math.ceil(16 / sp));
             for (
               let k = kS;
               k < 5000 && (pc + k * v <= hi || pc - k * v >= lo);
               k += kS
             ) {
-              line(
-                pc + k * v,
-                "#e08a00",
-                [1, 3],
-                "+" + k + "  " + (pc + k * v).toFixed(DP),
-              );
-              line(
-                pc - k * v,
-                "#e08a00",
-                [1, 3],
-                "−" + k + "  " + (pc - k * v).toFixed(DP),
-              );
+              /* name left of the axis, value in the axis
+                 column on a white patch */
+              [
+                [pc + k * v, "+"],
+                [pc - k * v, "−"],
+              ].forEach(([p, s]) => {
+                line(p, "#e08a00", [1, 3], s + k, 1, 0);
+                const y = Y(p);
+                if (y >= top && y <= bot)
+                  ptag(
+                    y,
+                    p.toFixed(DP),
+                    "#fff",
+                    "#e08a00",
+                  );
+              });
             }
           }
 
@@ -1828,11 +1938,69 @@
                     : Math.max(ext, q.h);
               }
               drawBox(
-                { t: A.t, lo: ext, hi: dn ? ext + ht : ext - ht },
+                /* first point = the candle's far side, so the
+                   66% line sits near it: near the top after
+                   a down candle, near the bottom after an up */
+                { t: A.t, lo: dn ? ext + ht : ext - ht, hi: ext },
                 false,
               );
               g.lineWidth = 1;
             }
+          }
+          /*
+           * own orders (from orders.js): a segment at the
+           * order price for as long as the order was alive,
+           * as thick as its quantity; dot = filled,
+           * cancelled just stops, open orders run to the edge
+           */
+          if (showOrders && orders.length) {
+            const n = arr.length;
+            const tEnd = off > 0 && n - off < n
+              ? arr[n - off].t
+              : Infinity;
+            const tFirst = geo[0].c.t;
+            const mq = Math.max(...orders.map((o) => o.qty));
+            g.save();
+            g.beginPath();
+            g.rect(x0, top, px0 - x0, bot - top);
+            g.clip();
+            orders.forEach((o) => {
+              const y = Y(o.price);
+              const gone = o.t1 != null && o.t1 < tFirst;
+              if (y < top || y > bot || o.t0 >= tEnd || gone)
+                return;
+              const a = geoAt(o.t0);
+              const ended = o.t1 != null && o.t1 < tEnd;
+              const b = ended ? geoAt(o.t1) : null;
+              let xs = a ? a.x + a.w / 2 : x0;
+              let xe = b ? b.x + b.w / 2 : px0;
+              if (xe - xs < 6) {
+                xs -= 3;
+                xe = xs + 6;
+              }
+              const col = o.buy ? "#56b4e9" : "#e69f00";
+              g.strokeStyle = g.fillStyle = col;
+              g.lineWidth = Math.max(1.5, (10 * o.qty) / mq);
+              g.globalAlpha = ended ? 0.55 : 0.9;
+              g.setLineDash([]);
+              g.beginPath();
+              g.moveTo(xs, y);
+              g.lineTo(xe, y);
+              if (showLines) g.stroke();
+              g.globalAlpha = 1;
+              g.lineWidth = 1.5;
+              g.beginPath();
+              if (ended && o.filled) {
+                /* dot in the order's colour, bigger for
+                   bigger sizes (area follows quantity) */
+                const rDot = 2 + 4 * Math.sqrt(o.qty / mq);
+                g.fillStyle = col;
+                g.arc(xe, y, rDot, 0, 6.2832);
+                g.fill();
+              }
+            });
+            g.restore();
+            g.lineWidth = 1;
           }
           lines.forEach((l) => {
             const sel = l === hl || l === drag;
@@ -1916,11 +2084,13 @@
             lp = mid != null ? mid : last.c,
             ly = Math.max(top, Math.min(bot, Y(lp)));
           g.strokeStyle = "#000000";
-          g.setLineDash([2, 3]);
+          g.setLineDash([4, 3]);
+          g.lineWidth = 2;
           g.beginPath();
           g.moveTo(4, ly);
           g.lineTo(px0, ly);
           g.stroke();
+          g.lineWidth = 1;
           g.setLineDash([]);
           /*
            * tag sits left of the axis so it does not cover the
@@ -2812,6 +2982,8 @@
        */
 
       const SAVE_KEY = "btcfdusd-state-v2";
+      /* raise this whenever the default vol / B / O change */
+      const DEFAULTS_VER = 2;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -2833,8 +3005,11 @@
           };
         return {
           v: 2,
+          dv: DEFAULTS_VER,
           vol: $("vol").value,
           autoBox,
+          showOrders,
+          showLines,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -2865,9 +3040,16 @@
         if (!st) return;
         if (Array.isArray(st.lines))
           lines.push(...st.lines.filter((l) => l && l.k));
-        if (typeof st.autoBox === "boolean")
+        /* vol / B / O saved before the defaults last changed
+           are ignored, so the new defaults apply */
+        const cur = st.dv === DEFAULTS_VER;
+        if (cur && typeof st.autoBox === "boolean")
           setAutoBox(st.autoBox);
-        if (typeof st.vol === "string") {
+        if (cur && typeof st.showOrders === "boolean")
+          setShowOrders(st.showOrders);
+        if (cur && typeof st.showLines === "boolean")
+          setShowLines(st.showLines);
+        if (cur && typeof st.vol === "string") {
           $("vol").value = st.vol;
           setVol(st.vol);
         }
@@ -3072,9 +3254,12 @@
       setVol($("vol").value);
       restore();
       $("boxTog").onclick = () => setAutoBox(!autoBox);
+      $("ordTog").onclick = () => setShowOrders(!showOrders);
+      $("ordLineTog").onclick = () => setShowLines(!showLines);
       $("vol").addEventListener("input", (e) =>
         setVol(e.target.value),
       );
+      loadOrders();
       connect();
       hist(IV, () => seedIv(IV));
       hist("15m", () => seedIv("15m"));
