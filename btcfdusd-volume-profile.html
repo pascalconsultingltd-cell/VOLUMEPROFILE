@@ -13,6 +13,12 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <title>BTCFDUSD</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#f6f7f9" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="BTCFDUSD" />
+    <link rel="apple-touch-icon" href="icon-180.png" />
     <style>
       :root {
         --bg: #ffffff;
@@ -3259,6 +3265,12 @@
       $("vol").addEventListener("input", (e) =>
         setVol(e.target.value),
       );
+      /* installable app: only when served over https */
+      if (
+        "serviceWorker" in navigator &&
+        location.protocol === "https:"
+      )
+        navigator.serviceWorker.register("sw.js").catch(() => {});
       loadOrders();
       connect();
       hist(IV, () => seedIv(IV));
