@@ -1214,6 +1214,14 @@
          * fit = auto-fitted price range, lock = range frozen
          * once the chart has been dragged
          */
+        /*
+         * cfg.N = candles shown by default; cfg.room = share
+         * of the width left empty at the right of the latest
+         * candle. N counts slots (candles + empty ones), and
+         * a negative off is what leaves the empty ones.
+         */
+        const ROOM = cfg.room || 0,
+          slotsFor = (v) => Math.round(v / (1 - ROOM));
         let W = 0,
           H = 0,
           raf = 0,
@@ -1226,12 +1234,12 @@
           boxTool = 0,
           dotTool = 0,
           draft = null,
-          off = 0,
+          off = -Math.round(slotsFor(cfg.N) * ROOM),
           pan = null,
           sc = null,
           ysc = 1,
           ypan = 0,
-          N = cfg.N,
+          N = slotsFor(cfg.N),
           mode = cfg.mode,
           hover = -1,
           mouse = null,
@@ -1243,6 +1251,9 @@
           lbT = null,
           fit = null,
           lock = null;
+        /* pan position of the default view: latest candle,
+           with the empty room at its right */
+        const home = () => -Math.round(N * ROOM);
         /*
          * pointers currently down on this canvas; pinch =
          * two-finger zoom in progress
@@ -1449,10 +1460,15 @@
            */
 
           /*
-           * a day's row size comes from the average range of
-           * the two days before it, so it is fixed for the
-           * whole day and does not depend on zoom or pan
+           * a day's row size comes from the vol step (see
+           * dayProf); without one, from the average range of
+           * the two days before it. Either way it does not
+           * depend on zoom or pan.
+           * volAmt = the vol step as a price amount; a percent
+           * is taken of the latest 15m close
            */
+          const volRef = k15.length ? k15[k15.length - 1].c : 0,
+            volAmt = volPct ? (volRef * volN) / 100 : volN;
 
           /* dayR = high/low of every loaded day */
           const gap = 10,
@@ -1531,11 +1547,18 @@
               }
             });
             /*
-             * falls back to the day's own range when no earlier
-             * day is loaded
+             * brick height = one tenth of the vol step, rounded
+             * up (330 gives 33). With no vol step set it falls
+             * back to the two-day range rule, or the day's own
+             * range when no earlier day is loaded.
              */
             const rng = prevR(dS) || dh - dl,
-              step = rng > 0 ? Math.max(1, nice(rng / 40)) : 1;
+              step =
+                volAmt > 0
+                  ? Math.max(1, Math.ceil(volAmt / 10))
+                  : rng > 0
+                    ? Math.max(1, nice(rng / 40))
+                    : 1;
             [...per.values()]
               .sort((m, n) => m.i - n.i)
               .forEach((q) => {
@@ -2987,8 +3010,8 @@
           newCandle,
           size,
           resetView: () => {
-            N = cfg.N;
-            off = 0;
+            N = slotsFor(cfg.N);
+            off = home();
             ysc = 1;
             ypan = 0;
             lock = null;
@@ -3088,14 +3111,22 @@
               [288, "288"],
               [576, "576"],
             ],
-            () => N,
-            (v) => (N = v),
+            /* a button shows that many candles, back at
+               the latest one with the usual room */
+            () =>
+              [40, 80, 120, 160, 288, 576].find(
+                (v) => slotsFor(v) === N,
+              ),
+            (v) => {
+              N = slotsFor(v);
+              off = home();
+            },
           );
         }
 
         function setTF(v) {
           TF = v;
-          off = 0;
+          off = home();
           lock = null;
           draft = null;
           boxTool = 0;
@@ -3112,7 +3143,9 @@
       const mainChart = makeChart($("c"), {
         main: true,
         mode: "eq",
+        /* one day of 5m candles, a fifth of the width free */
         N: 288,
+        room: 0.2,
         tpo: true,
       });
       const miniChart = makeChart($("mc"), {
