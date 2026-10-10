@@ -28,7 +28,7 @@
         --mu: #6b7684;
         --up: #089981;
         --dn: #000000;
-        --poc: #5a6473;
+        --poc: #003366;
         --va: #2f80c8;
       }
       * {
@@ -725,6 +725,15 @@
           if (!any) break;
         }
       }
+      /*
+       * Days are UTC days (00:00 to 00:00 UTC) for the TPO
+       * profiles, the levels and the vertical grid. This is
+       * the one place that defines a day: dayOf = the UTC
+       * midnight that starts t's day.
+       */
+      const dayOf = (t) => Math.floor(t / 86400000) * 86400000;
+      const prevDay = (dS) => dS - 86400000;
+      const nextDay = (dS) => dS + 86400000;
       function schedule() {
         charts.forEach((h) => h.sched());
       }
@@ -1330,9 +1339,7 @@
             )
             .filter(okC);
           if (!vis.length || !W) return;
-          const dayStart =
-            Math.floor(vis[vis.length - 1].t / 86400000) *
-            86400000;
+          const dayStart = dayOf(vis[vis.length - 1].t);
           const dayC = cfg.tpo
             ? k15.filter((c) => c.t >= dayStart && okC(c))
             : [];
@@ -1443,18 +1450,18 @@
 
           /*
            * a day's row size comes from the average range of
-           * the two UTC days before it, so it is fixed for the
+           * the two days before it, so it is fixed for the
            * whole day and does not depend on zoom or pan
            */
 
-          /* dayR = high/low of every loaded UTC day */
+          /* dayR = high/low of every loaded day */
           const gap = 10,
             DAY = 86400000,
             dayR = new Map();
           if (cfg.tpo)
             k15.forEach((c) => {
               if (!okC(c)) return;
-              const k = Math.floor(c.t / DAY),
+              const k = dayOf(c.t),
                 q = dayR.get(k);
               if (!q) dayR.set(k, { h: c.h, l: c.l });
               else {
@@ -1463,15 +1470,11 @@
               }
             });
           const prevR = (dS) => {
-            const r = [1, 2]
-              .map((n) => dS - n * DAY)
+            const r = [prevDay(dS), prevDay(prevDay(dS))]
               .filter(
-                (s) =>
-                  k15.length &&
-                  k15[0].t <= s &&
-                  dayR.has(s / DAY),
+                (s) => k15.length && k15[0].t <= s && dayR.has(s),
               )
-              .map((s) => dayR.get(s / DAY))
+              .map((s) => dayR.get(s))
               .map((q) => q.h - q.l)
               .filter((v) => v > 0);
             /* only fully loaded days count */
@@ -1480,27 +1483,43 @@
               : 0;
           };
           /*
-           * always compute at least 2 days so the previous
-           * day's POC exists
+           * candle geometry first: the levels below are cut
+           * per day and need each candle's x position
            */
-          const colW = (tpoW - 6 - (nTpo - 1) * gap) / nTpo,
-            cnt = cfg.tpo ? Math.max(nTpo, 2) : 0;
-          profs = [];
-          g.save();
-          g.beginPath();
-          g.rect(0, top, x0 - 5, bot - top);
-          g.clip();
-          for (let d = 0; d < cnt; d++) {
-            const show = d >= cnt - nTpo,
-              dS = dayStart - (cnt - 1 - d) * 86400000,
-              cx0 = 6 + (d - (cnt - nTpo)) * (colW + gap);
+          const vsum =
+              vis.reduce((s, c) => s + (c.v || 0), 0) || 1,
+            cw = x1 - x0,
+            slots = vis.length + Math.max(0, -off),
+            cwE = (cw * vis.length) / slots;
+          geo = [];
+          {
+            let x = x0;
+            const nV = vis.length,
+              minW = Math.min(3, (cwE / nV) * 0.4);
+            vis.forEach((c) => {
+              const w =
+                mode === "eq"
+                  ? minW + ((cwE - nV * minW) * (c.v || 0)) / vsum
+                  : cw / slots;
+              geo.push({ x, w, c });
+              x += w;
+            });
+          }
+          /*
+           * one day's TPO profile: rows of 30-minute
+           * bricks, its POC row and its 70% value area.
+           * Worked out once per day per frame.
+           */
+          const profCache = new Map();
+          const dayProf = (dS) => {
+            if (profCache.has(dS)) return profCache.get(dS);
             const rows = new Map(),
               per = new Map();
             let dh = -Infinity,
               dl = Infinity;
+            const dE = nextDay(dS);
             k15.forEach((c) => {
-              if (!okC(c) || c.t < dS || c.t >= dS + 86400000)
-                return;
+              if (!okC(c) || c.t < dS || c.t >= dE) return;
               dh = Math.max(dh, c.h);
               dl = Math.min(dl, c.l);
               const i = Math.floor((c.t - dS) / TPO_MS),
@@ -1516,8 +1535,7 @@
              * day is loaded
              */
             const rng = prevR(dS) || dh - dl,
-              step = rng > 0 ? Math.max(1, nice(rng / 40)) : 1,
-              rowH = (ch * step) / (hi - lo);
+              step = rng > 0 ? Math.max(1, nice(rng / 40)) : 1;
             [...per.values()]
               .sort((m, n) => m.i - n.i)
               .forEach((q) => {
@@ -1530,22 +1548,20 @@
                   rows.get(r).push(q.i);
                 }
               });
+            /* full = the whole day is loaded */
             const P = {
-              d,
               dS,
-              cx0,
-              show,
               rows,
               step,
-              rowH,
-              lw: 1,
+              maxC: 1,
               poc: null,
               a: null,
               b: null,
+              full: k15.length > 0 && k15[0].t <= dS,
             };
-            profs.push(P);
+            profCache.set(dS, P);
             const keys = [...rows.keys()];
-            if (!keys.length) continue;
+            if (!keys.length) return P;
             const kmin = Math.min(...keys),
               kmax = Math.max(...keys),
               L = (r) => (rows.has(r) ? rows.get(r).length : 0);
@@ -1585,48 +1601,72 @@
                   acc += L(a);
                 }
             }
-            const lw = Math.min(11, (colW - 2) / maxC);
-            Object.assign(P, { poc, a, b, lw });
-            if (show)
-              for (let r = a; r <= b; r++) {
-                g.fillStyle =
-                  r === poc
-                    ? "rgba(90,100,115,.25)"
-                    : "rgba(47,128,200,.08)";
+            Object.assign(P, { poc, a, b, maxC });
+            return P;
+          };
+          /* the TPO profiles drawn at the left of the chart */
+          const colW = (tpoW - 6 - (nTpo - 1) * gap) / nTpo,
+            cnt = cfg.tpo ? nTpo : 0;
+          profs = [];
+          const tpoDays = [dayStart];
+          while (tpoDays.length < cnt)
+            tpoDays.unshift(prevDay(tpoDays[0]));
+          g.save();
+          g.beginPath();
+          g.rect(0, top, x0 - 5, bot - top);
+          g.clip();
+          for (let d = 0; d < cnt; d++) {
+            const Q = dayProf(tpoDays[d]),
+              cx0 = 6 + d * (colW + gap),
+              rowH = (ch * Q.step) / (hi - lo),
+              lw = Math.min(11, (colW - 2) / Q.maxC),
+              P = Object.assign(
+                { d, cx0, show: true, rowH, lw },
+                Q,
+              );
+            profs.push(P);
+            if (P.poc == null) continue;
+            for (let r = P.a; r <= P.b; r++) {
+              g.fillStyle =
+                r === P.poc
+                  ? "rgba(0,51,102,.25)"
+                  : "rgba(47,128,200,.08)";
+              g.fillRect(
+                cx0 - 2,
+                Y((r + 1) * P.step),
+                colW + 2,
+                rowH,
+              );
+            }
+            P.rows.forEach((lst, r) => {
+              const yT = Y((r + 1) * P.step);
+              if (yT > bot || yT + rowH < top) return;
+              lst.forEach((idx, k) => {
+                g.fillStyle = tpoColor(idx, 0.72);
                 g.fillRect(
-                  cx0 - 2,
-                  Y((r + 1) * step),
-                  colW + 2,
-                  rowH,
+                  cx0 + k * lw,
+                  yT + 0.5,
+                  Math.max(1, lw - 1),
+                  Math.max(1, rowH - 1),
                 );
-              }
-            if (show)
-              rows.forEach((lst, r) => {
-                const yT = Y((r + 1) * step);
-                if (yT > bot || yT + rowH < top) return;
-                lst.forEach((idx, k) => {
-                  g.fillStyle = tpoColor(idx, 0.72);
-                  g.fillRect(
-                    cx0 + k * lw,
-                    yT + 0.5,
-                    Math.max(1, lw - 1),
-                    Math.max(1, rowH - 1),
-                  );
-                });
               });
+            });
           }
           g.restore();
           /*
-           * need the shown days plus the two before the oldest
-           * one
+           * 15m history needed: three days before the oldest
+           * day on the chart (its previous day, plus the two
+           * that set that day's row size), and likewise for
+           * the profiles
            */
-          if (
-            cfg.tpo &&
-            seeded["15m"] &&
-            k15.length &&
-            dayStart - (cnt + 1) * DAY < k15[0].t
-          )
-            older("15m");
+          if (cfg.tpo && seeded["15m"] && k15.length) {
+            /* a little over the days needed, to be safe */
+            const d0 = dayOf(geo[0].c.t),
+              need =
+                Math.min(d0 - 3 * DAY, dayStart - (cnt + 1) * DAY) -
+                7200000;
+            if (need < k15[0].t) older("15m");
+          }
           if (cfg.tpo) {
             g.strokeStyle = "#cfd5dc";
             g.beginPath();
@@ -1672,7 +1712,8 @@
             );
           });
           g.font = "11px ui-monospace,Menlo,monospace";
-          const line = (yv, col, dash, lbl, wd = 1, xa = x0) => {
+          /* a horizontal stroke between two x positions */
+          const hseg = (yv, xa, xb, col, dash, wd) => {
             const y = Y(yv);
             if (y < top || y > bot) return;
             g.strokeStyle = col;
@@ -1680,117 +1721,111 @@
             g.setLineDash(dash);
             g.beginPath();
             g.moveTo(xa, y);
-            g.lineTo(px0, y);
+            g.lineTo(xb, y);
             g.stroke();
             g.setLineDash([]);
             g.lineWidth = 1;
-            g.fillStyle = col;
-            g.textAlign = "right";
-            g.fillText(lbl, px0 - 4, y - 7);
           };
           /*
-           * previous UTC day: its POC, VAH and VAL are the
-           * levels drawn across the chart
+           * Reference levels, cut per UTC day: over each day's
+           * candles the chart shows the POC band, the value
+           * area and the vol steps of the day before it. So
+           * today uses yesterday's levels, yesterday uses the
+           * day before's, and so on.
            */
-          const PP = profs[profs.length - 2];
-          if (PP && PP.poc != null) {
-            {
-              /* POC: a band one TPO row tall, 30% grey,
-                 across the TPO profiles and the chart */
-              const yT = Y((PP.poc + 1) * PP.step),
-                yB = Y(PP.poc * PP.step),
-                pm = (PP.poc + 0.5) * PP.step;
-              g.save();
-              g.beginPath();
-              g.rect(0, top, px0, bot - top);
-              g.clip();
-              g.fillStyle = "rgba(90,100,115,.3)";
-              g.fillRect(0, yT, px0, yB - yT);
-              g.restore();
-              if (yB >= top && yT <= bot) {
-                const ym = (yT + yB) / 2;
-                if (ym >= top && ym <= bot)
-                  ptag(ym, pm.toFixed(DP), "#fff", "#4a5461");
-              }
-            }
-            {
-              /* value area: a very pale blue shade from VAL
-                 to VAH, with the two values in the axis */
-              const vah = (PP.b + 1) * PP.step,
-                val = PP.a * PP.step;
-              g.save();
-              g.beginPath();
-              g.rect(x0, top, px0 - x0, bot - top);
-              g.clip();
-              g.fillStyle = "rgba(47,128,200,.07)";
-              g.fillRect(x0, Y(vah), px0 - x0, Y(val) - Y(vah));
-              g.restore();
-              g.fillStyle = "#2f80c8";
-              g.textAlign = "right";
-              [
-                vah,
-                val,
-              ].forEach((p) => {
-                const y = Y(p);
-                if (y < top || y > bot) return;
-                ptag(y, p.toFixed(DP), "#fff", "#2f80c8");
-              });
-            }
-          }
-          /*
-           * vol ladder: a line every 1x, 2x, 3x... the vol
-           * step above and below yesterday's POC
-           */
-          if (PP && PP.poc != null && volN > 0) {
+          const segs = [];
+          if (cfg.tpo)
+            geo.forEach((o) => {
+              const dS = dayOf(o.c.t),
+                s = segs[segs.length - 1];
+              if (s && s.dS === dS) s.xb = o.x + o.w;
+              else segs.push({ dS, xa: o.x, xb: o.x + o.w });
+            });
+          if (segs.length) segs[segs.length - 1].xb = px0;
+          segs.forEach((sg, i) => {
+            const R = dayProf(prevDay(sg.dS));
+            if (R.poc == null || !R.full) return;
             /*
-             * kS thins the ladder when lines would be closer
-             * than 16px
+             * the last day on the chart also runs its POC band
+             * and vol lines across the TPO profiles, and is the
+             * one whose prices are written in the axis
              */
-            const pc = (PP.poc + 0.5) * PP.step,
+            const last = i === segs.length - 1,
+              own = [sg.xa, sg.xb],
+              spans = last ? [[0, x0 - 5], own] : [own],
+              pT = (R.poc + 1) * R.step,
+              pB = R.poc * R.step,
+              pc = (pT + pB) / 2,
+              vah = (R.b + 1) * R.step,
+              val = R.a * R.step,
               v = volPct ? (pc * volN) / 100 : volN,
-              sp = (v * ch) / (hi - lo),
-              kS = Math.max(1, Math.ceil(16 / sp));
-            for (
-              let k = kS;
-              k < 5000 && (pc + k * v <= hi || pc - k * v >= lo);
-              k += kS
-            ) {
-              /* name left of the axis, value in the axis
-                 column on a white patch */
-              [
-                [pc + k * v, "+"],
-                [pc - k * v, "−"],
-              ].forEach(([p, s]) => {
-                line(p, "#e08a00", [1, 3], s + k, 1, 0);
-                const y = Y(p);
-                if (y >= top && y <= bot)
-                  ptag(
-                    y,
-                    p.toFixed(DP),
-                    "#fff",
-                    "#e08a00",
+              /* kS thins the ladder below 16px spacing */
+              kS = Math.max(
+                1,
+                Math.ceil(16 / ((v * ch) / (hi - lo))),
+              ),
+              inK = (k) =>
+                k < 5000 && (pc + k * v <= hi || pc - k * v >= lo);
+            g.save();
+            g.beginPath();
+            g.rect(0, top, px0, bot - top);
+            g.clip();
+            /* value area: pale blue, chart only */
+            g.fillStyle = "rgba(47,128,200,.13)";
+            g.fillRect(
+              sg.xa,
+              Y(vah),
+              sg.xb - sg.xa,
+              Y(val) - Y(vah),
+            );
+            /* POC: a navy band one TPO row tall */
+            g.fillStyle = "rgba(0,51,102,.3)";
+            spans.forEach(([xa, xb]) =>
+              g.fillRect(xa, Y(pT), xb - xa, Y(pB) - Y(pT)),
+            );
+            g.restore();
+            /* vol ladder: solid navy zero through the POC,
+               then a dashed step every 1x, 2x, 3x... */
+            if (volN > 0)
+              spans.forEach(([xa, xb]) => {
+                hseg(pc, xa, xb, "#003366", [], 1.5);
+                for (let k = kS; inK(k); k += kS)
+                  [pc + k * v, pc - k * v].forEach((p) =>
+                    hseg(p, xa, xb, "rgba(0,0,0,.5)", [3, 3], 1),
                   );
               });
+            if (!last) return;
+            /* prices in the axis column, on white patches */
+            const tag = (p, col) => {
+              const y = Y(p);
+              if (y >= top && y <= bot)
+                ptag(y, p.toFixed(DP), "#fff", col);
+            };
+            tag(pc, "#003366");
+            tag(vah, "#2f80c8");
+            tag(val, "#2f80c8");
+            if (volN > 0) {
+              const name = (p, t, col) => {
+                const y = Y(p);
+                if (y < top || y > bot) return;
+                g.fillStyle = col;
+                g.textAlign = "right";
+                g.textBaseline = "middle";
+                g.fillText(t, px0 - 4, y - 7);
+              };
+              name(pc, "0", "#003366");
+              for (let k = kS; inK(k); k += kS) {
+                name(pc + k * v, "+" + k, "#000000");
+                tag(pc + k * v, "#000000");
+                name(pc - k * v, "−" + k, "#000000");
+                tag(pc - k * v, "#000000");
+              }
             }
-          }
+          });
 
           /* candles */
 
-          const vsum =
-              vis.reduce((s, c) => s + (c.v || 0), 0) || 1,
-            cw = x1 - x0,
-            slots = vis.length + Math.max(0, -off),
-            cwE = (cw * vis.length) / slots;
-          let x = x0;
-          geo = [];
-          vis.forEach((c) => {
-            const nV = vis.length,
-              minW = Math.min(3, (cwE / nV) * 0.4),
-              w =
-                mode === "eq"
-                  ? minW + ((cwE - nV * minW) * (c.v || 0)) / vsum
-                  : cw / slots;
-            geo.push({ x, w, c });
+          geo.forEach(({ x, w, c }) => {
             const col = c.c >= c.o ? "#089981" : "#000000",
               xm = x + w / 2;
             g.save();
@@ -1812,7 +1847,6 @@
               Math.max(1, Math.abs(yo - yc)),
             );
             g.restore();
-            x += w;
           });
           /*
            * circles: green below bullish bars, black above
@@ -1838,27 +1872,78 @@
               g.fill();
             });
           }
-          /* time labels */
+          /*
+           * vertical grid: a line every 6 hours counted from
+           * UTC midnight, where the day and its levels change
+           * (01, 07, 13, 19 on a London summer clock), drawn
+           * behind everything
+           */
+          const SIX = 21600000,
+            p2 = (v) => String(v).padStart(2, "0"),
+            slot = (t) => Math.floor(t / SIX),
+            marks = cfg.main
+              ? geo.filter(
+                  (o, i) => i && slot(o.c.t) !== slot(geo[i - 1].c.t),
+                )
+              : [];
+          g.save();
+          g.globalCompositeOperation = "destination-over";
+          g.lineWidth = 1.5;
+          marks.forEach((o) => {
+            const xm = Math.round(o.x + o.w / 2) + 0.5,
+              mid0 = new Date(o.c.t).getUTCHours() < 6;
+            /* midnight solid navy like the 0 line, the
+               others dashed black like the vol steps */
+            g.strokeStyle = mid0 ? "#003366" : "rgba(0,0,0,.5)";
+            g.setLineDash(mid0 ? [] : [3, 3]);
+            g.lineWidth = mid0 ? 1.5 : 1;
+            g.beginPath();
+            g.moveTo(xm, top);
+            g.lineTo(xm, bot);
+            g.stroke();
+          });
+          g.restore();
+          /* time labels: on the 6-hour lines when there are
+             at least two of them, else every few candles */
 
           g.fillStyle = "#6b7684";
           g.textAlign = "center";
           const every = Math.ceil(vis.length / 8);
-          geo.forEach((o, i) => {
-            if (i % every === 0) {
-              const d = new Date(o.c.t);
+          let lastX = -1e9;
+          if (marks.length >= 2)
+            marks.forEach((o) => {
+              /* the line's time on the local clock; the date
+                 (UTC) on the line that starts a day */
+              const xm = o.x + o.w / 2,
+                d = new Date(slot(o.c.t) * SIX);
+              if (xm - lastX < 46) return;
+              lastX = xm;
               g.fillText(
-                d.getHours().toString().padStart(2, "0") +
-                  ":" +
-                  d.getMinutes().toString().padStart(2, "0") +
-                  (sec()
-                    ? ":" +
-                      d.getSeconds().toString().padStart(2, "0")
-                    : ""),
-                o.x + o.w / 2,
+                d.getUTCHours()
+                  ? p2(d.getHours()) + ":" + p2(d.getMinutes())
+                  : d.toLocaleDateString([], {
+                      day: "2-digit",
+                      month: "short",
+                      timeZone: "UTC",
+                    }),
+                xm,
                 bot + 10,
               );
-            }
-          });
+            });
+          else
+            geo.forEach((o, i) => {
+              if (i % every === 0) {
+                const d = new Date(o.c.t);
+                g.fillText(
+                  p2(d.getHours()) +
+                    ":" +
+                    p2(d.getMinutes()) +
+                    (sec() ? ":" + p2(d.getSeconds()) : ""),
+                  o.x + o.w / 2,
+                  bot + 10,
+                );
+              }
+            });
           /* user lines (Alt+H / Alt+V) */
 
           view = {
@@ -1912,44 +1997,105 @@
             });
           };
           /*
-           * automatic box on the latest big-volume candle: as
-           * tall as that candle (high to low), and it trails
-           * the market —
+           * Automatic channel on the latest big-volume candle.
+           * It is as tall as that candle (high to low) and it
+           * trails the market: after a down candle its bottom
+           * follows every new low, after an up candle its top
+           * follows every new high. It is drawn as a channel,
+           * candle by candle, so the moving edges are visible
+           * from the start.
+           * When a candle closes out of it on the far side
+           * (above when following lows, below when following
+           * highs), that channel stops there and a new one of
+           * the same height starts in the opposite direction,
+           * and so on. Following highs = green, lows = black.
            */
           if (cfg.main && autoBox) {
-            /*
-             * after a down candle its bottom follows every new
-             * low, after an up candle its top follows every new
-             * high
-             */
-
             let k = arr.length - 1;
             for (; k >= BIG_WIN - 1; k--) {
               const c = arr[k];
               if (okC(c) && c.c !== c.o && isBig(arr, k)) break;
             }
-            if (
-              k >= BIG_WIN - 1 &&
-              arr[k].t <= vis[vis.length - 1].t
-            ) {
+            if (k >= BIG_WIN - 1) {
               const A = arr[k],
                 ht = A.h - A.l,
-                dn = A.c < A.o;
-              let ext = dn ? A.l : A.h;
+                where = new Map(geo.map((o) => [o.c, o])),
+                runs = [];
+              let dn = A.c < A.o,
+                ext = dn ? A.l : A.h,
+                pts = [{ c: A, ext }];
               for (let j = k + 1; j < arr.length; j++) {
                 const q = arr[j];
-                if (okC(q))
-                  ext = dn
-                    ? Math.min(ext, q.l)
-                    : Math.max(ext, q.h);
+                if (!okC(q)) continue;
+                ext = dn ? Math.min(ext, q.l) : Math.max(ext, q.h);
+                pts.push({ c: q, ext });
+                const out = dn ? q.c > ext + ht : q.c < ext - ht;
+                if (!out) continue;
+                runs.push({ dn, pts, live: false });
+                dn = !dn;
+                ext = dn ? q.l : q.h;
+                pts = [{ c: q, ext }];
               }
-              drawBox(
-                /* first point = the candle's far side, so the
-                   66% line sits near it: near the top after
-                   a down candle, near the bottom after an up */
-                { t: A.t, lo: dn ? ext + ht : ext - ht, hi: ext },
-                false,
-              );
+              runs.push({ dn, pts, live: true });
+              runs.forEach((r) => {
+                /* far = the side away from the trailed edge;
+                   the 66% line sits 34% in from it */
+                const far = (e) => (r.dn ? e + ht : e - ht),
+                  p66 = (e) => e + 0.66 * (far(e) - e),
+                  rgb = r.dn ? "0,0,0" : "8,153,129",
+                  n = r.pts.length,
+                  sg = [];
+                r.pts.forEach((p, i) => {
+                  const o = where.get(p.c);
+                  if (!o) return;
+                  const xm = o.x + o.w / 2,
+                    end = i === n - 1;
+                  sg.push({
+                    e: p.ext,
+                    xa: i ? o.x : xm,
+                    xb: end ? (r.live ? px0 : xm) : o.x + o.w,
+                  });
+                });
+                if (!sg.length) return;
+                const edge = (f, back) => {
+                  (back ? [...sg].reverse() : sg).forEach((s) => {
+                    const y = Y(f(s.e));
+                    g.lineTo(back ? s.xb : s.xa, y);
+                    g.lineTo(back ? s.xa : s.xb, y);
+                  });
+                };
+                g.save();
+                g.beginPath();
+                g.rect(x0, top, px0 - x0, bot - top);
+                g.clip();
+                g.beginPath();
+                g.moveTo(sg[0].xa, Y(sg[0].e));
+                edge((e) => e, false);
+                edge(far, true);
+                g.closePath();
+                g.fillStyle = "rgba(" + rgb + ",.13)";
+                g.fill();
+                g.strokeStyle = "rgba(" + rgb + ",.5)";
+                g.lineWidth = 1;
+                g.setLineDash([]);
+                g.stroke();
+                g.setLineDash([5, 4]);
+                g.beginPath();
+                g.moveTo(sg[0].xa, Y(p66(sg[0].e)));
+                edge(p66, false);
+                g.stroke();
+                g.setLineDash([]);
+                g.restore();
+                /* current prices of the live channel, when
+                   its latest candle is on screen */
+                if (!r.live || !where.has(r.pts[n - 1].c)) return;
+                const e = r.pts[n - 1].ext;
+                [e, p66(e), far(e)].forEach((pv) => {
+                  const yy = Y(pv);
+                  if (yy >= top && yy <= bot)
+                    ptag(yy, pv.toFixed(DP), "rgb(" + rgb + ")");
+                });
+              });
               g.lineWidth = 1;
             }
           }
@@ -2015,7 +2161,7 @@
             g.setLineDash([]);
             g.beginPath();
             if (l.k === "h") {
-              g.strokeStyle = "#7d8794";
+              g.strokeStyle = "#1f3a93";
               g.lineWidth = sel ? 6 : 4;
               const y = Y(l.p);
               if (y >= top && y <= bot) {
@@ -2024,10 +2170,10 @@
                 g.globalAlpha = 0.5;
                 g.stroke();
                 g.globalAlpha = 1;
-                ptag(y, l.p.toFixed(DP), "#7d8794");
+                ptag(y, l.p.toFixed(DP), "#1f3a93");
               }
             } else if (l.k === "v") {
-              g.strokeStyle = "#7d8794";
+              g.strokeStyle = "#1f3a93";
               g.lineWidth = sel ? 6 : 4;
               const o = geoAt(l.t);
               if (o) {
@@ -2037,32 +2183,30 @@
                 g.globalAlpha = 0.5;
                 g.stroke();
                 g.globalAlpha = 1;
-                ttag(cx, dlabel(l.t), "#7d8794");
+                ttag(cx, dlabel(l.t), "#1f3a93");
               }
             } else if (l.k === "d") {
               const o = geoAt(l.t),
                 xs = o ? o.x + o.w / 2 : x0,
                 y = Y(l.p);
               if (y >= top && y <= bot) {
-                g.strokeStyle = g.fillStyle = "#388e3c";
+                g.strokeStyle = g.fillStyle = "#1f3a93";
                 g.lineWidth = sel ? 3 : 2;
                 g.beginPath();
                 g.moveTo(xs, y);
                 g.lineTo(px0, y);
-                g.globalAlpha = 0.5;
                 g.stroke();
-                g.globalAlpha = 1;
                 g.beginPath();
                 g.arc(xs, y, sel ? 2.5 : 1.5, 0, 6.2832);
                 g.fill();
-                ptag(y, l.p.toFixed(DP), "#388e3c");
+                ptag(y, l.p.toFixed(DP), "#1f3a93");
               }
             } else if (l.k === "b") drawBox(l, sel);
             g.lineWidth = 1;
           });
           if (dotTool) {
             g.font = "11px ui-monospace,Menlo,monospace";
-            g.fillStyle = "#388e3c";
+            g.fillStyle = "#1f3a93";
             g.textAlign = "left";
             g.textBaseline = "middle";
             g.fillText(
@@ -2153,10 +2297,7 @@
                   k = Math.floor((mouse.x - P.cx0) / P.lw),
                   lst = P.rows.get(ri),
                   idx = lst && lst[k];
-                /*
-                 * TPO periods are UTC half-hours, so the label says
-                 * so
-                 */
+                /* TPO periods are UTC half-hours: say so */
                 if (idx != null) {
                   const f = (t) =>
                       new Date(t).toLocaleTimeString([], {
@@ -2989,7 +3130,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 2;
+      const DEFAULTS_VER = 3;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -3046,9 +3187,9 @@
         if (!st) return;
         if (Array.isArray(st.lines))
           lines.push(...st.lines.filter((l) => l && l.k));
-        /* vol / B / O saved before the defaults last changed
-           are ignored, so the new defaults apply */
-        const cur = st.dv === DEFAULTS_VER;
+        /* vol / B / O / L saved before version 2 of the
+           defaults are ignored */
+        const cur = st.dv >= 2;
         if (cur && typeof st.autoBox === "boolean")
           setAutoBox(st.autoBox);
         if (cur && typeof st.showOrders === "boolean")
@@ -3059,26 +3200,17 @@
           $("vol").value = st.vol;
           setVol(st.vol);
         }
-        if (st.win) {
-          if (st.win.w > 0 && st.win.h > 0) {
-            const w = st.win.w,
-              h = st.win.h;
-            miniBox = {
-              x:
-                st.win.x != null ? st.win.x : innerWidth - w - 12,
-              y:
-                st.win.y != null
-                  ? st.win.y
-                  : innerHeight - h - 12,
-              w,
-              h,
-            };
-            setMiniBox(miniBox);
-          }
-          if (st.win.hidden) mini.style.display = "none";
-        }
-        mainChart.setState(st.main);
-        miniChart.setState(st.mini);
+        /*
+         * A reload behaves like Alt+R, except that drawings
+         * and settings are kept: the view (zoom, pan, price
+         * scale, floating window) always starts from its
+         * default, so only mode / timeframe / TPO days are
+         * taken from the saved chart state.
+         */
+        const keep = (s) =>
+          s && { mode: s.mode, TF: s.TF, nTpo: s.nTpo };
+        mainChart.setState(keep(st.main));
+        miniChart.setState(keep(st.mini));
         schedule();
       }
       addEventListener("keydown", (e) => {
@@ -3092,7 +3224,7 @@
             const snap = snapshot();
             localStorage.setItem(SAVE_KEY, JSON.stringify(snap));
             toast(
-              "Layout, settings and drawings saved (" +
+              "Settings and drawings saved (" +
                 snap.lines.length +
                 " drawings)",
             );
@@ -3119,14 +3251,14 @@
         mini.style.width = w + "px";
         mini.style.height = h + "px";
       }
-      /* default: bottom-right */
+      /* default: minimum size, top-left corner of the page */
       {
         const r0 = mini.getBoundingClientRect();
         setMiniBox({
-          x: innerWidth - r0.width - 12,
-          y: innerHeight - r0.height - 12,
-          w: r0.width,
-          h: r0.height,
+          x: 0,
+          y: 0,
+          w: 240,
+          h: 160,
         });
       }
       addEventListener("resize", () => {
@@ -3235,17 +3367,18 @@
             return;
           lines = [];
           linesSig = "";
-          /* back to the CSS default size, bottom-right */
+          /* back to the minimum size, in the top-left
+             corner of the page, over the header */
           mini.style.display = "flex";
           mini.style.width = "";
           mini.style.height = "";
           {
             const r = mini.getBoundingClientRect();
             setMiniBox({
-              x: innerWidth - r.width - 12,
-              y: innerHeight - r.height - 12,
-              w: r.width,
-              h: r.height,
+              x: 0,
+              y: 0,
+              w: 240,
+              h: 160,
             });
           }
           mainChart.resetView();
