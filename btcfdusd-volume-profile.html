@@ -283,7 +283,7 @@
       <div class="ctl">
         <input
           id="vol"
-          value="330"
+          value="355"
           inputmode="decimal"
           autocomplete="off"
           placeholder="vol"
@@ -3212,6 +3212,7 @@
           v: 2,
           dv: DEFAULTS_VER,
           vol: $("vol").value,
+          volDef: VOL_DEFAULT,
           autoBox,
           nBox,
           showOrders,
@@ -3256,7 +3257,13 @@
           setShowOrders(st.showOrders);
         if (cur && typeof st.showLines === "boolean")
           setShowLines(st.showLines);
-        if (cur && typeof st.vol === "string") {
+        /* a saved vol is dropped when the default has
+           changed since it was saved */
+        if (
+          cur &&
+          typeof st.vol === "string" &&
+          st.volDef === VOL_DEFAULT
+        ) {
           $("vol").value = st.vol;
           setVol(st.vol);
         }
@@ -3450,6 +3457,7 @@
       $("sym").textContent = SYM + " " + TF;
       document.title = SYM;
       /* default vol step, overridden by a saved layout */
+      const VOL_DEFAULT = $("vol").value;
       setVol($("vol").value);
       setNBox(1);
       [...$("boxN").children].forEach(
