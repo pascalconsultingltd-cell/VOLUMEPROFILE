@@ -292,10 +292,16 @@
         <button
           id="boxTog"
           class="a"
-          title="Automatic box on the last high-volume candle"
+          title="Automatic channels on high-volume candles"
         >
           B
         </button>
+        <span
+          id="boxN"
+          title="Channels for the latest 1, 2 or 3 big candles"
+          ><button>1</button><button>2</button
+          ><button>3</button></span
+        >
         <button
           id="ordTog"
           class=""
@@ -415,6 +421,15 @@
        * button)
        */
       let autoBox = true;
+      /* channels shown: the latest 1, 2 or 3 big candles */
+      let nBox = 1;
+      function setNBox(v) {
+        nBox = v;
+        [...$("boxN").children].forEach(
+          (b, i) => (b.className = i + 1 === nBox ? "a" : ""),
+        );
+        schedule();
+      }
       function setAutoBox(v) {
         autoBox = !!v;
         $("boxTog").className = autoBox ? "a" : "";
@@ -2020,7 +2035,8 @@
             });
           };
           /*
-           * Automatic channel on the latest big-volume candle.
+           * Automatic channels on the latest big-volume candles
+           * (1 to 3 of them, chosen in the header).
            * It is as tall as that candle (high to low) and it
            * trails the market: after a down candle its bottom
            * follows every new low, after an up candle its top
@@ -2034,20 +2050,29 @@
            * and so on. Following highs = green, lows = black.
            */
           if (cfg.main && autoBox) {
-            let k = arr.length - 1;
-            for (; k >= BIG_WIN - 1; k--) {
+            /* the latest nBox big candles, newest first */
+            const bigs = [],
+              where = new Map(geo.map((o) => [o.c, o]));
+            for (
+              let k = arr.length - 1;
+              k >= BIG_WIN - 1 && bigs.length < nBox;
+              k--
+            ) {
               const c = arr[k];
-              if (okC(c) && c.c !== c.o && isBig(arr, k)) break;
+              if (okC(c) && c.c !== c.o && isBig(arr, k))
+                bigs.push(k);
             }
-            if (k >= BIG_WIN - 1) {
-              const A = arr[k],
+            bigs.forEach((k, bi) => {
+              /* an older candle's channels stop at the next
+                 big candle, which starts its own */
+              const kEnd = bi ? bigs[bi - 1] : arr.length - 1,
+                A = arr[k],
                 ht = A.h - A.l,
-                where = new Map(geo.map((o) => [o.c, o])),
                 runs = [];
               let dn = A.c < A.o,
                 ext = dn ? A.l : A.h,
                 pts = [{ c: A, ext }];
-              for (let j = k + 1; j < arr.length; j++) {
+              for (let j = k + 1; j <= kEnd; j++) {
                 const q = arr[j];
                 if (!okC(q)) continue;
                 ext = dn ? Math.min(ext, q.l) : Math.max(ext, q.h);
@@ -2059,7 +2084,7 @@
                 ext = dn ? q.l : q.h;
                 pts = [{ c: q, ext }];
               }
-              runs.push({ dn, pts, live: true });
+              runs.push({ dn, pts, live: !bi });
               runs.forEach((r) => {
                 /* far = the side away from the trailed edge;
                    the 66% line sits 34% in from it */
@@ -2119,8 +2144,8 @@
                     ptag(yy, pv.toFixed(DP), "rgb(" + rgb + ")");
                 });
               });
-              g.lineWidth = 1;
-            }
+            });
+            g.lineWidth = 1;
           }
           /*
            * own orders (from orders.js): a segment at the
@@ -3188,6 +3213,7 @@
           dv: DEFAULTS_VER,
           vol: $("vol").value,
           autoBox,
+          nBox,
           showOrders,
           showLines,
           lines: lines.filter(
@@ -3225,6 +3251,7 @@
         const cur = st.dv >= 2;
         if (cur && typeof st.autoBox === "boolean")
           setAutoBox(st.autoBox);
+        if (cur && [1, 2, 3].includes(st.nBox)) setNBox(st.nBox);
         if (cur && typeof st.showOrders === "boolean")
           setShowOrders(st.showOrders);
         if (cur && typeof st.showLines === "boolean")
@@ -3424,6 +3451,10 @@
       document.title = SYM;
       /* default vol step, overridden by a saved layout */
       setVol($("vol").value);
+      setNBox(1);
+      [...$("boxN").children].forEach(
+        (b, i) => (b.onclick = () => setNBox(i + 1)),
+      );
       restore();
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
