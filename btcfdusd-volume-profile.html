@@ -290,6 +290,20 @@
           title="Step for lines around yesterday's POC: 250 or 0.3%"
         />
         <button
+          id="ladTog"
+          class="a"
+          title="Vol steps move to the day's high / low; off = POC"
+        >
+          HL
+        </button>
+        <button
+          id="gridTog"
+          class=""
+          title="Vertical lines at 06, 12, 18 UTC; midnight stays"
+        >
+          6h
+        </button>
+        <button
           id="boxTog"
           class="a"
           title="Automatic channels on high-volume candles"
@@ -433,6 +447,22 @@
       function setAutoBox(v) {
         autoBox = !!v;
         $("boxTog").className = autoBox ? "a" : "";
+        schedule();
+      }
+      /* vol ladder from the day's high and low (HL button);
+         off = from the previous day's POC */
+      let hlLad = true;
+      function setHlLad(v) {
+        hlLad = !!v;
+        $("ladTog").className = hlLad ? "a" : "";
+        schedule();
+      }
+      /* vertical 6-hour lines (6h button); the midnight
+         line and the time labels stay either way */
+      let showGrid = false;
+      function setShowGrid(v) {
+        showGrid = !!v;
+        $("gridTog").className = showGrid ? "a" : "";
         schedule();
       }
       /* own orders on the chart (O button) */
@@ -1822,16 +1852,102 @@
               g.fillRect(xa, Y(pT), xb - xa, Y(pB) - Y(pT)),
             );
             g.restore();
-            /* vol ladder: solid navy zero through the POC,
-               then a dashed step every 1x, 2x, 3x... */
-            if (volN > 0)
-              spans.forEach(([xa, xb]) => {
-                hseg(pc, xa, xb, "#003366", [], 1.5);
+            /*
+             * Vol ladder. It starts on the previous day's
+             * POC: solid navy zero, then a dashed step every
+             * 1x, 2x, 3x... With the HL button the reference
+             * can move. The day's running high and low are
+             * both followed: a close more than 2 steps below
+             * the high makes that high the reference (black,
+             * steps going down), a close more than 2 steps
+             * above the low makes that low the reference
+             * (green, steps going up), whichever comes first.
+             * After that only the other side is followed,
+             * counted from that candle, and they alternate.
+             * ref = the high / low in use (null = the POC),
+             * up = side followed (null = both), runs =
+             * stretches of the day with one reference.
+             */
+            const lv = ({ ref, refUp }) => {
+              const a = [];
+              if (ref == null) {
+                a.push([pc, "0", "#003366", 1]);
                 for (let k = kS; inK(k); k += kS)
-                  [pc + k * v, pc - k * v].forEach((p) =>
-                    hseg(p, xa, xb, "rgba(0,0,0,.5)", [3, 3], 1),
+                  a.push(
+                    [pc + k * v, "+" + k, "#000000"],
+                    [pc - k * v, "−" + k, "#000000"],
                   );
+                return a;
+              }
+              const s = refUp ? -1 : 1,
+                n = refUp ? "H−" : "L+",
+                col = refUp ? "#000000" : "#089981",
+                at = (k) => ref + s * k * v,
+                inV = (p) => (refUp ? p >= lo : p <= hi);
+              /* 4th value: solid line, on even steps */
+              for (let k = 0; k < 5000 && inV(at(k)); k += kS)
+                a.push([at(k), k ? n + k : n[0], col, k % 2 === 0]);
+              return a;
+            };
+            const runs = [{ ref: null, xa: sg.xa, xb: sg.xb }];
+            if (volN > 0 && hlLad) {
+              let up = null,
+                H = -1e12,
+                L = 1e12,
+                ref = null,
+                refUp;
+              const step = (c) => {
+                H = Math.max(H, c.h);
+                L = Math.min(L, c.l);
+                const dn = up !== false && c.c < H - 2 * v,
+                  ris = up !== true && c.c > L + 2 * v;
+                if (!dn && !ris) return;
+                /* both on one giant candle: a red one takes
+                   the high, a green one the low */
+                refUp = dn && ris ? c.c < c.o : dn;
+                ref = refUp ? H : L;
+                up = !refUp;
+                H = c.h;
+                L = c.l;
+              };
+              /* day's candles left of the view count too */
+              if (!i)
+                arr.forEach((c) => {
+                  if (
+                    okC(c) &&
+                    dayOf(c.t) === sg.dS &&
+                    c.t < geo[0].c.t
+                  )
+                    step(c);
+                });
+              runs.length = 0;
+              geo.forEach((o) => {
+                if (dayOf(o.c.t) !== sg.dS) return;
+                step(o.c);
+                const r = runs[runs.length - 1],
+                  xb = o.x + o.w;
+                if (r && r.ref === ref && r.refUp === refUp)
+                  r.xb = xb;
+                else runs.push({ ref, refUp, xa: o.x, xb });
               });
+              if (last) runs[runs.length - 1].xb = sg.xb;
+            }
+            /* last day: its latest levels cross the TPO area */
+            const end = runs[runs.length - 1],
+              tpoRun = Object.assign({}, end, { xa: 0, xb: x0 - 5 });
+            if (volN > 0)
+              (last ? [tpoRun].concat(runs) : runs).forEach((r) =>
+                lv(r).forEach(([p, t, col, solid]) =>
+                  hseg(
+                    p,
+                    r.xa,
+                    r.xb,
+                    col === "#000000" ? "rgba(0,0,0,.5)" : col,
+                    solid ? [] : [3, 3],
+                    t.length > 1 ? 1 : 1.5,
+                  ),
+                ),
+              );
             if (!last) return;
             /* prices in the axis column, on white patches */
             const tag = (p, col) => {
@@ -1851,13 +1967,10 @@
                 g.textBaseline = "middle";
                 g.fillText(t, px0 - 4, y - 7);
               };
-              name(pc, "0", "#003366");
-              for (let k = kS; inK(k); k += kS) {
-                name(pc + k * v, "+" + k, "#000000");
-                tag(pc + k * v, "#000000");
-                name(pc - k * v, "−" + k, "#000000");
-                tag(pc - k * v, "#000000");
-              }
+              lv(end).forEach(([p, t, col]) => {
+                name(p, t, col);
+                tag(p, col);
+              });
             }
           });
 
@@ -1930,6 +2043,7 @@
           marks.forEach((o) => {
             const xm = Math.round(o.x + o.w / 2) + 0.5,
               mid0 = new Date(o.c.t).getUTCHours() < 6;
+            if (!mid0 && !showGrid) return;
             /* midnight solid navy like the 0 line, the
                others dashed black like the vol steps */
             g.strokeStyle = mid0 ? "#003366" : "rgba(0,0,0,.5)";
@@ -3188,7 +3302,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 3;
+      const DEFAULTS_VER = 4;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -3215,6 +3329,8 @@
           volDef: VOL_DEFAULT,
           autoBox,
           nBox,
+          hlLad,
+          showGrid,
           showOrders,
           showLines,
           lines: lines.filter(
@@ -3253,6 +3369,12 @@
         if (cur && typeof st.autoBox === "boolean")
           setAutoBox(st.autoBox);
         if (cur && [1, 2, 3].includes(st.nBox)) setNBox(st.nBox);
+        /* HL / 6h: defaults changed in version 4 */
+        const cur4 = st.dv >= 4;
+        if (cur4 && typeof st.hlLad === "boolean")
+          setHlLad(st.hlLad);
+        if (cur4 && typeof st.showGrid === "boolean")
+          setShowGrid(st.showGrid);
         if (cur && typeof st.showOrders === "boolean")
           setShowOrders(st.showOrders);
         if (cur && typeof st.showLines === "boolean")
@@ -3464,6 +3586,8 @@
         (b, i) => (b.onclick = () => setNBox(i + 1)),
       );
       restore();
+      $("ladTog").onclick = () => setHlLad(!hlLad);
+      $("gridTog").onclick = () => setShowGrid(!showGrid);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
