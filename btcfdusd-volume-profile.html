@@ -291,10 +291,17 @@
         />
         <button
           id="ladTog"
-          class="a"
+          class=""
           title="Vol steps move to the day's high / low; off = POC"
         >
           HL
+        </button>
+        <button
+          id="vaTog"
+          class=""
+          title="Value area on / off; the POC always stays"
+        >
+          VA
         </button>
         <button
           id="gridTog"
@@ -451,10 +458,17 @@
       }
       /* vol ladder from the day's high and low (HL button);
          off = from the previous day's POC */
-      let hlLad = true;
+      let hlLad = false;
       function setHlLad(v) {
         hlLad = !!v;
         $("ladTog").className = hlLad ? "a" : "";
+        schedule();
+      }
+      /* value area shading and tags (VA button) */
+      let showVA = false;
+      function setShowVA(v) {
+        showVA = !!v;
+        $("vaTog").className = showVA ? "a" : "";
         schedule();
       }
       /* vertical 6-hour lines (6h button); the midnight
@@ -1672,6 +1686,18 @@
             Object.assign(P, { poc, a, b, maxC });
             return P;
           };
+          /* a day's POC colour (rgb): dark green above the
+             day before's POC, dark red below, else navy.
+             Day D's profile and chart take D-1's colour. */
+          const pocRgb = (dS) => {
+            const A = dayProf(dS),
+              B = dayProf(prevDay(dS));
+            if (A.poc == null || B.poc == null || !B.full)
+              return "0,51,102";
+            const d =
+              (A.poc + 0.5) * A.step - (B.poc + 0.5) * B.step;
+            return d > 0 ? "0,100,0" : d < 0 ? "139,0,0" : "0,51,102";
+          };
           /* the TPO profiles drawn at the left of the chart */
           const colW = (tpoW - 6 - (nTpo - 1) * gap) / nTpo,
             cnt = cfg.tpo ? nTpo : 0;
@@ -1695,9 +1721,10 @@
             profs.push(P);
             if (P.poc == null) continue;
             for (let r = P.a; r <= P.b; r++) {
+              if (!showVA && r !== P.poc) continue;
               g.fillStyle =
                 r === P.poc
-                  ? "rgba(0,51,102,.25)"
+                  ? "rgba(" + pocRgb(prevDay(tpoDays[d])) + ",.25)"
                   : "rgba(47,128,200,.08)";
               g.fillRect(
                 cx0 - 2,
@@ -1813,6 +1840,8 @@
           segs.forEach((sg, i) => {
             const R = dayProf(prevDay(sg.dS));
             if (R.poc == null || !R.full) return;
+            const pRgb = pocRgb(prevDay(sg.dS)),
+              pCol = "rgb(" + pRgb + ")";
             /*
              * the last day on the chart also runs its POC band
              * and vol lines across the TPO profiles, and is the
@@ -1840,14 +1869,15 @@
             g.clip();
             /* value area: pale blue, chart only */
             g.fillStyle = "rgba(47,128,200,.13)";
-            g.fillRect(
-              sg.xa,
-              Y(vah),
-              sg.xb - sg.xa,
-              Y(val) - Y(vah),
-            );
-            /* POC: a navy band one TPO row tall */
-            g.fillStyle = "rgba(0,51,102,.3)";
+            if (showVA)
+              g.fillRect(
+                sg.xa,
+                Y(vah),
+                sg.xb - sg.xa,
+                Y(val) - Y(vah),
+              );
+            /* POC: a band one TPO row tall, coloured by pocRgb */
+            g.fillStyle = "rgba(" + pRgb + ",.3)";
             spans.forEach(([xa, xb]) =>
               g.fillRect(xa, Y(pT), xb - xa, Y(pB) - Y(pT)),
             );
@@ -1871,7 +1901,7 @@
             const lv = ({ ref, refUp }) => {
               const a = [];
               if (ref == null) {
-                a.push([pc, "0", "#003366", 1]);
+                a.push([pc, "0", pCol, 1]);
                 for (let k = kS; inK(k); k += kS)
                   a.push(
                     [pc + k * v, "+" + k, "#000000"],
@@ -1955,9 +1985,11 @@
               if (y >= top && y <= bot)
                 ptag(y, p.toFixed(DP), "#fff", col);
             };
-            tag(pc, "#003366");
-            tag(vah, "#2f80c8");
-            tag(val, "#2f80c8");
+            tag(pc, pCol);
+            if (showVA) {
+              tag(vah, "#2f80c8");
+              tag(val, "#2f80c8");
+            }
             if (volN > 0) {
               const name = (p, t, col) => {
                 const y = Y(p);
@@ -2126,7 +2158,7 @@
             g.beginPath();
             g.rect(xs, top, px0 - xs, bot - top);
             g.clip();
-            g.fillStyle = "rgba(120,130,145,.18)";
+            g.fillStyle = "rgba(120,130,145,.1)";
             g.fillRect(xs, yT, px0 - xs, yB - yT);
             g.strokeStyle = "rgba(91,107,125,.5)";
             g.lineWidth = sel ? 2 : 1;
@@ -2235,7 +2267,7 @@
                 edge((e) => e, false);
                 edge(far, true);
                 g.closePath();
-                g.fillStyle = "rgba(" + rgb + ",.13)";
+                g.fillStyle = "rgba(" + rgb + ",.07)";
                 g.fill();
                 g.strokeStyle = "rgba(" + rgb + ",.5)";
                 g.lineWidth = 1;
@@ -2352,7 +2384,7 @@
                 xs = o ? o.x + o.w / 2 : x0,
                 y = Y(l.p);
               if (y >= top && y <= bot) {
-                g.strokeStyle = g.fillStyle = "#1f3a93";
+                g.strokeStyle = g.fillStyle = "#d4a017";
                 g.lineWidth = sel ? 3 : 2;
                 g.beginPath();
                 g.moveTo(xs, y);
@@ -2361,7 +2393,7 @@
                 g.beginPath();
                 g.arc(xs, y, sel ? 2.5 : 1.5, 0, 6.2832);
                 g.fill();
-                ptag(y, l.p.toFixed(DP), "#1f3a93");
+                ptag(y, l.p.toFixed(DP), "#d4a017", "#000");
               }
             } else if (l.k === "b") drawBox(l, sel);
             g.lineWidth = 1;
@@ -3302,7 +3334,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 4;
+      const DEFAULTS_VER = 5;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -3331,6 +3363,7 @@
           nBox,
           hlLad,
           showGrid,
+          showVA,
           showOrders,
           showLines,
           lines: lines.filter(
@@ -3369,12 +3402,15 @@
         if (cur && typeof st.autoBox === "boolean")
           setAutoBox(st.autoBox);
         if (cur && [1, 2, 3].includes(st.nBox)) setNBox(st.nBox);
-        /* HL / 6h: defaults changed in version 4 */
-        const cur4 = st.dv >= 4;
-        if (cur4 && typeof st.hlLad === "boolean")
+        /* 6h: default changed in version 4, HL / VA in 5 */
+        const cur4 = st.dv >= 4,
+          cur5 = st.dv >= 5;
+        if (cur5 && typeof st.hlLad === "boolean")
           setHlLad(st.hlLad);
         if (cur4 && typeof st.showGrid === "boolean")
           setShowGrid(st.showGrid);
+        if (cur5 && typeof st.showVA === "boolean")
+          setShowVA(st.showVA);
         if (cur && typeof st.showOrders === "boolean")
           setShowOrders(st.showOrders);
         if (cur && typeof st.showLines === "boolean")
@@ -3588,6 +3624,7 @@
       restore();
       $("ladTog").onclick = () => setHlLad(!hlLad);
       $("gridTog").onclick = () => setShowGrid(!showGrid);
+      $("vaTog").onclick = () => setShowVA(!showVA);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
