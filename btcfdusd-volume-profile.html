@@ -1686,8 +1686,8 @@
             Object.assign(P, { poc, a, b, maxC });
             return P;
           };
-          /* a day's POC colour (rgb): dark green above the
-             day before's POC, dark red below, else navy.
+          /* a day's POC colour (rgb): candle green above the
+             day before's POC, soft red below, else navy.
              Day D's profile and chart take D-1's colour. */
           const pocRgb = (dS) => {
             const A = dayProf(dS),
@@ -1696,7 +1696,8 @@
               return "0,51,102";
             const d =
               (A.poc + 0.5) * A.step - (B.poc + 0.5) * B.step;
-            return d > 0 ? "0,100,0" : d < 0 ? "139,0,0" : "0,51,102";
+            if (d > 0) return "8,153,129";
+            return d < 0 ? "229,72,77" : "0,51,102";
           };
           /* the TPO profiles drawn at the left of the chart */
           const colW = (tpoW - 6 - (nTpo - 1) * gap) / nTpo,
