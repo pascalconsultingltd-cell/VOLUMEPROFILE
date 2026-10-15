@@ -2333,13 +2333,19 @@
                 g.beginPath();
                 g.rect(x0, top, px0 - x0, bot - top);
                 g.clip();
+                /* fill only the far 34%, up to the 66% line */
+                g.beginPath();
+                g.moveTo(sg[0].xa, Y(p66(sg[0].e)));
+                edge(p66, false);
+                edge(far, true);
+                g.closePath();
+                g.fillStyle = "rgba(" + rgb + ",.07)";
+                g.fill();
                 g.beginPath();
                 g.moveTo(sg[0].xa, Y(sg[0].e));
                 edge((e) => e, false);
                 edge(far, true);
                 g.closePath();
-                g.fillStyle = "rgba(" + rgb + ",.07)";
-                g.fill();
                 g.strokeStyle = "rgba(" + rgb + ",.5)";
                 g.lineWidth = 1;
                 g.setLineDash([]);
