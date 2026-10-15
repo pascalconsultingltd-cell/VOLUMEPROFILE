@@ -1882,6 +1882,20 @@
             spans.forEach(([xa, xb]) =>
               g.fillRect(xa, Y(pT), xb - xa, Y(pB) - Y(pT)),
             );
+            /* a finished day also shows its own POC over its
+               own candles: each POC covers its day and the next */
+            const Q = dayProf(sg.dS),
+              done = sg.dS < dayOf(arr[arr.length - 1].t);
+            if (done && Q.poc != null && Q.full) {
+              const qT = Y((Q.poc + 1) * Q.step);
+              g.fillStyle = "rgba(" + pocRgb(sg.dS) + ",.3)";
+              g.fillRect(
+                sg.xa,
+                qT,
+                sg.xb - sg.xa,
+                Y(Q.poc * Q.step) - qT,
+              );
+            }
             g.restore();
             /*
              * Vol ladder. It starts on the previous day's
