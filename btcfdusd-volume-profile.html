@@ -3446,7 +3446,7 @@
           setVol(st.vol);
         }
         /*
-         * A reload behaves like Alt+R, except that drawings
+         * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
          * scale, floating window) always starts from its
          * default, so only mode / timeframe / TPO days are
@@ -3598,8 +3598,16 @@
         miniChart.size();
       };
 
+      /* Alt+R: default zoom and pan only. Alt+X: full reset,
+         floating window too, drawings deleted. */
       addEventListener("keydown", (e) => {
         if (e.altKey && e.code === "KeyR") {
+          e.preventDefault();
+          mainChart.resetView();
+          miniChart.resetView();
+          schedule();
+          toast("View reset");
+        } else if (e.altKey && e.code === "KeyX") {
           e.preventDefault();
           if (
             lines.length &&
