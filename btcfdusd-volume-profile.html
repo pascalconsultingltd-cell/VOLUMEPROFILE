@@ -1514,7 +1514,7 @@
 
           /*
            * TPO (Market Profile): one brick per 30 min; up to
-           * 3 UTC days side by side (oldest left, latest next
+           * 5 UTC days side by side (oldest left, latest next
            * to the chart)
            */
 
@@ -3242,7 +3242,7 @@
                 TF = st.TF;
                 $("sym").textContent = SYM + " " + TF;
               }
-              if ([1, 2, 3].includes(st.nTpo)) nTpo = st.nTpo;
+              if ([1, 2, 3, 5].includes(st.nTpo)) nTpo = st.nTpo;
               ui();
             }
             draw();
@@ -3288,6 +3288,7 @@
               [1, "1d"],
               [2, "2d"],
               [3, "3d"],
+              [5, "5d"],
             ],
             () => nTpo,
             (v) => (nTpo = v),
