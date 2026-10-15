@@ -2121,6 +2121,23 @@
               g.arc(o.x + o.w / 2, y, 5, 0, 6.2832);
               g.fill();
             });
+            /* unusual delta: blue dot under the bar when
+               buyers won, red dot over it when sellers won */
+            const df = deltaFlags(
+              arr,
+              Math.max(0, arr.length - off - N),
+              Math.min(arr.length, arr.length - off),
+            );
+            geo.forEach((o) => {
+              const s = df.get(o.c);
+              if (!s) return;
+              const y = s > 0 ? Y(o.c.l) + 24 : Y(o.c.h) - 24;
+              if (y < top || y > bot) return;
+              g.fillStyle = s > 0 ? "#2962ff" : "#e5484d";
+              g.beginPath();
+              g.arc(o.x + o.w / 2, y, 3.5, 0, 6.2832);
+              g.fill();
+            });
           }
           /*
            * vertical grid: a line every 6 hours counted from
@@ -3240,6 +3257,36 @@
           if (fcache.size > 30000) fcache.clear();
           for (let k = Math.max(i0, BIG_WIN - 1); k < i1; k++)
             if (isBig(arr, k)) out.set(arr[k], true);
+          return out;
+        }
+        /*
+         * unusual delta: |taker buys - taker sells| above the
+         * same percentile of the last BIG_WIN bars (current
+         * one included); +1 buyers won, -1 sellers won
+         */
+        const dcache = new Map();
+        function deltaFlags(arr, i0, i1) {
+          const out = new Map(),
+            r = Math.ceil(BIG_PERC * BIG_WIN) - 1,
+            D = (q) => (q.bv || 0) * 2 - q.v;
+          if (dcache.size > 30000) dcache.clear();
+          for (let k = Math.max(i0, BIG_WIN - 1); k < i1; k++) {
+            const c = arr[k];
+            if (!c || c.v == null) continue;
+            const key =
+              (cfg.main ? TF : "") + mode + "|" + c.t + "|" +
+              c.v + "|" + c.bv + "|" + arr[k - BIG_WIN + 1].t;
+            let f = dcache.get(key);
+            if (f === undefined) {
+              const ds = new Float64Array(BIG_WIN);
+              for (let j = 0; j < BIG_WIN; j++)
+                ds[j] = Math.abs(D(arr[k - BIG_WIN + 1 + j]));
+              ds.sort();
+              f = Math.abs(D(c)) > ds[r] ? Math.sign(D(c)) : 0;
+              dcache.set(key, f);
+            }
+            if (f) out.set(c, f);
+          }
           return out;
         }
         /* line-break views re-anchor on bricks in drawInner */
