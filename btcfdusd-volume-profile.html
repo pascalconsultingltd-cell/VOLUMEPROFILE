@@ -1629,28 +1629,6 @@
                 rows.get(r).push(q.i);
               }
             });
-            /* dev[i] = POC row once period i is in (the
-               developing POC), same rule as the final one */
-            const cnt = new Map(),
-              dev = [];
-            let r0 = Infinity,
-              r1 = -Infinity;
-            ps.forEach((q) => {
-              const qa = Math.floor(q.l / step),
-                qb = Math.floor(q.h / step);
-              for (let r = qa; r <= qb; r++)
-                cnt.set(r, (cnt.get(r) || 0) + 1);
-              r0 = Math.min(r0, qa);
-              r1 = Math.max(r1, qb);
-              const C = (r) => cnt.get(r) || 0,
-                md = (r0 + r1) / 2,
-                D = (r) => Math.abs(r - md);
-              let p = r0;
-              for (let r = r0; r <= r1; r++)
-                if (C(r) > C(p) || (C(r) === C(p) && D(r) < D(p)))
-                  p = r;
-              dev[q.i] = p;
-            });
             /* full = the whole day is loaded */
             const P = {
               dS,
@@ -1660,7 +1638,6 @@
               poc: null,
               a: null,
               b: null,
-              dev,
               full: k15.length > 0 && k15[0].t <= dS,
             };
             profCache.set(dS, P);
@@ -1919,30 +1896,40 @@
                 Y(Q.poc * Q.step) - qT,
               );
             }
-            /* today: the developing POC, blue, stepping as it
-               moved through the day */
-            const devP = [];
-            if (!done && Q.dev.length)
+            /*
+             * today: session VWAP from the 5m candles since
+             * UTC midnight, typical price (h+l+c)/3, blue;
+             * only when the whole day is loaded
+             */
+            const vw = [];
+            if (!done && k5.length && k5[0].t <= sg.dS) {
+              let pv = 0,
+                vv = 0,
+                n = 0;
+              const day5 = k5.filter(
+                (c) => okC(c) && dayOf(c.t) === sg.dS,
+              );
               geo.forEach((o) => {
                 if (dayOf(o.c.t) !== sg.dS) return;
-                let k = Math.floor((o.c.t - sg.dS) / TPO_MS);
-                while (k > 0 && Q.dev[k] == null) k--;
-                const p = Q.dev[k],
-                  r = devP[devP.length - 1];
-                if (p == null) return;
-                if (r && r.p === p) r.xb = o.x + o.w;
-                else devP.push({ p, xa: o.x, xb: o.x + o.w });
+                for (; n < day5.length && day5[n].t <= o.c.t; n++) {
+                  const c = day5[n];
+                  pv += ((c.h + c.l + c.c) / 3) * c.v;
+                  vv += c.v;
+                }
+                if (vv > 0) vw.push([o.x + o.w / 2, pv / vv]);
               });
-            if (devP.length) devP[devP.length - 1].xb = sg.xb;
-            g.fillStyle = "rgba(41,98,255,.55)";
-            devP.forEach(({ p, xa, xb }) =>
-              g.fillRect(
-                xa,
-                Y((p + 1) * Q.step),
-                xb - xa,
-                Y(p * Q.step) - Y((p + 1) * Q.step),
-              ),
-            );
+            }
+            if (vw.length) {
+              vw.push([sg.xb, vw[vw.length - 1][1]]);
+              g.strokeStyle = "#2962ff";
+              g.lineWidth = 1.5;
+              g.beginPath();
+              vw.forEach(([x, p], k) =>
+                k ? g.lineTo(x, Y(p)) : g.moveTo(x, Y(p)),
+              );
+              g.stroke();
+              g.lineWidth = 1;
+            }
             g.restore();
             /*
              * Vol ladder. It starts on the previous day's
@@ -2048,11 +2035,8 @@
                 ptag(y, p.toFixed(DP), "#fff", col);
             };
             tag(pc, pCol);
-            /* developing POC price, mid-brick */
-            if (devP.length) {
-              const dp = devP[devP.length - 1].p;
-              tag((dp + 0.5) * Q.step, "#2962ff");
-            }
+            /* VWAP price */
+            if (vw.length) tag(vw[vw.length - 1][1], "#2962ff");
             if (showVA) {
               tag(vah, "#2f80c8");
               tag(val, "#2f80c8");
