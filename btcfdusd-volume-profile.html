@@ -2219,6 +2219,10 @@
               let dn = A.c < A.o,
                 ext = dn ? A.l : A.h,
                 pts = [{ c: A, ext }];
+              /* the latest one also gets a fixed Alt+B style
+                 box, 66% line placed as in its channel */
+              if (!bi)
+                drawBox({ t: A.t, lo: dn ? A.h : A.l, hi: ext });
               for (let j = k + 1; j <= kEnd; j++) {
                 const q = arr[j];
                 if (!okC(q)) continue;
