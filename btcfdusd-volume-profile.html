@@ -283,7 +283,7 @@
       <div class="ctl">
         <input
           id="vol"
-          value="355"
+          value="280"
           inputmode="decimal"
           autocomplete="off"
           placeholder="vol"
@@ -1686,8 +1686,9 @@
             Object.assign(P, { poc, a, b, maxC });
             return P;
           };
-          /* a day's POC colour (rgb): candle green above the
-             day before's POC, soft red below, else navy.
+          /* a day's POC colour (rgb): soft red below the day
+             before's POC, candle green otherwise; navy only
+             when that day is not loaded.
              Day D's profile and chart take D-1's colour. */
           const pocRgb = (dS) => {
             const A = dayProf(dS),
@@ -1696,8 +1697,7 @@
               return "0,51,102";
             const d =
               (A.poc + 0.5) * A.step - (B.poc + 0.5) * B.step;
-            if (d > 0) return "8,153,129";
-            return d < 0 ? "229,72,77" : "0,51,102";
+            return d < 0 ? "229,72,77" : "8,153,129";
           };
           /* the TPO profiles drawn at the left of the chart */
           const colW = (tpoW - 6 - (nTpo - 1) * gap) / nTpo,
