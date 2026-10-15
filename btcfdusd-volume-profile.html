@@ -2121,8 +2121,9 @@
               g.arc(o.x + o.w / 2, y, 5, 0, 6.2832);
               g.fill();
             });
-            /* unusual delta: blue dot under the bar when
-               buyers won, red dot over it when sellers won */
+            /* unusual delta on a big-candle bar only: blue
+               dot under it when buyers won, red over it when
+               sellers won */
             const df = deltaFlags(
               arr,
               Math.max(0, arr.length - off - N),
@@ -2130,7 +2131,7 @@
             );
             geo.forEach((o) => {
               const s = df.get(o.c);
-              if (!s) return;
+              if (!s || !fl.get(o.c)) return;
               const y = s > 0 ? Y(o.c.l) + 24 : Y(o.c.h) - 24;
               if (y < top || y > bot) return;
               g.fillStyle = s > 0 ? "#2962ff" : "#e5484d";
