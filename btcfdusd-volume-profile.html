@@ -2097,8 +2097,9 @@
               tpoRun = Object.assign({}, end, { xa: 0, xb: x0 - 5 });
             if (volN > 0)
               (last ? [tpoRun].concat(runs) : runs).forEach((r) =>
+                /* no "0" line: the POC band already marks it */
                 lv(r).forEach(([p, t, col, solid]) =>
-                  hseg(
+                  t === "0" ? 0 : hseg(
                     p,
                     r.xa,
                     r.xb,
