@@ -2220,14 +2220,16 @@
               o = geoAt(l.t),
               xs = o ? o.x + o.w / 2 : x0,
               p66 = l.hi + 0.66 * (l.lo - l.hi),
-              y66 = Y(p66);
+              y66 = Y(p66),
+              /* drawn upwards green, downwards red */
+              rgb = l.hi >= l.lo ? "8,153,129" : "229,72,77";
             g.save();
             g.beginPath();
             g.rect(xs, top, px0 - xs, bot - top);
             g.clip();
-            g.fillStyle = "rgba(120,130,145,.1)";
+            g.fillStyle = "rgba(" + rgb + ",.1)";
             g.fillRect(xs, yT, px0 - xs, yB - yT);
-            g.strokeStyle = "rgba(91,107,125,.5)";
+            g.strokeStyle = "rgba(" + rgb + ",.5)";
             g.lineWidth = sel ? 2 : 1;
             g.setLineDash([]);
             g.strokeRect(xs, yT, px0 - xs, yB - yT);
@@ -2244,7 +2246,7 @@
               [mn, yB],
             ].forEach(([pv, yy]) => {
               if (yy >= top && yy <= bot)
-                ptag(yy, pv.toFixed(DP), "#5b6b7d");
+                ptag(yy, pv.toFixed(DP), "rgb(" + rgb + ")");
             });
           };
           /*
@@ -2457,11 +2459,14 @@
                 ttag(cx, dlabel(l.t), "#1f3a93");
               }
             } else if (l.k === "d") {
+              /* blue above the last price, dark red below */
               const o = geoAt(l.t),
                 xs = o ? o.x + o.w / 2 : x0,
-                y = Y(l.p);
+                y = Y(l.p),
+                lp = mid != null ? mid : arr[arr.length - 1].c,
+                col = l.p >= lp ? "#2962ff" : "#8b0000";
               if (y >= top && y <= bot) {
-                g.strokeStyle = g.fillStyle = "#d4a017";
+                g.strokeStyle = g.fillStyle = col;
                 g.lineWidth = sel ? 3 : 2;
                 g.beginPath();
                 g.moveTo(xs, y);
@@ -2470,7 +2475,7 @@
                 g.beginPath();
                 g.arc(xs, y, sel ? 2.5 : 1.5, 0, 6.2832);
                 g.fill();
-                ptag(y, l.p.toFixed(DP), "#d4a017", "#000");
+                ptag(y, l.p.toFixed(DP), col);
               }
             } else if (l.k === "b") drawBox(l, sel);
             g.lineWidth = 1;
