@@ -133,11 +133,13 @@
         border-left: 0;
         padding-left: 0;
       }
-      /* candle style: one choice of three, boxed together */
-      #modeBtns {
+      /* buttons that go together, framed like a cell border */
+      .ctl .box {
+        margin-left: 0;
         padding: 2px;
-        border: 1px solid var(--line);
-        border-radius: 7px;
+        border: 1px solid #5b6470;
+        border-radius: 6px;
+        align-items: center;
       }
       .ctl .grp > span:first-child {
         margin-left: 0;
@@ -304,69 +306,77 @@
       >
       <div class="ctl">
         <!-- groups: chart, profile and levels, channels,
-             orders, view -->
+             orders, view; .box = buttons that go together -->
         <span class="grp" title="Chart"
-          ><span id="tfBtns"></span><span id="nBtns"></span
+          ><span id="tfBtns" class="box"></span
+          ><span id="nBtns" class="box"></span
           ><span
             id="modeBtns"
+            class="box"
             title="VC volume candles, Std standard, LB line break"
           ></span
         ></span>
         <span class="grp" title="Profile and levels"
-          ><span id="tpoBtns"></span>
-          <input
-            id="vol"
-            value="280"
-            inputmode="decimal"
-            autocomplete="off"
-            placeholder="vol"
-            title="Step for lines around yesterday's POC: 250 or 0.3%"
-          />
-          <button
-            id="ladTog"
-            class=""
-            title="Vol steps move to the day's high / low; off = POC"
-          >
-            HL
-          </button>
-          <button
-            id="vaTog"
-            class=""
-            title="Value area on / off; the POC always stays"
-          >
-            VA
-          </button>
-        </span>
+          ><span id="tpoBtns" class="box"></span
+          ><span class="box"
+            ><input
+              id="vol"
+              value="280"
+              inputmode="decimal"
+              autocomplete="off"
+              placeholder="vol"
+              title="Step around yesterday's POC: 250 or 0.3%"
+            />
+            <button
+              id="ladTog"
+              class=""
+              title="Steps move to the day's high / low; off = POC"
+            >
+              HL
+            </button>
+            <button
+              id="vaTog"
+              class=""
+              title="Value area on / off; the POC always stays"
+            >
+              VA
+            </button></span
+          ></span
+        >
         <span class="grp" title="Channels"
-          ><button
-            id="boxTog"
-            class="a"
-            title="Automatic channels on high-volume candles"
-          >
-            B
-          </button>
-          <span
-            id="boxN"
-            title="Channels for the latest 1, 2 or 3 big candles"
-            ><button>1</button><button>2</button
-            ><button>3</button></span
+          ><span class="box"
+            ><button
+              id="boxTog"
+              class="a"
+              title="Automatic channels on high-volume candles"
+            >
+              B
+            </button>
+            <span
+              id="boxN"
+              title="Channels for the latest 1, 2 or 3 big candles"
+              ><button>1</button><button>2</button
+              ><button>3</button></span
+            ></span
           ></span
         >
         <span class="grp" title="My orders"
-          ><button
-            id="ordTog"
-            class=""
-            title="Show / hide my orders (from orders.js)"
-          >
-            O
-          </button>
-          <button
-            id="ordLineTog"
-            class="a"
-            title="Order lines; off = executions only"
-          >
-            L
-          </button></span
+          ><span class="box"
+            ><button
+              id="ordTog"
+              class=""
+              title="Show / hide my orders (from orders.js)"
+            >
+              O
+            </button>
+            <button
+              id="ordLineTog"
+              class=""
+              title="Order lines; off = executions only"
+            >
+              L
+            </button></span
+          ></span
         >
         <span class="grp" title="View"
           ><button
@@ -526,7 +536,7 @@
       }
       /* order lines (L button): off keeps only the
          execution dots */
-      let showLines = true;
+      let showLines = false;
       function setShowLines(v) {
         showLines = !!v;
         $("ordLineTog").className = showLines ? "a" : "";
@@ -3468,7 +3478,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 5;
+      const DEFAULTS_VER = 6;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -3545,9 +3555,11 @@
           setShowGrid(st.showGrid);
         if (cur5 && typeof st.showVA === "boolean")
           setShowVA(st.showVA);
-        if (cur && typeof st.showOrders === "boolean")
+        /* O / L: defaults changed in version 6 */
+        const cur6 = st.dv >= 6;
+        if (cur6 && typeof st.showOrders === "boolean")
           setShowOrders(st.showOrders);
-        if (cur && typeof st.showLines === "boolean")
+        if (cur6 && typeof st.showLines === "boolean")
           setShowLines(st.showLines);
         /* a saved vol is dropped when the default has
            changed since it was saved */
