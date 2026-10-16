@@ -85,7 +85,7 @@
       }
       .ctl {
         display: flex;
-        gap: 4px;
+        gap: 6px 10px;
         margin-left: auto;
         flex-wrap: wrap;
       }
@@ -119,6 +119,20 @@
         display: inline-flex;
         gap: 4px;
         margin-left: 6px;
+      }
+      /* one group per function, split by a thin rule */
+      .ctl .grp {
+        margin-left: 0;
+        padding-left: 10px;
+        border-left: 1px solid var(--line);
+        align-items: center;
+      }
+      .ctl .grp:first-of-type {
+        border-left: 0;
+        padding-left: 0;
+      }
+      .ctl .grp > span:first-child {
+        margin-left: 0;
       }
       #mini {
         position: fixed;
@@ -281,70 +295,83 @@
         ><span id="st">connecting</span></span
       >
       <div class="ctl">
-        <input
-          id="vol"
-          value="280"
-          inputmode="decimal"
-          autocomplete="off"
-          placeholder="vol"
-          title="Step for lines around yesterday's POC: 250 or 0.3%"
-        />
-        <button
-          id="ladTog"
-          class=""
-          title="Vol steps move to the day's high / low; off = POC"
+        <!-- groups: chart, profile and levels, channels,
+             orders, view -->
+        <span class="grp" title="Chart"
+          ><span id="tfBtns"></span><span id="nBtns"></span
+          ><span id="modeBtns"></span
+        ></span>
+        <span class="grp" title="Profile and levels"
+          ><span id="tpoBtns"></span>
+          <input
+            id="vol"
+            value="280"
+            inputmode="decimal"
+            autocomplete="off"
+            placeholder="vol"
+            title="Step for lines around yesterday's POC: 250 or 0.3%"
+          />
+          <button
+            id="ladTog"
+            class=""
+            title="Vol steps move to the day's high / low; off = POC"
+          >
+            HL
+          </button>
+          <button
+            id="vaTog"
+            class=""
+            title="Value area on / off; the POC always stays"
+          >
+            VA
+          </button>
+        </span>
+        <span class="grp" title="Channels"
+          ><button
+            id="boxTog"
+            class="a"
+            title="Automatic channels on high-volume candles"
+          >
+            B
+          </button>
+          <span
+            id="boxN"
+            title="Channels for the latest 1, 2 or 3 big candles"
+            ><button>1</button><button>2</button
+            ><button>3</button></span
+          ></span
         >
-          HL
-        </button>
-        <button
-          id="vaTog"
-          class=""
-          title="Value area on / off; the POC always stays"
+        <span class="grp" title="My orders"
+          ><button
+            id="ordTog"
+            class=""
+            title="Show / hide my orders (from orders.js)"
+          >
+            O
+          </button>
+          <button
+            id="ordLineTog"
+            class="a"
+            title="Order lines; off = executions only"
+          >
+            L
+          </button></span
         >
-          VA
-        </button>
-        <button
-          id="gridTog"
-          class=""
-          title="Vertical lines at 06, 12, 18 UTC; midnight stays"
+        <span class="grp" title="View"
+          ><button
+            id="gridTog"
+            class=""
+            title="Vertical lines at 06, 12, 18 UTC; midnight stays"
+          >
+            6h
+          </button>
+          <button
+            id="miniTog"
+            title="Show / hide the 15s line break window"
+          >
+            15s LB
+          </button></span
         >
-          6h
-        </button>
-        <button
-          id="boxTog"
-          class="a"
-          title="Automatic channels on high-volume candles"
-        >
-          B
-        </button>
-        <span
-          id="boxN"
-          title="Channels for the latest 1, 2 or 3 big candles"
-          ><button>1</button><button>2</button
-          ><button>3</button></span
-        >
-        <button
-          id="ordTog"
-          class=""
-          title="Show / hide my orders (from orders.js)"
-        >
-          O
-        </button>
-        <button
-          id="ordLineTog"
-          class="a"
-          title="Order lines; off = executions only"
-        >
-          L
-        </button>
-        <button
-          id="miniTog"
-          title="Show / hide the 15s line break window"
-        >
-          15s LB
-        </button>
-        <span id="tfBtns"></span><span id="tpoBtns"></span
-        ><span id="modeBtns"></span><span id="nBtns"></span>
       </div>
     </header>
     <div id="info"></div>
@@ -2100,9 +2127,9 @@
           });
           /*
            * circles: green below bullish bars, black above
-           * bearish bars
+           * bearish bars; the 15s window gets its own
            */
-          if (cfg.main) {
+          {
             const fl = bigFlags(
               arr,
               Math.max(0, arr.length - off - N),
