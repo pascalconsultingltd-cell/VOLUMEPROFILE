@@ -88,6 +88,7 @@
         gap: 6px 10px;
         margin-left: auto;
         flex-wrap: wrap;
+        min-width: 0;
       }
       button {
         background: transparent;
@@ -122,6 +123,7 @@
       }
       /* one group per function, split by a thin rule */
       .ctl .grp {
+        flex-wrap: wrap;
         margin-left: 0;
         padding-left: 10px;
         border-left: 1px solid var(--line);
@@ -1588,21 +1590,31 @@
            * candle geometry first: the levels below are cut
            * per day and need each candle's x position
            */
-          const vsum =
-              vis.reduce((s, c) => s + (c.v || 0), 0) || 1,
-            cw = x1 - x0,
+          const cw = x1 - x0,
             slots = vis.length + Math.max(0, -off),
             cwE = (cw * vis.length) / slots;
           geo = [];
           {
+            /*
+             * volume candles, in units of the screen's
+             * volumes: under the median 1 unit wide, up to
+             * the 95th percentile 2 units, above that its
+             * true size, volume / median units
+             */
             let x = x0;
             const nV = vis.length,
-              minW = Math.min(3, (cwE / nV) * 0.4);
+              vs = vis.map((c) => c.v || 0).sort((p, q) => p - q),
+              vMed = vs[Math.floor(nV / 2)] || 1,
+              v95 = vs[Math.ceil(0.95 * nV) - 1],
+              un = (c) =>
+                c.v < vMed
+                  ? 1
+                  : c.v <= v95
+                    ? 2
+                    : Math.max(2, c.v / vMed),
+              uW = cwE / vis.reduce((s, c) => s + un(c), 0);
             vis.forEach((c) => {
-              const w =
-                mode === "eq"
-                  ? minW + ((cwE - nV * minW) * (c.v || 0)) / vsum
-                  : cw / slots;
+              const w = mode === "eq" ? un(c) * uW : cw / slots;
               geo.push({ x, w, c });
               x += w;
             });
@@ -3586,16 +3598,11 @@
         mini.style.width = w + "px";
         mini.style.height = h + "px";
       }
-      /* default: minimum size, top-left corner of the page */
-      {
-        const r0 = mini.getBoundingClientRect();
-        setMiniBox({
-          x: 0,
-          y: 0,
-          w: 240,
-          h: 160,
-        });
-      }
+      /* default: minimum size, bottom-left corner (setMiniBox
+         clamps y to the bottom) */
+      const miniHome = () =>
+        setMiniBox({ x: 0, y: innerHeight, w: 240, h: 160 });
+      miniHome();
       addEventListener("resize", () => {
         const r = mini.getBoundingClientRect();
         if (r.width > 0)
@@ -3688,11 +3695,12 @@
         miniChart.size();
       };
 
-      /* Alt+R: default zoom and pan only. Alt+X: full reset,
-         floating window too, drawings deleted. */
+      /* Alt+R: default zoom and pan, floating window back to
+         its corner. Alt+X: the same, plus drawings deleted. */
       addEventListener("keydown", (e) => {
         if (e.altKey && e.code === "KeyR") {
           e.preventDefault();
+          miniHome();
           mainChart.resetView();
           miniChart.resetView();
           schedule();
@@ -3710,20 +3718,9 @@
             return;
           lines = [];
           linesSig = "";
-          /* back to the minimum size, in the top-left
-             corner of the page, over the header */
+          /* back to the minimum size, bottom-left corner */
           mini.style.display = "flex";
-          mini.style.width = "";
-          mini.style.height = "";
-          {
-            const r = mini.getBoundingClientRect();
-            setMiniBox({
-              x: 0,
-              y: 0,
-              w: 240,
-              h: 160,
-            });
-          }
+          miniHome();
           mainChart.resetView();
           miniChart.resetView();
           schedule();
