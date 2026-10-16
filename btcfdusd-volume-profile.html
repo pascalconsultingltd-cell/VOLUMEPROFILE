@@ -346,13 +346,20 @@
             ><button
               id="boxTog"
               class="a"
-              title="Automatic channels on high-volume candles"
+              title="Static boxes on the high-volume candles"
             >
               B
             </button>
+            <button
+              id="fboxTog"
+              class="a"
+              title="Following channels on the high-volume candles"
+            >
+              FB
+            </button>
             <span
               id="boxN"
-              title="Channels for the latest 1, 2 or 3 big candles"
+              title="Boxes and channels: latest 1, 2 or 3 big candles"
               ><button>1</button><button>2</button
               ><button>3</button></span
             ></span
@@ -496,6 +503,13 @@
       function setAutoBox(v) {
         autoBox = !!v;
         $("boxTog").className = autoBox ? "a" : "";
+        schedule();
+      }
+      /* following channels on the same candles (FB button) */
+      let followBox = true;
+      function setFollowBox(v) {
+        followBox = !!v;
+        $("fboxTog").className = followBox ? "a" : "";
         schedule();
       }
       /* vol ladder from the day's high and low (HL button);
@@ -2315,7 +2329,7 @@
            * the same height starts in the opposite direction,
            * and so on. Following highs = green, lows = black.
            */
-          if (cfg.main && autoBox) {
+          if (cfg.main && (autoBox || followBox)) {
             /* the latest nBox big candles, newest first */
             const bigs = [],
               where = new Map(geo.map((o) => [o.c, o]));
@@ -2338,9 +2352,9 @@
               let dn = A.c < A.o,
                 ext = dn ? A.l : A.h,
                 pts = [{ c: A, ext }];
-              /* the latest one also gets a fixed Alt+B style
-                 box, 66% line placed as in its channel */
-              if (!bi)
+              /* B: a static Alt+B style box on the candle, 66%
+                 line placed as in its channel */
+              if (autoBox)
                 drawBox({ t: A.t, lo: dn ? A.h : A.l, hi: ext });
               for (let j = k + 1; j <= kEnd; j++) {
                 const q = arr[j];
@@ -2355,7 +2369,8 @@
                 pts = [{ c: q, ext }];
               }
               runs.push({ dn, pts, live: !bi });
-              runs.forEach((r) => {
+              /* FB: the following channels */
+              (followBox ? runs : []).forEach((r) => {
                 /* far = the side away from the trailed edge;
                    the 66% line sits 34% in from it */
                 const far = (e) => (r.dn ? e + ht : e - ht),
@@ -3494,6 +3509,7 @@
           vol: $("vol").value,
           volDef: VOL_DEFAULT,
           autoBox,
+          followBox,
           nBox,
           hlLad,
           showGrid,
@@ -3536,6 +3552,8 @@
         if (cur && typeof st.autoBox === "boolean")
           setAutoBox(st.autoBox);
         if (cur && [1, 2, 3].includes(st.nBox)) setNBox(st.nBox);
+        if (typeof st.followBox === "boolean")
+          setFollowBox(st.followBox);
         /* 6h: default changed in version 4, HL / VA in 5 */
         const cur4 = st.dv >= 4,
           cur5 = st.dv >= 5;
@@ -3750,6 +3768,7 @@
       $("gridTog").onclick = () => setShowGrid(!showGrid);
       $("vaTog").onclick = () => setShowVA(!showVA);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
+      $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
       $("vol").addEventListener("input", (e) =>
