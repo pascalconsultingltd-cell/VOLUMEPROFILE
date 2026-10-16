@@ -318,7 +318,6 @@
         ></span>
         <span class="grp" title="Profile and levels"
           ><span class="box"
-            ><span id="tpoBtns"></span
             ><input
               id="vol"
               value="280"
@@ -326,7 +325,7 @@
               autocomplete="off"
               placeholder="vol"
               title="Step around yesterday's POC: 250 or 0.3%"
-            />
+            /><span id="tpoBtns"></span>
             <button
               id="ladTog"
               class=""
@@ -379,19 +378,15 @@
           ></span
         >
         <span class="grp" title="View"
-          ><button
-            id="gridTog"
-            class=""
-            title="Vertical lines at 06, 12, 18 UTC; midnight stays"
-          >
-            6h
-          </button>
-          <button
-            id="miniTog"
-            title="Show / hide the 15s line break window"
-          >
-            15s LB
-          </button></span
+          ><span class="box"
+            ><button
+              id="gridTog"
+              class=""
+              title="Vertical lines at 06, 12, 18 UTC; midnight stays"
+            >
+              6h
+            </button></span
+          ></span
         >
       </div>
     </header>
@@ -3712,11 +3707,6 @@
       });
       $("mx").onclick = () => {
         mini.style.display = "none";
-      };
-      $("miniTog").onclick = () => {
-        mini.style.display =
-          mini.style.display === "none" ? "flex" : "none";
-        miniChart.size();
       };
 
       /* Alt+R: default zoom and pan, floating window back to
