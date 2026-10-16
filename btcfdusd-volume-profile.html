@@ -1431,36 +1431,13 @@
             arr.length - off - N <= 0
           )
             older(IV);
-          const vis = arr
+          let vis = arr
             .slice(
               Math.max(0, arr.length - off - N),
               arr.length - off,
             )
             .filter(okC);
           if (!vis.length || !W) return;
-          const dayStart = dayOf(vis[vis.length - 1].t);
-          const dayC = cfg.tpo
-            ? k15.filter((c) => c.t >= dayStart && okC(c))
-            : [];
-          let hi = -1e12,
-            lo = 1e12;
-          vis.concat(dayC).forEach((c) => {
-            hi = Math.max(hi, c.h);
-            lo = Math.min(lo, c.l);
-          });
-          const pad = (hi - lo) * 0.06 || 1;
-          hi += pad;
-          lo -= pad;
-          fit = { hi, lo };
-          if (lock) {
-            hi = lock.hi;
-            lo = lock.lo;
-          }
-          const hi0 = hi,
-            lo0 = lo,
-            mid0 = (hi + lo) / 2 + ypan;
-          hi = mid0 + ((hi0 - lo0) / 2) * ysc;
-          lo = mid0 - ((hi0 - lo0) / 2) * ysc;
           /*
            * legendH = room for the TPO session legend and day
            * labels
@@ -1485,6 +1462,55 @@
             top = 8,
             bot = H - legendH - timeH - 6,
             ch = bot - top;
+          /*
+           * candle widths: Standard = sw each. Volume candles
+           * in Standard widths: under the median volume 1, up
+           * to the 95th percentile 2, above that its true size
+           * (volume / median); only the newest that fit stay,
+           * so the price range follows what is shown.
+           */
+          const cw = x1 - x0,
+            slots = vis.length + Math.max(0, -off),
+            sw = cw / slots,
+            cwE = sw * vis.length,
+            vs = vis.map((c) => c.v || 0).sort((p, q) => p - q),
+            vMed = vs[Math.floor(vs.length / 2)] || 1,
+            v95 = vs[Math.ceil(0.95 * vs.length) - 1],
+            wOf = (c) =>
+              mode !== "eq" || c.v < vMed
+                ? sw
+                : c.v <= v95
+                  ? 2 * sw
+                  : Math.max(2, c.v / vMed) * sw;
+          let used = 0,
+            keep = vis.length;
+          while (keep > 0 && used + wOf(vis[keep - 1]) <= cwE + 0.5)
+            used += wOf(vis[--keep]);
+          if (keep === vis.length) used = wOf(vis[--keep]);
+          vis = vis.slice(keep);
+          const dayStart = dayOf(vis[vis.length - 1].t);
+          const dayC = cfg.tpo
+            ? k15.filter((c) => c.t >= dayStart && okC(c))
+            : [];
+          let hi = -1e12,
+            lo = 1e12;
+          vis.concat(dayC).forEach((c) => {
+            hi = Math.max(hi, c.h);
+            lo = Math.min(lo, c.l);
+          });
+          const pad = (hi - lo) * 0.06 || 1;
+          hi += pad;
+          lo -= pad;
+          fit = { hi, lo };
+          if (lock) {
+            hi = lock.hi;
+            lo = lock.lo;
+          }
+          const hi0 = hi,
+            lo0 = lo,
+            mid0 = (hi + lo) / 2 + ypan;
+          hi = mid0 + ((hi0 - lo0) / 2) * ysc;
+          lo = mid0 - ((hi0 - lo0) / 2) * ysc;
           const Y = (p) => top + ((hi - p) / (hi - lo)) * ch;
           /*
            * price tag in the axis column / time tag under the
@@ -1590,31 +1616,13 @@
            * candle geometry first: the levels below are cut
            * per day and need each candle's x position
            */
-          const cw = x1 - x0,
-            slots = vis.length + Math.max(0, -off),
-            cwE = (cw * vis.length) / slots;
           geo = [];
           {
-            /*
-             * volume candles, in units of the screen's
-             * volumes: under the median 1 unit wide, up to
-             * the 95th percentile 2 units, above that its
-             * true size, volume / median units
-             */
-            let x = x0;
-            const nV = vis.length,
-              vs = vis.map((c) => c.v || 0).sort((p, q) => p - q),
-              vMed = vs[Math.floor(nV / 2)] || 1,
-              v95 = vs[Math.ceil(0.95 * nV) - 1],
-              un = (c) =>
-                c.v < vMed
-                  ? 1
-                  : c.v <= v95
-                    ? 2
-                    : Math.max(2, c.v / vMed),
-              uW = cwE / vis.reduce((s, c) => s + un(c), 0);
+            /* right-aligned: the newest ends where it would
+               on the Standard chart */
+            let x = x0 + cwE - used;
             vis.forEach((c) => {
-              const w = mode === "eq" ? un(c) * uW : cw / slots;
+              const w = wOf(c);
               geo.push({ x, w, c });
               x += w;
             });
@@ -2222,8 +2230,11 @@
             });
           else
             geo.forEach((o, i) => {
-              if (i % every === 0) {
+              /* uneven volume widths: keep labels apart */
+              const xm = o.x + o.w / 2;
+              if (i % every === 0 && xm - lastX >= 46) {
                 const d = new Date(o.c.t);
+                lastX = xm;
                 g.fillText(
                   p2(d.getHours()) +
                     ":" +
