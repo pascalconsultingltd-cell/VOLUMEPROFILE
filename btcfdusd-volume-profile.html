@@ -1987,7 +1987,7 @@
                 Y((Q.poc - 1) * Q.step) - qT,
               );
             }
-            /* today: the developing POC, blue, stepping as it
+            /* today: the developing POC, dark grey, stepping as it
                moved through the day */
             const devP = [];
             if (!done && Q.dev.length)
@@ -2002,7 +2002,7 @@
                 else devP.push({ p, xa: o.x, xb: o.x + o.w });
               });
             if (devP.length) devP[devP.length - 1].xb = sg.xb;
-            g.fillStyle = "rgba(41,98,255,.55)";
+            g.fillStyle = "rgba(64,64,64,.55)";
             devP.forEach(({ p, xa, xb }) =>
               g.fillRect(
                 xa,
@@ -2120,7 +2120,7 @@
             /* developing POC price, mid-brick */
             if (devP.length) {
               const dp = devP[devP.length - 1].p;
-              tag((dp + 0.5) * Q.step, "#2962ff");
+              tag((dp + 0.5) * Q.step, "#404040");
             }
             if (showVA) {
               tag(vah, "#2f80c8");
