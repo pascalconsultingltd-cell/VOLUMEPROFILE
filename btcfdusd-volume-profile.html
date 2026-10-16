@@ -2525,12 +2525,12 @@
                 ttag(cx, dlabel(l.t), "#1f3a93");
               }
             } else if (l.k === "d") {
-              /* blue above the last price, dark red below */
+              /* marine blue above the last price, dark red below */
               const o = geoAt(l.t),
                 xs = o ? o.x + o.w / 2 : x0,
                 y = Y(l.p),
                 lp = mid != null ? mid : arr[arr.length - 1].c,
-                col = l.p >= lp ? "#2962ff" : "#8b0000";
+                col = l.p >= lp ? "#0b2e6b" : "#8b0000";
               if (y >= top && y <= bot) {
                 g.strokeStyle = g.fillStyle = col;
                 g.lineWidth = sel ? 3 : 2;
