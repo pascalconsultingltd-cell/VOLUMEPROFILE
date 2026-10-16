@@ -133,6 +133,12 @@
         border-left: 0;
         padding-left: 0;
       }
+      /* candle style: one choice of three, boxed together */
+      #modeBtns {
+        padding: 2px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+      }
       .ctl .grp > span:first-child {
         margin-left: 0;
       }
@@ -301,7 +307,10 @@
              orders, view -->
         <span class="grp" title="Chart"
           ><span id="tfBtns"></span><span id="nBtns"></span
-          ><span id="modeBtns"></span
+          ><span
+            id="modeBtns"
+            title="VC volume candles, Std standard, LB line break"
+          ></span
         ></span>
         <span class="grp" title="Profile and levels"
           ><span id="tpoBtns"></span>
@@ -3370,9 +3379,9 @@
           mkBtns(
             $("modeBtns"),
             [
-              ["eq", "Volume candles"],
-              ["std", "Standard"],
-              ["lb", "Line break"],
+              ["eq", "VC"],
+              ["std", "Std"],
+              ["lb", "LB"],
             ],
             () => mode,
             (v) => (mode = v),
