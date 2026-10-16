@@ -1431,7 +1431,7 @@
             arr.length - off - N <= 0
           )
             older(IV);
-          let vis = arr
+          const vis = arr
             .slice(
               Math.max(0, arr.length - off - N),
               arr.length - off,
@@ -1464,10 +1464,9 @@
             ch = bot - top;
           /*
            * candle widths: Standard = sw each. Volume candles
-           * in Standard widths: under the median volume 1, up
-           * to the 95th percentile 2, above that its true size
-           * (volume / median); only the newest that fit stay,
-           * so the price range follows what is shown.
+           * in 3 fixed sizes, 1 / 2 / 3 units: under the
+           * median volume, up to the 95th percentile, above
+           * it; units scaled so all candles fit.
            */
           const cw = x1 - x0,
             slots = vis.length + Math.max(0, -off),
@@ -1476,18 +1475,9 @@
             vs = vis.map((c) => c.v || 0).sort((p, q) => p - q),
             vMed = vs[Math.floor(vs.length / 2)] || 1,
             v95 = vs[Math.ceil(0.95 * vs.length) - 1],
-            wOf = (c) =>
-              mode !== "eq" || c.v < vMed
-                ? sw
-                : c.v <= v95
-                  ? 2 * sw
-                  : Math.max(2, c.v / vMed) * sw;
-          let used = 0,
-            keep = vis.length;
-          while (keep > 0 && used + wOf(vis[keep - 1]) <= cwE + 0.5)
-            used += wOf(vis[--keep]);
-          if (keep === vis.length) used = wOf(vis[--keep]);
-          vis = vis.slice(keep);
+            un = (c) => (c.v < vMed ? 1 : c.v <= v95 ? 2 : 3),
+            uW = cwE / vis.reduce((s, c) => s + un(c), 0),
+            wOf = (c) => (mode === "eq" ? un(c) * uW : sw);
           const dayStart = dayOf(vis[vis.length - 1].t);
           const dayC = cfg.tpo
             ? k15.filter((c) => c.t >= dayStart && okC(c))
@@ -1618,9 +1608,7 @@
            */
           geo = [];
           {
-            /* right-aligned: the newest ends where it would
-               on the Standard chart */
-            let x = x0 + cwE - used;
+            let x = x0;
             vis.forEach((c) => {
               const w = wOf(c);
               geo.push({ x, w, c });
