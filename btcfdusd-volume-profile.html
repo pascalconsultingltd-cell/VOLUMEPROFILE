@@ -1464,16 +1464,22 @@
             ch = bot - top;
           /*
            * candle widths: Standard = sw each. Volume candles
-           * in 2 sizes: 1 unit, 11 above the 95th percentile
-           * volume; units scaled so all candles fit.
+           * in 2 sizes: 3 units, 11 for the high-activity
+           * (circled) candles; units scaled so all fit.
            */
           const cw = x1 - x0,
             slots = vis.length + Math.max(0, -off),
             sw = cw / slots,
             cwE = sw * vis.length,
-            vs = vis.map((c) => c.v || 0).sort((p, q) => p - q),
-            v95 = vs[Math.ceil(0.95 * vs.length) - 1],
-            un = (c) => (c.v > v95 ? 11 : 1),
+            bigV =
+              mode === "eq"
+                ? bigFlags(
+                    arr,
+                    Math.max(0, arr.length - off - N),
+                    Math.min(arr.length, arr.length - off),
+                  )
+                : new Map(),
+            un = (c) => (bigV.get(c) ? 11 : 3),
             uW = cwE / vis.reduce((s, c) => s + un(c), 0),
             wOf = (c) => (mode === "eq" ? un(c) * uW : sw);
           const dayStart = dayOf(vis[vis.length - 1].t);
