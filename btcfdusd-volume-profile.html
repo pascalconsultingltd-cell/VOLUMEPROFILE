@@ -126,15 +126,23 @@
         margin-left: 0;
         padding-left: 10px;
         border-left: 1px solid var(--line);
-        align-items: center;
+        align-items: flex-end;
       }
       .ctl .grp:first-of-type {
         border-left: 0;
         padding-left: 0;
       }
-      /* a group's name, in front of its buttons */
+      /* a title on top of its framed buttons */
+      .ctl .ttl {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1px;
+      }
+      .ctl .ttl > span {
+        margin-left: 0;
+      }
       .ctl .lbl {
-        font-size: 12px;
+        font-size: 11px;
         color: var(--mu);
       }
       /* buttons that go together, framed like a cell border */
@@ -312,14 +320,15 @@
         <!-- groups: chart, profile and levels, channels,
              orders, view; .box = buttons that go together -->
         <span class="grp" title="Chart"
-          ><span class="lbl">Chart type</span
           ><span id="tfBtns" class="box"></span
           ><span id="nBtns" class="box"></span
-          ><span
-            id="modeBtns"
-            class="box"
-            title="VC volume candles, Std standard, LB line break"
-          ></span
+          ><span class="ttl"
+            ><span class="lbl">Chart type</span
+            ><span
+              id="modeBtns"
+              class="box"
+              title="VC volume candles, Std standard, LB line break"
+            ></span></span
         ></span>
         <span class="grp" title="Profile and levels"
           ><span class="box"
@@ -362,6 +371,7 @@
           ></span
         >
         <span class="grp" title="Channels"
+          ><span class="ttl"
           ><span class="lbl">Boxes</span
           ><span class="box"
             ><button
@@ -385,8 +395,10 @@
               ><button>3</button></span
             ></span
           ></span
+          ></span
         >
         <span class="grp" title="My orders"
+          ><span class="ttl"
           ><span class="lbl">Orders</span
           ><span class="box"
             ><button
@@ -403,6 +415,7 @@
             >
               L
             </button></span
+          ></span
           ></span
         >
         <span class="grp" title="View"
