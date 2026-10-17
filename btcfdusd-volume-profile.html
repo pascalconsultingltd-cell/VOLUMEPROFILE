@@ -1391,6 +1391,9 @@
           moveInfo = null,
           tpoFrac = null,
           pcN = null,
+          /* pcBack / tpoBack: candles / days dragged back */
+          pcBack = 0,
+          tpoBack = 0,
           divDrag = false,
           lbT = null,
           fit = null,
@@ -1820,7 +1823,7 @@
           const colW = (tpoW - 6 - (nTpo - 1) * gap) / nTpo,
             cnt = cfg.tpo ? nTpo : 0;
           profs = [];
-          const tpoDays = [dayStart];
+          const tpoDays = [dayStart - tpoBack * DAY];
           while (tpoDays.length < cnt)
             tpoDays.unshift(prevDay(tpoDays[0]));
           g.save();
@@ -1876,7 +1879,10 @@
             /* a little over the days needed, to be safe */
             const d0 = dayOf(geo[0].c.t),
               need =
-                Math.min(d0 - 3 * DAY, dayStart - (cnt + 1) * DAY) -
+                Math.min(
+                  d0 - 3 * DAY,
+                  dayStart - (cnt + 1 + tpoBack) * DAY,
+                ) -
                 7200000;
             if (need < k15[0].t) older("15m");
           }
@@ -2186,7 +2192,8 @@
            */
           /* pcGeo: DPoc candles and their x, for the magnet */
           const pcGeo = [];
-          let pcShow = 0;
+          let pcShow = 0,
+            pcSl = 0;
           if (pcW) {
             const pa = 4,
               pv = (dS) => {
@@ -2235,13 +2242,22 @@
                 pcN || Math.max(3, Math.floor(pcW / (colW + gap))),
               sl = pcW / nFit;
             pcShow = nFit;
-            if (cds.length < nFit && !olderEnd["15m"]) older("15m");
+            pcSl = sl;
+            const need = nFit + pcBack;
+            if (cds.length < need && !olderEnd["15m"]) older("15m");
             g.save();
             g.beginPath();
             g.rect(pa, top, pcW, bot - top);
             g.clip();
             /* same price scale as the chart */
-            const cv2 = cds.slice(-nFit),
+            /* pb = what is loaded so far; pcBack waits for more */
+            const room = cds.length - nFit,
+              pb = Math.max(0, Math.min(pcBack, room));
+            if (olderEnd["15m"]) pcBack = pb;
+            const cv2 = cds.slice(
+                Math.max(0, cds.length - nFit - pb),
+                cds.length - pb,
+              ),
               YP = Y;
             cv2.forEach((c, i) => {
               const xm = pa + sl * (i + 0.5),
@@ -2412,6 +2428,8 @@
             pcOff,
             pcGeo,
             pcN: pcShow,
+            pcSl,
+            tpoSl: colW + gap,
             Y,
             pc: cw / slots,
           };
@@ -2928,8 +2946,19 @@
             return;
           }
           if (pan && view) {
-            off =
-              pan.off + Math.round((t.clientX - pan.x) / view.pc);
+            const dx = t.clientX - pan.x;
+            /* dragging right shows older, as on the chart */
+            if (pan.w === "pc")
+              pcBack = Math.max(
+                0,
+                pan.b0 + Math.round(dx / view.pcSl),
+              );
+            else if (pan.w === "tpo")
+              tpoBack = Math.max(
+                0,
+                Math.min(60, pan.b0 + Math.round(dx / view.tpoSl)),
+              );
+            else off = pan.off + Math.round(dx / view.pc);
             const dy = t.clientY - pan.y;
             if (Math.abs(dy) > 4) pan.vy = true;
             if (pan.vy) ypan = pan.yp + (dy / view.ch) * pan.rng;
@@ -3316,7 +3345,17 @@
               cv.style.cursor = "ns-resize";
             } else {
               if (!lock && fit) lock = fit;
+              /* w: the window being dragged, b0 its offset */
+              const px = e.clientX - cv.getBoundingClientRect().left,
+                w =
+                  view.pcOff && px < view.pcOff - 5
+                    ? "pc"
+                    : cfg.tpo && px < view.x0 - 5
+                      ? "tpo"
+                      : null;
               pan = {
+                w,
+                b0: w === "pc" ? pcBack : tpoBack,
                 x: e.clientX,
                 y: e.clientY,
                 off,
@@ -3534,6 +3573,9 @@
             ypan = 0;
             lock = null;
             tpoFrac = null;
+            pcN = null;
+            pcBack = 0;
+            tpoBack = 0;
             draft = null;
             boxTool = 0;
             dotTool = 0;
