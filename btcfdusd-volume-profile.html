@@ -1390,7 +1390,8 @@
           arrLen = 0,
           moveInfo = null,
           tpoFrac = null,
-          pcN = null,
+          /* DPoc candles shown: 7 at start, wheel 3-60 */
+          pcN = 7,
           /* pcBack / tpoBack: candles / days dragged back */
           pcBack = 0,
           /* subX: the chart's slide between two candles, 0-1 */
@@ -2476,7 +2477,7 @@
             g.beginPath();
             g.rect(xs, top, px0 - xs, bot - top);
             g.clip();
-            g.fillStyle = "rgba(" + rgb + ",.1)";
+            g.fillStyle = "rgba(" + rgb + ",.2)";
             g.fillRect(xs, yT, px0 - xs, yB - yT);
             g.strokeStyle = "rgba(" + rgb + ",.5)";
             g.lineWidth = sel ? 2 : 1;
@@ -3600,7 +3601,7 @@
             ypan = 0;
             lock = null;
             tpoFrac = null;
-            pcN = null;
+            pcN = 7;
             pcBack = 0;
             subX = 0;
             tpoBack = 0;
