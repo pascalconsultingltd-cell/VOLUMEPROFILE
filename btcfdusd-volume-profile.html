@@ -338,6 +338,13 @@
               title="Value area on / off; the POC always stays"
             >
               VA
+            </button>
+            <button
+              id="pcTog"
+              class=""
+              title="POC candles, left of the chart"
+            >
+              PC
             </button></span
           ></span
         >
@@ -525,6 +532,13 @@
       function setShowVA(v) {
         showVA = !!v;
         $("vaTog").className = showVA ? "a" : "";
+        schedule();
+      }
+      /* POC candles panel (PC button) */
+      let pocC = false;
+      function setPocC(v) {
+        pocC = !!v;
+        $("pcTog").className = pocC ? "a" : "";
         schedule();
       }
       /* vertical 6-hour lines (6h button); the midnight
@@ -1478,7 +1492,9 @@
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
             px0 = W - axW;
-          const x0 = tpoW + 10,
+          /* pcW = POC candles panel, between profiles and chart */
+          const pcW = cfg.main && cfg.tpo && pocC ? 80 : 0,
+            x0 = tpoW + 10 + (pcW ? pcW + 10 : 0),
             x1 =
               W -
               axW -
@@ -2141,6 +2157,77 @@
               });
             }
           });
+
+          /*
+           * POC candles (PC button), one per pair of profile
+           * days whose POCs share a colour (red = below the
+           * day before's, green = not). Red: drawn only when
+           * the second red POC is lower than the first, open
+           * at the first, close at the second; green the
+           * same, higher. High / low = the days a to b.
+           */
+          if (pcW) {
+            const pa = tpoW + 10,
+              pv = (dS) => {
+                const P = dayProf(dS);
+                return P.poc == null ? null : (P.poc + 0.5) * P.step;
+              },
+              info = tpoDays
+                .map((dS) => {
+                  const p = pv(dS),
+                    q = pv(prevDay(dS)),
+                    up = p == null || q == null ? null : p >= q;
+                  return { dS, p, up };
+                })
+                .filter((o) => o.up != null),
+              cds = [];
+            [true, false].forEach((up) => {
+              const s = info.filter((o) => o.up === up);
+              for (let i = 1; i < s.length; i++) {
+                const a = s[i - 1],
+                  b = s[i];
+                if (up ? b.p <= a.p : b.p >= a.p) continue;
+                let h = -1e12,
+                  l = 1e12;
+                for (let d = a.dS; d <= b.dS; d = nextDay(d)) {
+                  const r = dayR.get(d);
+                  if (r) {
+                    h = Math.max(h, r.h);
+                    l = Math.min(l, r.l);
+                  }
+                }
+                cds.push({ t: b.dS, o: a.p, c: b.p, h, l, up });
+              }
+            });
+            cds.sort((m, n) => m.t - n.t);
+            g.save();
+            g.beginPath();
+            g.rect(pa, top, pcW, bot - top);
+            g.clip();
+            const sl = pcW / Math.max(3, cds.length);
+            cds.forEach((c, i) => {
+              const xm = pa + sl * (i + 0.5),
+                col = c.up ? "#089981" : "#e5484d";
+              g.strokeStyle = g.fillStyle = col;
+              g.beginPath();
+              g.moveTo(xm, Y(c.h));
+              g.lineTo(xm, Y(c.l));
+              g.stroke();
+              const yo = Y(c.o),
+                yc = Y(c.c);
+              g.fillRect(
+                xm - sl * 0.3,
+                Math.min(yo, yc),
+                sl * 0.6,
+                Math.max(1, Math.abs(yo - yc)),
+              );
+            });
+            g.restore();
+            g.fillStyle = "#6b7684";
+            g.textAlign = "left";
+            const lab = cds.length ? "POC" : "no POC pair";
+            g.fillText(lab, pa, bot + 10);
+          }
 
           /* candles */
 
@@ -3521,6 +3608,7 @@
           hlLad,
           showGrid,
           showVA,
+          pocC,
           showOrders,
           showLines,
           lines: lines.filter(
@@ -3568,6 +3656,7 @@
           setHlLad(st.hlLad);
         if (cur4 && typeof st.showGrid === "boolean")
           setShowGrid(st.showGrid);
+        if (typeof st.pocC === "boolean") setPocC(st.pocC);
         if (cur5 && typeof st.showVA === "boolean")
           setShowVA(st.showVA);
         /* O / L: defaults changed in version 6 */
@@ -3774,6 +3863,7 @@
       $("ladTog").onclick = () => setHlLad(!hlLad);
       $("gridTog").onclick = () => setShowGrid(!showGrid);
       $("vaTog").onclick = () => setShowVA(!showVA);
+      $("pcTog").onclick = () => setPocC(!pocC);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
