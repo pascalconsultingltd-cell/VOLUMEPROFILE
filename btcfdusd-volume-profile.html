@@ -1492,9 +1492,11 @@
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
             px0 = W - axW;
-          /* pcW = POC candles panel, between profiles and chart */
-          const pcW = cfg.main && cfg.tpo && pocC ? 80 : 0,
-            x0 = tpoW + 10 + (pcW ? pcW + 10 : 0),
+          /* pcW = POC candles panel, at the far left; pcOff
+             shifts the profiles right of it */
+          const pcW = cfg.main && cfg.tpo && pocC ? 90 : 0,
+            pcOff = pcW ? pcW + 10 : 0,
+            x0 = tpoW + 10 + pcOff,
             x1 =
               W -
               axW -
@@ -1812,7 +1814,7 @@
           g.clip();
           for (let d = 0; d < cnt; d++) {
             const Q = dayProf(tpoDays[d]),
-              cx0 = 6 + d * (colW + gap),
+              cx0 = 6 + pcOff + d * (colW + gap),
               rowH = (ch * Q.step) / (hi - lo),
               lw = Math.min(11, (colW - 2) / Q.maxC),
               P = Object.assign(
@@ -2167,7 +2169,7 @@
            * same, higher. High / low = the days a to b.
            */
           if (pcW) {
-            const pa = tpoW + 10,
+            const pa = 4,
               pv = (dS) => {
                 const P = dayProf(dS);
                 return P.poc == null ? null : (P.poc + 0.5) * P.step;
@@ -2223,10 +2225,14 @@
               );
             });
             g.restore();
+            /* framed, named, and says so when it is empty */
+            g.strokeStyle = "#5b6470";
+            g.strokeRect(pa + 0.5, top + 0.5, pcW - 1, bot - top - 1);
             g.fillStyle = "#6b7684";
-            g.textAlign = "left";
-            const lab = cds.length ? "POC" : "no POC pair";
-            g.fillText(lab, pa, bot + 10);
+            g.textAlign = "center";
+            const pm = pa + pcW / 2;
+            g.fillText("POC candles", pm, bot + 10);
+            if (!cds.length) g.fillText("no pair yet", pm, (top + bot) / 2);
           }
 
           /* candles */
@@ -2364,6 +2370,7 @@
             ch,
             px0,
             x0,
+            pcOff,
             Y,
             pc: cw / slots,
           };
@@ -2855,7 +2862,8 @@
             return;
           }
           if (divDrag && view) {
-            tpoFrac = Math.max(80, Math.min(W * 0.75, x - 5)) / W;
+            const xd = x - 5 - (view.pcOff || 0);
+            tpoFrac = Math.max(80, Math.min(W * 0.75, xd)) / W;
             draw();
             return;
           }
