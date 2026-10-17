@@ -349,7 +349,7 @@
             ><span class="box"
               ><input
                 id="vol"
-                value="280"
+                value="230"
                 inputmode="decimal"
                 autocomplete="off"
                 placeholder="vol"
@@ -2195,14 +2195,15 @@
               tpoRun = Object.assign({}, end, { xa: 0, xb: x0 - 5 });
             if (volN > 0)
               (last ? [tpoRun].concat(runs) : runs).forEach((r) =>
-                /* no "0" line: the POC band already marks it */
+                /* "0": no line under the POC band, dashed when
+                   the band is off */
                 lv(r).forEach(([p, t, col, solid]) =>
-                  t === "0" ? 0 : hseg(
+                  t === "0" && showPOC ? 0 : hseg(
                     p,
                     r.xa,
                     r.xb,
                     col === "#000000" ? "rgba(0,0,0,.5)" : col,
-                    solid ? [] : [3, 3],
+                    solid && t !== "0" ? [] : [3, 3],
                     t.length > 1 ? 1 : 1.5,
                   ),
                 ),
