@@ -1803,7 +1803,7 @@
             Object.assign(P, { poc, a, b, maxC });
             return P;
           };
-          /* a day's POC colour (rgb): soft red below the day
+          /* a day's POC colour (rgb): black below the day
              before's POC, candle green otherwise; navy only
              when that day is not loaded.
              Day D's profile and chart take D-1's colour. */
@@ -1814,7 +1814,7 @@
               return "0,51,102";
             const d =
               (A.poc + 0.5) * A.step - (B.poc + 0.5) * B.step;
-            return d < 0 ? "229,72,77" : "8,153,129";
+            return d < 0 ? "0,0,0" : "8,153,129";
           };
           /* the TPO profiles drawn at the left of the chart */
           const colW = (tpoW - 6 - (nTpo - 1) * gap) / nTpo,
@@ -2020,7 +2020,7 @@
                 Y((Q.poc - 1) * Q.step) - qT,
               );
             }
-            /* today: the developing POC, dark grey, stepping as it
+            /* today: the developing POC, gold, stepping as it
                moved through the day */
             const devP = [];
             if (!done && Q.dev.length)
@@ -2035,7 +2035,7 @@
                 else devP.push({ p, xa: o.x, xb: o.x + o.w });
               });
             if (devP.length) devP[devP.length - 1].xb = sg.xb;
-            g.fillStyle = "rgba(64,64,64,.55)";
+            g.fillStyle = "rgba(212,160,23,.55)";
             (showPOC ? devP : []).forEach(({ p, xa, xb }) =>
               g.fillRect(
                 xa,
@@ -2153,7 +2153,7 @@
             /* developing POC price, mid-brick */
             if (showPOC && devP.length) {
               const dp = devP[devP.length - 1].p;
-              tag((dp + 0.5) * Q.step, "#404040");
+              tag((dp + 0.5) * Q.step, "#b8860b");
             }
             if (showVA) {
               tag(vah, "#2f80c8");
@@ -2414,8 +2414,7 @@
               mn = Math.min(l.lo, l.hi),
               yT = Y(mx),
               yB = Y(mn),
-              o = geoAt(l.t),
-              xs = o ? o.x + o.w / 2 : x0,
+              xs = xsOf(l),
               p66 = l.hi + 0.66 * (l.lo - l.hi),
               y66 = Y(p66),
               /* drawn upwards green, downwards black */
@@ -2662,8 +2661,7 @@
               }
             } else if (l.k === "d") {
               /* marine blue above the last price, dark red below */
-              const o = geoAt(l.t),
-                xs = o ? o.x + o.w / 2 : x0,
+              const xs = xsOf(l),
                 y = Y(l.p),
                 lp = mid != null ? mid : arr[arr.length - 1].c,
                 col = l.p >= lp ? "#0b2e6b" : "#8b0000";
@@ -3043,6 +3041,13 @@
             (x < geo[0].x ? geo[0] : geo[geo.length - 1])
           );
         }
+        /* where a box or dot starts: its candle, or the left
+           edge when it was drawn over DPoc / the profiles */
+        function xsOf(l) {
+          if (l.l) return 4;
+          const o = geoAt(l.t);
+          return o ? o.x + o.w / 2 : view ? view.x0 : 0;
+        }
         function geoAt(t) {
           let r = null;
           if (geo)
@@ -3061,6 +3066,7 @@
             view.hi -
             ((y - view.top) / view.ch) * (view.hi - view.lo);
           const o = at(x);
+          if (x < view.x0 - 5) return { p: free, o, left: 1 };
           let best = null,
             bd = 14;
           [o.c.o, o.c.h, o.c.l, o.c.c].forEach((v) => {
@@ -3093,7 +3099,7 @@
             y = e.clientY - r.top;
           if (y < view.top || y > view.bot) return;
           const sn = snap(x, y);
-          lines.push({ k: "d", t: sn.o.c.t, p: sn.p });
+          lines.push({ k: "d", t: sn.o.c.t, p: sn.p, l: sn.left });
           dotTool = 0;
           draw();
         }
@@ -3119,8 +3125,7 @@
               )
                 return l;
             } else if (l.k === "d") {
-              const o = geoAt(l.t),
-                xs = o ? o.x + o.w / 2 : view.x0;
+              const xs = xsOf(l);
               if (
                 Math.abs(y - view.Y(l.p)) <= 6 &&
                 x >= xs - 6 &&
@@ -3128,8 +3133,7 @@
               )
                 return l;
             } else {
-              const o = geoAt(l.t),
-                xs = o ? o.x + o.w / 2 : view.x0;
+              const xs = xsOf(l);
               for (const e of ["hi", "lo"])
                 if (
                   Math.abs(y - view.Y(l[e])) <= 5 &&
@@ -3144,8 +3148,7 @@
           for (let i = lines.length - 1; i >= 0; i--) {
             const l = lines[i];
             if (l.k !== "b") continue;
-            const o = geoAt(l.t),
-              xs = o ? o.x + o.w / 2 : view.x0,
+            const xs = xsOf(l),
               y1 = view.Y(Math.max(l.lo, l.hi)),
               y2 = view.Y(Math.min(l.lo, l.hi));
             if (x >= xs && x <= view.px0 && y >= y1 && y <= y2) {
@@ -3183,10 +3186,11 @@
             x = e.clientX - r.left,
             y = e.clientY - r.top;
           if (y < view.top || y > view.bot) return;
-          const p = snap(x, y).p;
+          const sn = snap(x, y),
+            p = sn.p;
           if (boxTool === 1) {
-            const o = at(x);
-            draft = { k: "b", t: o.c.t, lo: p, hi: p };
+            const o = sn.o;
+            draft = { k: "b", t: o.c.t, lo: p, hi: p, l: sn.left };
             lines.push(draft);
             boxTool = 2;
           } else {
@@ -3354,7 +3358,8 @@
             boxTool = 1;
             const m = mouseAt();
             if (m) {
-              draft = { k: "b", t: m.o.c.t, lo: m.p, hi: m.p };
+              const { o, p, left } = m;
+              draft = { k: "b", t: o.c.t, lo: p, hi: p, l: left };
               lines.push(draft);
               boxTool = 2;
             }
@@ -3367,7 +3372,7 @@
             dotTool = 1;
             const m = mouseAt();
             if (m) {
-              lines.push({ k: "d", t: m.o.c.t, p: m.p });
+              lines.push({ k: "d", t: m.o.c.t, p: m.p, l: m.left });
               dotTool = 0;
             }
             draw();
@@ -3929,6 +3934,9 @@
       $("vol").addEventListener("input", (e) =>
         setVol(e.target.value),
       );
+      $("vol").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === "Escape") e.target.blur();
+      });
       /* installable app: only when served over https */
       if (
         "serviceWorker" in navigator &&
