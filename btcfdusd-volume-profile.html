@@ -2184,6 +2184,8 @@
            * earlier POC, close at the later, high / low over
            * the days between.
            */
+          /* pcGeo: DPoc candles and their x, for the magnet */
+          const pcGeo = [];
           if (pcW) {
             const pa = 4,
               pv = (dS) => {
@@ -2239,6 +2241,7 @@
             cv2.forEach((c, i) => {
               const xm = pa + sl * (i + 0.5),
                 col = c.up ? "#089981" : "#000000";
+              pcGeo.push({ xa: xm - sl / 2, xb: xm + sl / 2, c });
               g.strokeStyle = g.fillStyle = col;
               g.beginPath();
               g.moveTo(xm, YP(c.h));
@@ -2402,6 +2405,7 @@
             px0,
             x0,
             pcOff,
+            pcGeo,
             Y,
             pc: cw / slots,
           };
@@ -3066,7 +3070,23 @@
             view.hi -
             ((y - view.top) / view.ch) * (view.hi - view.lo);
           const o = at(x);
-          if (x < view.x0 - 5) return { p: free, o, left: 1 };
+          if (x < view.x0 - 5) {
+            /* over DPoc: magnet to that candle, else free */
+            const q = (view.pcGeo || []).find(
+                (g2) => x >= g2.xa && x < g2.xb,
+              ),
+              ps = q ? [q.c.o, q.c.h, q.c.l, q.c.c] : [];
+            let p = free,
+              d0 = 14;
+            ps.forEach((v) => {
+              const d = Math.abs(view.Y(v) - y);
+              if (d < d0) {
+                d0 = d;
+                p = v;
+              }
+            });
+            return { p, o, left: 1 };
+          }
           let best = null,
             bd = 14;
           [o.c.o, o.c.h, o.c.l, o.c.c].forEach((v) => {
