@@ -1390,7 +1390,6 @@
           arrLen = 0,
           moveInfo = null,
           tpoFrac = null,
-          pcPx = null,
           divDrag = false,
           lbT = null,
           fit = null,
@@ -1507,9 +1506,9 @@
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
             px0 = W - axW;
-          /* pcW = POC candles panel, at the far left; pcOff
-             shifts the profiles right of it */
-          const pcW = cfg.main && cfg.tpo && pocC ? pcPx || 90 : 0,
+          /* pcW = DPoc panel at the far left, as wide as the
+             profiles; pcOff shifts the profiles right of it */
+          const pcW = cfg.main && cfg.tpo && pocC ? tpoW : 0,
             pcOff = pcW ? pcW + 10 : 0,
             x0 = tpoW + 10 + pcOff,
             x1 =
@@ -2228,16 +2227,18 @@
               }
             });
             cds.sort((m, n) => m.t - n.t);
-            /* at least 10 candles: fetch older 15m days */
-            if (cds.length < 10 && !olderEnd["15m"]) older("15m");
+            /* one candle per profile-column width, as many as
+               fit; fetch older 15m days until they are there */
+            const sl = colW + gap,
+              nFit = Math.max(1, Math.floor(pcW / sl));
+            if (cds.length < nFit && !olderEnd["15m"]) older("15m");
             g.save();
             g.beginPath();
             g.rect(pa, top, pcW, bot - top);
             g.clip();
-            /* same price scale as the chart; the latest 20 */
-            const cv2 = cds.slice(-20),
-              YP = Y,
-              sl = pcW / Math.max(3, cv2.length);
+            /* same price scale as the chart */
+            const cv2 = cds.slice(-nFit),
+              YP = Y;
             cv2.forEach((c, i) => {
               const xm = pa + sl * (i + 0.5),
                 col = c.up ? "#089981" : "#000000";
@@ -2250,9 +2251,9 @@
               const yo = YP(c.o),
                 yc = YP(c.c);
               g.fillRect(
-                xm - sl * 0.3,
+                xm - colW * 0.35,
                 Math.min(yo, yc),
-                sl * 0.6,
+                colW * 0.7,
                 Math.max(1, Math.abs(yo - yc)),
               );
             });
@@ -2899,11 +2900,9 @@
             return;
           }
           if (divDrag && view) {
-            /* "pc": the POC candles edge, else the profiles' */
-            const xd = x - 5 - (view.pcOff || 0);
-            if (divDrag === "pc")
-              pcPx = Math.max(50, Math.min(W * 0.4, x - 5));
-            else tpoFrac = Math.max(80, Math.min(W * 0.75, xd)) / W;
+            /* with DPoc on, the panel is as wide as the profiles */
+            const xd = view.pcOff ? (x - 15) / 2 : x - 5;
+            tpoFrac = Math.max(80, Math.min(W * 0.75, xd)) / W;
             draw();
             return;
           }
@@ -3023,7 +3022,7 @@
           }
         });
 
-        /* which divider is under x, y: "pc", "tpo" or false */
+        /* the profiles / chart divider under x, y */
         function isDiv(x, y) {
           if (
             !cfg.tpo ||
@@ -3034,9 +3033,7 @@
             y > view.bot
           )
             return false;
-          if (view.pcOff && Math.abs(x - (view.pcOff - 5)) <= 5)
-            return "pc";
-          return Math.abs(x - (view.x0 - 5)) <= 5 ? "tpo" : false;
+          return Math.abs(x - (view.x0 - 5)) <= 5;
         }
         /* candle under x, clamped to the first/last one */
         function at(x) {
@@ -3344,8 +3341,7 @@
             cv.style.cursor = "crosshair";
             draw();
           } else if (mouse && isDiv(mouse.x, mouse.y)) {
-            if (isDiv(mouse.x, mouse.y) === "pc") pcPx = null;
-            else tpoFrac = null;
+            tpoFrac = null;
             draw();
           } else if (view && mouse && mouse.x > view.px0) {
             ysc = 1;
