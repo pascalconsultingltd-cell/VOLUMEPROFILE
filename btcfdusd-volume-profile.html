@@ -320,7 +320,9 @@
         <!-- groups: chart, profile and levels, channels,
              orders, view; .box = buttons that go together -->
         <span class="grp" title="Chart"
-          ><span id="tfBtns" class="box"></span
+          ><span class="ttl"
+            ><span class="lbl">Interval</span
+            ><span id="tfBtns" class="box"></span></span
           ><span id="nBtns" class="box"></span
           ><span class="ttl"
             ><span class="lbl">Chart type</span
@@ -2034,8 +2036,8 @@
             g.beginPath();
             g.rect(0, top, px0, bot - top);
             g.clip();
-            /* value area: pale blue, chart only */
-            g.fillStyle = "rgba(47,128,200,.13)";
+            /* value area: light blue, chart only */
+            g.fillStyle = "rgba(47,128,200,.25)";
             if (showVA)
               g.fillRect(
                 sg.xa,
