@@ -340,11 +340,18 @@
               VA
             </button>
             <button
+              id="pocTog"
+              class="a"
+              title="POC bands and tags on / off"
+            >
+              POC
+            </button>
+            <button
               id="pcTog"
               class="a"
-              title="POC candles, left of the chart"
+              title="Daily POC candles, left of the profiles"
             >
-              PC
+              DPoc
             </button></span
           ></span
         >
@@ -534,7 +541,14 @@
         $("vaTog").className = showVA ? "a" : "";
         schedule();
       }
-      /* POC candles panel (PC button) */
+      /* POC bands and tags on the chart (POC button) */
+      let showPOC = true;
+      function setShowPOC(v) {
+        showPOC = !!v;
+        $("pocTog").className = showPOC ? "a" : "";
+        schedule();
+      }
+      /* POC candles panel (DPoc button) */
       let pocC = true;
       function setPocC(v) {
         pocC = !!v;
@@ -1983,7 +1997,7 @@
             /* POC: a band 3 TPO rows tall (the POC row and one
                each side), coloured by pocRgb */
             g.fillStyle = "rgba(" + pRgb + ",.3)";
-            spans.forEach(([xa, xb]) =>
+            (showPOC ? spans : []).forEach(([xa, xb]) =>
               g.fillRect(
                 xa,
                 Y(pT + R.step),
@@ -1996,7 +2010,7 @@
                shaded, so each POC covers its day and the next */
             const Q = dayProf(sg.dS),
               done = sg.dS < dayOf(arr[arr.length - 1].t);
-            if (done && Q.poc != null && Q.full) {
+            if (showPOC && done && Q.poc != null && Q.full) {
               const qT = Y((Q.poc + 2) * Q.step);
               g.fillStyle = "rgb(" + pocRgb(sg.dS) + ")";
               g.fillRect(
@@ -2022,7 +2036,7 @@
               });
             if (devP.length) devP[devP.length - 1].xb = sg.xb;
             g.fillStyle = "rgba(64,64,64,.55)";
-            devP.forEach(({ p, xa, xb }) =>
+            (showPOC ? devP : []).forEach(({ p, xa, xb }) =>
               g.fillRect(
                 xa,
                 Y((p + 2) * Q.step),
@@ -2135,9 +2149,9 @@
               if (y >= top && y <= bot)
                 ptag(y, p.toFixed(DP), "#fff", col);
             };
-            tag(pc, pCol);
+            if (showPOC) tag(pc, pCol);
             /* developing POC price, mid-brick */
-            if (devP.length) {
+            if (showPOC && devP.length) {
               const dp = devP[devP.length - 1].p;
               tag((dp + 0.5) * Q.step, "#404040");
             }
@@ -3643,6 +3657,7 @@
           hlLad,
           showGrid,
           showVA,
+          showPOC,
           pocC,
           showOrders,
           showLines,
@@ -3691,7 +3706,8 @@
           setHlLad(st.hlLad);
         if (cur4 && typeof st.showGrid === "boolean")
           setShowGrid(st.showGrid);
-        /* PC: default changed in version 7 */
+        if (typeof st.showPOC === "boolean") setShowPOC(st.showPOC);
+        /* DPoc: default changed in version 7 */
         if (st.dv >= 7 && typeof st.pocC === "boolean")
           setPocC(st.pocC);
         if (cur5 && typeof st.showVA === "boolean")
@@ -3901,6 +3917,7 @@
       $("gridTog").onclick = () => setShowGrid(!showGrid);
       $("vaTog").onclick = () => setShowVA(!showVA);
       $("pcTog").onclick = () => setPocC(!pocC);
+      $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
