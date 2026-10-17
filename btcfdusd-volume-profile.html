@@ -2418,8 +2418,8 @@
               xs = o ? o.x + o.w / 2 : x0,
               p66 = l.hi + 0.66 * (l.lo - l.hi),
               y66 = Y(p66),
-              /* drawn upwards green, downwards red */
-              rgb = l.hi >= l.lo ? "8,153,129" : "229,72,77";
+              /* drawn upwards green, downwards black */
+              rgb = l.hi >= l.lo ? "8,153,129" : "0,0,0";
             g.save();
             g.beginPath();
             g.rect(xs, top, px0 - xs, bot - top);
@@ -2632,7 +2632,10 @@
             g.setLineDash([]);
             g.beginPath();
             if (l.k === "h") {
-              g.strokeStyle = "#1f3a93";
+              /* green above the last price, black below */
+              const lp = mid != null ? mid : arr[arr.length - 1].c,
+                col = l.p >= lp ? "#089981" : "#000000";
+              g.strokeStyle = col;
               g.lineWidth = sel ? 6 : 4;
               const y = Y(l.p);
               if (y >= top && y <= bot) {
@@ -2641,10 +2644,11 @@
                 g.globalAlpha = 0.5;
                 g.stroke();
                 g.globalAlpha = 1;
-                ptag(y, l.p.toFixed(DP), "#1f3a93");
+                ptag(y, l.p.toFixed(DP), col);
               }
             } else if (l.k === "v") {
-              g.strokeStyle = "#1f3a93";
+              /* a time has no side: black */
+              g.strokeStyle = "#000000";
               g.lineWidth = sel ? 6 : 4;
               const o = geoAt(l.t);
               if (o) {
@@ -2654,7 +2658,7 @@
                 g.globalAlpha = 0.5;
                 g.stroke();
                 g.globalAlpha = 1;
-                ttag(cx, dlabel(l.t), "#1f3a93");
+                ttag(cx, dlabel(l.t), "#000000");
               }
             } else if (l.k === "d") {
               /* marine blue above the last price, dark red below */
