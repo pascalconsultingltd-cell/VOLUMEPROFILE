@@ -138,7 +138,8 @@
         align-items: flex-start;
         gap: 1px;
       }
-      .ctl .ttl > span {
+      .ctl .ttl > span,
+      .ctl .box > span:first-child {
         margin-left: 0;
       }
       .ctl .lbl {
@@ -326,50 +327,51 @@
           ><span id="nBtns" class="box"></span
           ><span class="ttl"
             ><span class="lbl">Chart type</span
-            ><span
-              id="modeBtns"
-              class="box"
-              title="VC volume candles, Std standard, LB line break"
-            ></span></span
+            ><span class="box"
+              ><span
+                id="modeBtns"
+                title="VC volume candles, Std standard, LB line break"
+              ></span
+              ><button
+                id="pcTog"
+                class="a"
+                title="Daily POC candles, left of the profiles"
+              >
+                DPoc
+              </button></span
+            ></span
         ></span>
         <span class="grp" title="Profile and levels"
-          ><span class="box"
-            ><input
-              id="vol"
-              value="280"
-              inputmode="decimal"
-              autocomplete="off"
-              placeholder="vol"
-              title="Step around yesterday's POC: 250 or 0.3%"
-            /><span id="tpoBtns"></span>
-            <button
-              id="ladTog"
-              class=""
-              title="Steps move to the day's high / low; off = POC"
-            >
-              HL
-            </button>
-            <button
-              id="vaTog"
-              class=""
-              title="Value area on / off; the POC always stays"
-            >
-              VA
-            </button>
-            <button
-              id="pocTog"
-              class=""
-              title="POC bands and tags on / off"
-            >
-              POC
-            </button>
-            <button
-              id="pcTog"
-              class="a"
-              title="Daily POC candles, left of the profiles"
-            >
-              DPoc
-            </button></span
+          ><span class="ttl"
+            ><span class="lbl">Vol</span
+            ><span class="box"
+              ><input
+                id="vol"
+                value="280"
+                inputmode="decimal"
+                autocomplete="off"
+                placeholder="vol"
+                title="Step around yesterday's POC: 250 or 0.3%"
+            /></span></span
+          ><span class="ttl"
+            ><span class="lbl">Volume Profile</span
+            ><span class="box"
+              ><span id="tpoBtns"></span>
+              <button
+                id="vaTog"
+                class=""
+                title="Value area on / off; the POC always stays"
+              >
+                VA
+              </button>
+              <button
+                id="pocTog"
+                class=""
+                title="POC bands and tags on / off"
+              >
+                POC
+              </button></span
+            ></span
           ></span
         >
         <span class="grp" title="Channels"
@@ -421,14 +423,24 @@
           ></span
         >
         <span class="grp" title="View"
-          ><span class="box"
-            ><button
-              id="gridTog"
-              class=""
-              title="Vertical lines at 06, 12, 18 UTC; midnight stays"
-            >
-              6h
-            </button></span
+          ><span class="ttl"
+            ><span class="lbl">Axis</span
+            ><span class="box"
+              ><button
+                id="ladTog"
+                class=""
+                title="Steps move to the day's high / low; off = POC"
+              >
+                HL
+              </button>
+              <button
+                id="gridTog"
+                class=""
+                title="Lines at 06, 12, 18 UTC; midnight stays"
+              >
+                6h
+              </button></span
+            ></span
           ></span
         >
       </div>
