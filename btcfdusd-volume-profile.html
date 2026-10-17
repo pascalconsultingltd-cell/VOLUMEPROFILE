@@ -340,6 +340,12 @@
                 title="Daily POC candles, left of the profiles"
               >
                 DPoc
+              </button
+              ><button
+                id="spTog"
+                title="POC candles from sub POCs, vs the previous POC"
+              >
+                SPoc
               </button></span
             ></span
         ></span>
@@ -738,6 +744,13 @@
       function setPocC(v) {
         pocC = !!v;
         $("pcTog").className = pocC ? "a" : "";
+        schedule();
+      }
+      /* POC candles from the sub POCs (SPoc button) */
+      let pcSub = false;
+      function setPcSub(v) {
+        pcSub = !!v;
+        $("spTog").className = pcSub ? "a" : "";
         schedule();
       }
       /* vertical 6-hour lines (6h button); the midnight
@@ -2475,6 +2488,9 @@
            * previous green one a green candle: open at the
            * earlier POC, close at the later, high / low over
            * the days between.
+           * SPoc: the same over every sub POC in time order
+           * (by earliest brick within a day), each against
+           * the previous POC instead of the day before's.
            */
           /* pcGeo: DPoc candles and their x, for the magnet */
           const pcGeo = [];
@@ -2494,14 +2510,38 @@
               d = nextDay(d)
             )
               days.push(d);
-            const info = days
-                .map((dS) => {
-                  const p = pv(dS),
-                    q = pv(prevDay(dS)),
-                    up = p == null || q == null ? null : p >= q;
-                  return { dS, p, up };
-                })
-                .filter((o) => o.up != null),
+            const seq = [];
+            if (pcSub)
+              days.forEach((dS) => {
+                const P = dayProf(dS);
+                if (P.poc == null || !P.full) return;
+                const vf = volAmt > 0 ? volAmt : P.step * 10;
+                subPocs(dS, P.ps, subStart, vf, P.step)
+                  .map((S) => {
+                    const r = P.rows.get(Math.floor(S.px / P.step));
+                    return {
+                      dS,
+                      p: S.px,
+                      f: r ? Math.min(...r) : 99,
+                    };
+                  })
+                  .sort((a, b) => a.f - b.f)
+                  .forEach((o) => seq.push(o));
+              });
+            const info = (
+                pcSub
+                  ? seq.map((o, k) => ({
+                      ...o,
+                      k,
+                      up: k ? o.p >= seq[k - 1].p : null,
+                    }))
+                  : days.map((dS) => {
+                      const p = pv(dS),
+                        q = pv(prevDay(dS)),
+                        up = p == null || q == null ? null : p >= q;
+                      return { dS, p, up };
+                    })
+              ).filter((o) => o.up != null),
               cds = [];
             [true, false].forEach((up) => {
               const s = info.filter((o) => o.up === up);
@@ -2518,10 +2558,18 @@
                     l = Math.min(l, r.l);
                   }
                 }
-                cds.push({ t: b.dS, o: a.p, c: b.p, h, l, up });
+                cds.push({
+                  t: b.dS,
+                  k: b.k,
+                  o: a.p,
+                  c: b.p,
+                  h,
+                  l,
+                  up,
+                });
               }
             });
-            cds.sort((m, n) => m.t - n.t);
+            cds.sort((m, n) => m.t - n.t || m.k - n.k || 0);
             /* one candle per profile-column width, as many as
                fit; fetch older 15m days until they are there */
             const nFit =
@@ -2577,7 +2625,11 @@
             g.fillStyle = "#6b7684";
             g.textAlign = "center";
             const pm = pa + pcW / 2;
-            g.fillText("POC candles", pm, bot + 10);
+            g.fillText(
+              pcSub ? "sub POC candles" : "POC candles",
+              pm,
+              bot + 10,
+            );
             if (!cds.length)
               g.fillText("no pair yet", pm, (top + bot) / 2);
 
@@ -4054,6 +4106,7 @@
           showVA,
           showPOC,
           pocC,
+          pcSub,
           showOrders,
           showLines,
           lines: lines.filter(
@@ -4107,6 +4160,7 @@
         /* DPoc: default changed in version 7 */
         if (st.dv >= 7 && typeof st.pocC === "boolean")
           setPocC(st.pocC);
+        if (typeof st.pcSub === "boolean") setPcSub(st.pcSub);
         if (cur5 && typeof st.showVA === "boolean")
           setShowVA(st.showVA);
         /* O / L: defaults changed in version 6 */
@@ -4314,6 +4368,7 @@
       $("gridTog").onclick = () => setShowGrid(!showGrid);
       $("vaTog").onclick = () => setShowVA(!showVA);
       $("pcTog").onclick = () => setPocC(!pocC);
+      $("spTog").onclick = () => setPcSub(!pcSub);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
