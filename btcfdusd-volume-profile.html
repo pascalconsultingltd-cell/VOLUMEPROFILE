@@ -132,6 +132,11 @@
         border-left: 0;
         padding-left: 0;
       }
+      /* a group's name, in front of its buttons */
+      .ctl .lbl {
+        font-size: 12px;
+        color: var(--mu);
+      }
       /* buttons that go together, framed like a cell border */
       .ctl .box {
         margin-left: 0;
@@ -307,6 +312,7 @@
         <!-- groups: chart, profile and levels, channels,
              orders, view; .box = buttons that go together -->
         <span class="grp" title="Chart"
+          ><span class="lbl">Chart type</span
           ><span id="tfBtns" class="box"></span
           ><span id="nBtns" class="box"></span
           ><span
@@ -356,6 +362,7 @@
           ></span
         >
         <span class="grp" title="Channels"
+          ><span class="lbl">Boxes</span
           ><span class="box"
             ><button
               id="boxTog"
@@ -380,6 +387,7 @@
           ></span
         >
         <span class="grp" title="My orders"
+          ><span class="lbl">Orders</span
           ><span class="box"
             ><button
               id="ordTog"
