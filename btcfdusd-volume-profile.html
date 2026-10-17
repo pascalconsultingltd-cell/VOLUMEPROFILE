@@ -1823,16 +1823,21 @@
           const colW = (tpoW - 6 - (nTpo - 1) * gap) / nTpo,
             cnt = cfg.tpo ? nTpo : 0;
           profs = [];
-          const tpoDays = [dayStart - tpoBack * DAY];
-          while (tpoDays.length < cnt)
+          /* tb whole days back, tf = the slide in between; one
+             more day on the left while sliding */
+          const tb = Math.floor(tpoBack),
+            tf = tpoBack - tb,
+            ex = cnt && tf > 0 ? 1 : 0,
+            tpoDays = [dayStart - tb * DAY];
+          while (tpoDays.length < cnt + ex)
             tpoDays.unshift(prevDay(tpoDays[0]));
           g.save();
           g.beginPath();
-          g.rect(0, top, x0 - 5, bot - top);
+          g.rect(pcOff, top, x0 - 5 - pcOff, bot - top);
           g.clip();
-          for (let d = 0; d < cnt; d++) {
+          for (let d = 0; d < cnt + ex; d++) {
             const Q = dayProf(tpoDays[d]),
-              cx0 = 6 + pcOff + d * (colW + gap),
+              cx0 = 6 + pcOff + (d - ex + tf) * (colW + gap),
               rowH = (ch * Q.step) / (hi - lo),
               lw = Math.min(11, (colW - 2) / Q.maxC),
               P = Object.assign(
@@ -1881,7 +1886,7 @@
               need =
                 Math.min(
                   d0 - 3 * DAY,
-                  dayStart - (cnt + 1 + tpoBack) * DAY,
+                  dayStart - (cnt + 2 + tb) * DAY,
                 ) -
                 7200000;
             if (need < k15[0].t) older("15m");
@@ -1898,7 +1903,9 @@
           g.font = "10px ui-monospace,Menlo,monospace";
           g.textBaseline = "middle";
           profs.forEach((P) => {
-            if (!P.show) return;
+            /* legends only under whole profiles */
+            const cut = P.cx0 < pcOff + 4 || P.cx0 + colW > x0 - 4;
+            if (!P.show || cut) return;
             const gr = g.createLinearGradient(
               P.cx0,
               0,
@@ -1912,7 +1919,7 @@
             g.fillRect(P.cx0, bot + 6, colW, 5);
             g.fillStyle = "#6b7684";
             g.textAlign = "left";
-            if (P.d === cnt - 1)
+            if (P.d === tpoDays.length - 1)
               [
                 ["Asia", 0],
                 ["EU", 8],
@@ -2254,13 +2261,17 @@
             const room = cds.length - nFit,
               pb = Math.max(0, Math.min(pcBack, room));
             if (olderEnd["15m"]) pcBack = pb;
-            const cv2 = cds.slice(
-                Math.max(0, cds.length - nFit - pb),
-                cds.length - pb,
+            /* ib whole candles back, fr = the slide in between */
+            const ib = Math.floor(pb),
+              fr = pb - ib,
+              cv2 = cds.slice(
+                Math.max(0, cds.length - nFit - ib - 1),
+                cds.length - ib,
               ),
               YP = Y;
             cv2.forEach((c, i) => {
-              const xm = pa + sl * (i + 0.5),
+              const j = nFit - (cv2.length - i) + 0.5 + fr,
+                xm = pa + sl * j,
                 col = c.up ? "#089981" : "#000000";
               pcGeo.push({ xa: xm - sl / 2, xb: xm + sl / 2, c });
               g.strokeStyle = g.fillStyle = col;
@@ -2948,15 +2959,13 @@
           if (pan && view) {
             const dx = t.clientX - pan.x;
             /* dragging right shows older, as on the chart */
+            /* fractional, so the windows slide smoothly */
             if (pan.w === "pc")
-              pcBack = Math.max(
-                0,
-                pan.b0 + Math.round(dx / view.pcSl),
-              );
+              pcBack = Math.max(0, pan.b0 + dx / view.pcSl);
             else if (pan.w === "tpo")
               tpoBack = Math.max(
                 0,
-                Math.min(60, pan.b0 + Math.round(dx / view.tpoSl)),
+                Math.min(60, pan.b0 + dx / view.tpoSl),
               );
             else off = pan.off + Math.round(dx / view.pc);
             const dy = t.clientY - pan.y;
