@@ -3769,7 +3769,7 @@
             const sg = Math.sign(e.deltaY),
               wx = e.clientX - cv.getBoundingClientRect().left;
             /* over DPoc: its candle count; over the profiles:
-               the number of days (1, 2, 3, 5) */
+               the number of days (1, 2, 3, 5, 7) */
             if (view && view.pcOff && wx < view.pcOff - 5) {
               const n0 = view.pcN;
               pcN = Math.max(3, Math.min(60, n0 + (sg > 0 ? 1 : -1)));
@@ -3777,9 +3777,9 @@
               return;
             }
             if (view && cfg.tpo && wx < view.x0 - 5) {
-              const ds = [1, 2, 3, 5],
+              const ds = [1, 2, 3, 5, 7],
                 j = ds.indexOf(nTpo) + (sg > 0 ? 1 : -1);
-              nTpo = ds[Math.max(0, Math.min(3, j))];
+              nTpo = ds[Math.max(0, Math.min(4, j))];
               if (cfg.main) ui();
               draw();
               return;
@@ -3907,7 +3907,7 @@
                 TF = st.TF;
                 $("sym").textContent = SYM + " " + TF;
               }
-              if ([1, 2, 3, 5].includes(st.nTpo)) nTpo = st.nTpo;
+              if ([1, 2, 3, 5, 7].includes(st.nTpo)) nTpo = st.nTpo;
               ui();
             }
             draw();
@@ -3954,6 +3954,7 @@
               [2, "2d"],
               [3, "3d"],
               [5, "5d"],
+              [7, "7d"],
             ],
             () => nTpo,
             (v) => (nTpo = v),
