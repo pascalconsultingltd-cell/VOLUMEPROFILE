@@ -356,7 +356,7 @@
             </button>
             <button
               id="pocTog"
-              class="a"
+              class=""
               title="POC bands and tags on / off"
             >
               POC
@@ -563,7 +563,7 @@
         schedule();
       }
       /* POC bands and tags on the chart (POC button) */
-      let showPOC = true;
+      let showPOC = false;
       function setShowPOC(v) {
         showPOC = !!v;
         $("pocTog").className = showPOC ? "a" : "";
@@ -3774,7 +3774,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 7;
+      const DEFAULTS_VER = 8;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -3854,7 +3854,9 @@
           setHlLad(st.hlLad);
         if (cur4 && typeof st.showGrid === "boolean")
           setShowGrid(st.showGrid);
-        if (typeof st.showPOC === "boolean") setShowPOC(st.showPOC);
+        /* POC: default changed in version 8 */
+        if (st.dv >= 8 && typeof st.showPOC === "boolean")
+          setShowPOC(st.showPOC);
         /* DPoc: default changed in version 7 */
         if (st.dv >= 7 && typeof st.pocC === "boolean")
           setPocC(st.pocC);
