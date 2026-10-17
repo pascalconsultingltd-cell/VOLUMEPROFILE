@@ -1390,6 +1390,7 @@
           arrLen = 0,
           moveInfo = null,
           tpoFrac = null,
+          pcN = null,
           divDrag = false,
           lbT = null,
           fit = null,
@@ -2185,6 +2186,7 @@
            */
           /* pcGeo: DPoc candles and their x, for the magnet */
           const pcGeo = [];
+          let pcShow = 0;
           if (pcW) {
             const pa = 4,
               pv = (dS) => {
@@ -2229,8 +2231,10 @@
             cds.sort((m, n) => m.t - n.t);
             /* one candle per profile-column width, as many as
                fit; fetch older 15m days until they are there */
-            const sl = colW + gap,
-              nFit = Math.max(1, Math.floor(pcW / sl));
+            const nFit =
+                pcN || Math.max(3, Math.floor(pcW / (colW + gap))),
+              sl = pcW / nFit;
+            pcShow = nFit;
             if (cds.length < nFit && !olderEnd["15m"]) older("15m");
             g.save();
             g.beginPath();
@@ -2251,9 +2255,9 @@
               const yo = YP(c.o),
                 yc = YP(c.c);
               g.fillRect(
-                xm - colW * 0.35,
+                xm - sl * 0.35,
                 Math.min(yo, yc),
-                colW * 0.7,
+                sl * 0.7,
                 Math.max(1, Math.abs(yo - yc)),
               );
             });
@@ -2407,6 +2411,7 @@
             x0,
             pcOff,
             pcGeo,
+            pcN: pcShow,
             Y,
             pc: cw / slots,
           };
@@ -2901,7 +2906,12 @@
           }
           if (divDrag && view) {
             /* with DPoc on, the panel is as wide as the profiles */
-            const xd = view.pcOff ? (x - 15) / 2 : x - 5;
+            const xd =
+              divDrag === "pc"
+                ? x - 5
+                : view.pcOff
+                  ? (x - 15) / 2
+                  : x - 5;
             tpoFrac = Math.max(80, Math.min(W * 0.75, xd)) / W;
             draw();
             return;
@@ -3033,7 +3043,11 @@
             y > view.bot
           )
             return false;
-          return Math.abs(x - (view.x0 - 5)) <= 5;
+          /* "pc" = DPoc / profiles edge, "tpo" = profiles /
+             chart; both resize the two windows together */
+          if (view.pcOff && Math.abs(x - (view.pcOff - 5)) <= 5)
+            return "pc";
+          return Math.abs(x - (view.x0 - 5)) <= 5 ? "tpo" : false;
         }
         /* candle under x, clamped to the first/last one */
         function at(x) {
@@ -3419,7 +3433,24 @@
              */
 
             const sg = Math.sign(e.deltaY),
-              mx = Math.max(
+              wx = e.clientX - cv.getBoundingClientRect().left;
+            /* over DPoc: its candle count; over the profiles:
+               the number of days (1, 2, 3, 5) */
+            if (view && view.pcOff && wx < view.pcOff - 5) {
+              const n0 = view.pcN;
+              pcN = Math.max(3, Math.min(60, n0 + (sg > 0 ? 1 : -1)));
+              draw();
+              return;
+            }
+            if (view && cfg.tpo && wx < view.x0 - 5) {
+              const ds = [1, 2, 3, 5],
+                j = ds.indexOf(nTpo) + (sg > 0 ? 1 : -1);
+              nTpo = ds[Math.max(0, Math.min(3, j))];
+              if (cfg.main) ui();
+              draw();
+              return;
+            }
+            const mx = Math.max(
                 20,
                 Math.min(arrLen || src().length, 3000),
               ),
