@@ -2161,20 +2161,29 @@
           });
 
           /*
-           * POC candles (PC button), one per pair of profile
-           * days whose POCs share a colour (red = below the
-           * day before's, green = not). Red: drawn only when
-           * the second red POC is lower than the first, open
-           * at the first, close at the second; green the
-           * same, higher. High / low = the days a to b.
+           * POC candles (PC button), over every loaded day.
+           * Each day's POC is red (below the day before's) or
+           * green. A red POC lower than the previous red POC
+           * makes a black candle, a green POC higher than the
+           * previous green one a green candle: open at the
+           * earlier POC, close at the later, high / low over
+           * the days between.
            */
           if (pcW) {
             const pa = 4,
               pv = (dS) => {
                 const P = dayProf(dS);
-                return P.poc == null ? null : (P.poc + 0.5) * P.step;
+                if (P.poc == null || !P.full) return null;
+                return (P.poc + 0.5) * P.step;
               },
-              info = tpoDays
+              days = [];
+            for (
+              let d = dayOf(k15.length ? k15[0].t : dayStart);
+              d <= dayStart;
+              d = nextDay(d)
+            )
+              days.push(d);
+            const info = days
                 .map((dS) => {
                   const p = pv(dS),
                     q = pv(prevDay(dS)),
@@ -2209,7 +2218,7 @@
             const sl = pcW / Math.max(3, cds.length);
             cds.forEach((c, i) => {
               const xm = pa + sl * (i + 0.5),
-                col = c.up ? "#089981" : "#e5484d";
+                col = c.up ? "#089981" : "#000000";
               g.strokeStyle = g.fillStyle = col;
               g.beginPath();
               g.moveTo(xm, Y(c.h));
@@ -2232,7 +2241,8 @@
             g.textAlign = "center";
             const pm = pa + pcW / 2;
             g.fillText("POC candles", pm, bot + 10);
-            if (!cds.length) g.fillText("no pair yet", pm, (top + bot) / 2);
+            if (!cds.length)
+              g.fillText("no pair yet", pm, (top + bot) / 2);
           }
 
           /* candles */
