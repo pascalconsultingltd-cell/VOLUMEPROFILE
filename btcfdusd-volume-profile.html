@@ -499,6 +499,154 @@
         );
         return "rgba(" + rgb.join(",") + "," + a + ")";
       }
+      /*
+       * sub POCs, same rules as simplified/POC/poc.py: the
+       * brick shrinks 5% a pass from `start` down to the
+       * chart's brick `fine`. A peak counts once it stands
+       * a quarter of its own count above its valley. A POC
+       * is born only while the brick is `vol` or more and
+       * range/10 (or 1.5 bricks) away from the others;
+       * smaller bricks only refine it, within `vol` of
+       * where detection left it. Up to 3 per day.
+       */
+      function peaks(c) {
+        /* [row, count, prominence]; flat tops merged */
+        const R = [],
+          out = [];
+        c.forEach((v, r) => {
+          const z = R[R.length - 1];
+          if (z && z[0] === v) z[2] = r;
+          else R.push([v, r, r]);
+        });
+        R.forEach(([v, a, b], k) => {
+          const up = (j) => j >= 0 && j < R.length && R[j][0] > v;
+          if (up(k - 1) || up(k + 1)) return;
+          /* lowest point before something higher, each side */
+          const sd = [];
+          for (const d of [-1, 1]) {
+            let m = null;
+            for (
+              let j = k + d;
+              j >= 0 && j < R.length && R[j][0] <= v;
+              j += d
+            )
+              m = Math.min(R[j][0], m == null ? v : m);
+            if (m != null) sd.push(m);
+          }
+          out.push([
+            (a + b) / 2,
+            v,
+            sd.length ? v - Math.max(...sd) : v,
+          ]);
+        });
+        return out;
+      }
+      const subCache = new Map();
+      function subPocs(dS, ps, start, vol, fine) {
+        if (!ps.length) return [];
+        const z = ps[ps.length - 1],
+          key = [dS, ps.length, z.h, z.l, start, vol, fine];
+        if (subCache.has(key.join())) return subCache.get(key.join());
+        let lo = Infinity,
+          hi = -Infinity;
+        ps.forEach((q) => {
+          lo = Math.min(lo, q.l);
+          hi = Math.max(hi, q.h);
+        });
+        const rg = hi - lo,
+          pocs = [];
+        for (let s = start; s >= fine; s *= 0.95) {
+          /* TPO count per row, rows anchored on the day low */
+          const c = [];
+          ps.forEach((q) => {
+            const a = Math.floor((q.l - lo) / s),
+              b = Math.floor((q.h - lo) / s);
+            for (let r = a; r <= b; r++) c[r] = (c[r] || 0) + 1;
+          });
+          for (let r = 0; r < c.length; r++) c[r] = c[r] || 0;
+          const pk = peaks(c),
+            top = Math.max(...pk.map((p) => p[1])),
+            free = pk
+              .filter(([, v, p]) => v === top || p >= 0.25 * v)
+              .map(([r, v]) => [Math.min(hi, lo + (r + 0.5) * s), v])
+              .sort((x, y) => y[1] - x[1]),
+            gap = Math.max(rg / 10, 1.5 * s),
+            moved = new Set(),
+            pr = [];
+          pocs.forEach((P, i) =>
+            free.forEach((q) =>
+              pr.push([Math.abs(q[0] - P.px), i, q]),
+            ),
+          );
+          /* closest pairs first */
+          pr.sort(
+            (x, y) =>
+              x[0] - y[0] ||
+              x[1] - y[1] ||
+              x[2][0] - y[2][0] ||
+              x[2][1] - y[2][1],
+          );
+          pr.forEach(([d, i, q]) => {
+            const P = pocs[i];
+            if (d >= gap || moved.has(i) || !free.includes(q)) return;
+            if (s < vol && Math.abs(q[0] - P.at) >= vol) return;
+            moved.add(i);
+            free.splice(free.indexOf(q), 1);
+            P.px = q[0];
+          });
+          free.forEach((q) => {
+            if (s < vol || pocs.length > 2) return;
+            if (pocs.every((P) => Math.abs(q[0] - P.px) >= gap))
+              pocs.push({ born: s, px: q[0] });
+          });
+          if (s >= vol) pocs.forEach((P) => (P.at = P.px));
+        }
+        if (subCache.size > 300) subCache.clear();
+        subCache.set(key.join(), pocs);
+        return pocs;
+      }
+      /*
+       * swing zigzag over POC points in time order: a point
+       * below the last low is a new low, and the highest
+       * point between the previous low and it becomes the
+       * top (none in between: the leg just extends down);
+       * new highs likewise. Returns the pivots; what comes
+       * after the last one is still open.
+       */
+      function swings(zz) {
+        if (!zz.length) return [];
+        const piv = [{ q: zz[0], i: 0, up: null }];
+        let pl = piv[0],
+          ph = piv[0];
+        zz.forEach((q, i) => {
+          const down = q.p < pl.q.p;
+          if (!down && !(q.p > ph.q.p)) return;
+          const last = piv[piv.length - 1],
+            ref = down ? pl : ph;
+          /* first leg: the first point is the other end */
+          if (last.up === null) last.up = down;
+          if (last.up === !down) {
+            /* same side as the last pivot: the extreme in
+               between becomes a pivot, or the leg extends */
+            let mid = null;
+            for (let k = ref.i + 1; k < i; k++) {
+              const z = zz[k];
+              if (mid && (down ? z.p <= mid.q.p : z.p >= mid.q.p))
+                continue;
+              mid = { q: z, i: k };
+            }
+            if (mid) {
+              piv.push({ ...mid, up: down });
+              if (down) ph = piv[piv.length - 1];
+              else pl = piv[piv.length - 1];
+            } else piv.pop();
+          }
+          piv.push({ q, i, up: !down });
+          if (down) pl = piv[piv.length - 1];
+          else ph = piv[piv.length - 1];
+        });
+        return piv;
+      }
       function kl(h, q) {
         return h + "/api/v3/klines?symbol=" + SYM + "&" + q;
       } /* klines URL */
@@ -1811,6 +1959,7 @@
               a: null,
               b: null,
               dev,
+              ps,
               full: k15.length > 0 && k15[0].t <= dS,
             };
             profCache.set(dS, P);
@@ -1883,10 +2032,22 @@
             tpoDays = [dayStart - tb * DAY];
           while (tpoDays.length < cnt + ex)
             tpoDays.unshift(prevDay(tpoDays[0]));
+          /* sub POCs start from a third of the widest day
+             shown; born no lower than the vol step */
+          const zp = [],
+            subStart =
+            Math.max(
+              0,
+              ...tpoDays.map((s) =>
+                dayR.has(s) ? dayR.get(s).h - dayR.get(s).l : 0,
+              ),
+            ) / 3;
           g.save();
           g.beginPath();
           g.rect(pcOff, top, x0 - 5 - pcOff, bot - top);
           g.clip();
+          g.font = "10px ui-monospace,Menlo,monospace";
+          g.textBaseline = "middle";
           for (let d = 0; d < cnt + ex; d++) {
             const Q = dayProf(tpoDays[d]),
               cx0 = 6 + pcOff + (d - ex + tf) * (colW + gap),
@@ -1924,6 +2085,71 @@
                 );
               });
             });
+            /* sub POCs: P1 solid, P2 dashed, P3 dotted, each
+               tagged with its price and its birth brick */
+            const vf = volAmt > 0 ? volAmt : P.step * 10;
+            const sp = subPocs(P.dS, P.ps, subStart, vf, P.step);
+            sp.forEach(
+              (S, k) => {
+                const y = Y(S.px),
+                  c = ["#003366", "#1f6fb8", "#3d4550"][k],
+                  tx = "P" + (k + 1) + " " + S.px.toFixed(DP) +
+                    " ·" + S.born.toFixed(0);
+                g.strokeStyle = c;
+                g.lineWidth = 3;
+                g.setLineDash([[], [8, 4], [3, 3]][k]);
+                g.beginPath();
+                g.moveTo(cx0 - 2, y);
+                g.lineTo(cx0 + colW, y);
+                g.stroke();
+                g.setLineDash([]);
+                /* white halo so the tag reads over bricks */
+                g.font = "bold 11px ui-monospace,Menlo,monospace";
+                g.textAlign = "left";
+                g.strokeStyle = "#fff";
+                g.lineWidth = 3;
+                g.strokeText(tx, cx0, y - 9);
+                g.fillStyle = c;
+                g.fillText(tx, cx0, y - 9);
+              },
+            );
+            /* zigzag points: the day's POCs in order of their
+               earliest brick, x = where their row ends */
+            zp.push(
+              ...sp
+                .map((S) => {
+                  const row =
+                    P.rows.get(Math.floor(S.px / P.step)) || [];
+                  return {
+                    x: cx0 + (Math.max(1, row.length) - 0.5) * lw,
+                    y: Y(S.px),
+                    p: S.px,
+                    f: row.length ? Math.min(...row) : 99,
+                  };
+                })
+                .sort((a, b) => a.f - b.f),
+            );
+          }
+          /* swing zigzag over the days' POCs; dashed = open */
+          const zs = swings(zp);
+          g.strokeStyle = "rgba(230,159,0,.9)";
+          g.lineWidth = 3.5;
+          g.lineJoin = "round";
+          g.beginPath();
+          zs.forEach(({ q }, i) =>
+            i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y),
+          );
+          g.stroke();
+          if (zs.length && zp.length - 1 > zs[zs.length - 1].i) {
+            const a = zs[zs.length - 1].q,
+              z = zp[zp.length - 1];
+            g.setLineDash([6, 5]);
+            g.lineWidth = 2;
+            g.beginPath();
+            g.moveTo(a.x, a.y);
+            g.lineTo(z.x, z.y);
+            g.stroke();
+            g.setLineDash([]);
           }
           g.restore();
           /*
