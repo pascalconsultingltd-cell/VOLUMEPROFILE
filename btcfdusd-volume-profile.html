@@ -2218,14 +2218,9 @@
             g.beginPath();
             g.rect(pa, top, pcW, bot - top);
             g.clip();
-            /* its own price scale, fitted to its candles */
+            /* same price scale as the chart; the latest 20 */
             const cv2 = cds.slice(-20),
-              ph = Math.max(...cv2.map((c) => c.h)),
-              pl = Math.min(...cv2.map((c) => c.l)),
-              pp = (ph - pl) * 0.04 || 1,
-              YP = (p) =>
-                top + 12 + ((ph + pp - p) / (ph - pl + 2 * pp)) *
-                  (bot - top - 24),
+              YP = Y,
               sl = pcW / Math.max(3, cv2.length);
             cv2.forEach((c, i) => {
               const xm = pa + sl * (i + 0.5),
@@ -2254,11 +2249,7 @@
             g.fillText("POC candles", pm, bot + 10);
             if (!cds.length)
               g.fillText("no pair yet", pm, (top + bot) / 2);
-            else {
-              /* the scale's top and bottom prices */
-              g.fillText(ph.toFixed(DP), pm, top + 8);
-              g.fillText(pl.toFixed(DP), pm, bot - 6);
-            }
+
           }
 
           /* candles */
