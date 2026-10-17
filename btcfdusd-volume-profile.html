@@ -1393,6 +1393,8 @@
           pcN = null,
           /* pcBack / tpoBack: candles / days dragged back */
           pcBack = 0,
+          /* subX: the chart's slide between two candles, 0-1 */
+          subX = 0,
           tpoBack = 0,
           divDrag = false,
           lbT = null,
@@ -1482,6 +1484,7 @@
             -(N - 3),
             Math.min(off, Math.max(0, arr.length - N)),
           );
+          if (off >= arr.length - N) subX = 0;
           /* view reaches the oldest loaded candle: load more */
           if (
             cfg.main &&
@@ -1670,6 +1673,9 @@
            * per day and need each candle's x position
            */
           geo = [];
+          /* exG: the older candle sliding in on the left; only
+             drawn, the levels and tools ignore it */
+          let exG = null;
           {
             let x = x0;
             vis.forEach((c) => {
@@ -1677,6 +1683,14 @@
               geo.push({ x, w, c });
               x += w;
             });
+            const i0 = Math.max(0, arr.length - off - N) - 1,
+              ec = subX > 0 && i0 >= 0 ? arr[i0] : null;
+            if (ec && okC(ec)) {
+              const w = wOf(ec),
+                sh = subX * w;
+              geo.forEach((o) => (o.x += sh));
+              exG = { x: x0 - w + sh, w, c: ec };
+            }
           }
           /*
            * one day's TPO profile: rows of 30-minute
@@ -2303,12 +2317,12 @@
 
           /* candles */
 
-          geo.forEach(({ x, w, c }) => {
+          (exG ? [exG].concat(geo) : geo).forEach(({ x, w, c }) => {
             const col = c.c >= c.o ? "#089981" : "#000000",
               xm = x + w / 2;
             g.save();
             g.beginPath();
-            g.rect(x0, top, cw, bot - top);
+            g.rect(x0, top, px0 - x0, bot - top);
             g.clip();
             g.strokeStyle = col;
             g.fillStyle = col;
@@ -2967,7 +2981,11 @@
                 0,
                 Math.min(60, pan.b0 + dx / view.tpoSl),
               );
-            else off = pan.off + Math.round(dx / view.pc);
+            else {
+              const tot = pan.off + dx / view.pc;
+              off = Math.floor(tot);
+              subX = tot - off;
+            }
             const dy = t.clientY - pan.y;
             if (Math.abs(dy) > 4) pan.vy = true;
             if (pan.vy) ypan = pan.yp + (dy / view.ch) * pan.rng;
@@ -3094,10 +3112,10 @@
             (x < geo[0].x ? geo[0] : geo[geo.length - 1])
           );
         }
-        /* where a box or dot starts: its candle, or the left
-           edge when it was drawn over DPoc / the profiles */
+        /* where a box or dot starts: its candle, or the x it
+           was drawn at over DPoc / the profiles */
         function xsOf(l) {
-          if (l.l) return 4;
+          if (l.l) return l.l;
           const o = geoAt(l.t);
           return o ? o.x + o.w / 2 : view ? view.x0 : 0;
         }
@@ -3134,7 +3152,7 @@
                 p = v;
               }
             });
-            return { p, o, left: 1 };
+            return { p, o, left: Math.max(4, x) };
           }
           let best = null,
             bd = 14;
@@ -3367,7 +3385,7 @@
                 b0: w === "pc" ? pcBack : tpoBack,
                 x: e.clientX,
                 y: e.clientY,
-                off,
+                off: off + subX,
                 yp: ypan,
                 rng: view.hi - view.lo,
                 vy: false,
@@ -3584,6 +3602,7 @@
             tpoFrac = null;
             pcN = null;
             pcBack = 0;
+            subX = 0;
             tpoBack = 0;
             draft = null;
             boxTool = 0;
