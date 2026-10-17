@@ -341,7 +341,7 @@
             </button>
             <button
               id="pcTog"
-              class=""
+              class="a"
               title="POC candles, left of the chart"
             >
               PC
@@ -535,7 +535,7 @@
         schedule();
       }
       /* POC candles panel (PC button) */
-      let pocC = false;
+      let pocC = true;
       function setPocC(v) {
         pocC = !!v;
         $("pcTog").className = pocC ? "a" : "";
@@ -1376,6 +1376,7 @@
           arrLen = 0,
           moveInfo = null,
           tpoFrac = null,
+          pcPx = null,
           divDrag = false,
           lbT = null,
           fit = null,
@@ -1494,7 +1495,7 @@
             px0 = W - axW;
           /* pcW = POC candles panel, at the far left; pcOff
              shifts the profiles right of it */
-          const pcW = cfg.main && cfg.tpo && pocC ? 90 : 0,
+          const pcW = cfg.main && cfg.tpo && pocC ? pcPx || 90 : 0,
             pcOff = pcW ? pcW + 10 : 0,
             x0 = tpoW + 10 + pcOff,
             x1 =
@@ -2211,21 +2212,31 @@
               }
             });
             cds.sort((m, n) => m.t - n.t);
+            /* at least 10 candles: fetch older 15m days */
+            if (cds.length < 10 && !olderEnd["15m"]) older("15m");
             g.save();
             g.beginPath();
             g.rect(pa, top, pcW, bot - top);
             g.clip();
-            const sl = pcW / Math.max(3, cds.length);
-            cds.forEach((c, i) => {
+            /* its own price scale, fitted to its candles */
+            const cv2 = cds.slice(-20),
+              ph = Math.max(...cv2.map((c) => c.h)),
+              pl = Math.min(...cv2.map((c) => c.l)),
+              pp = (ph - pl) * 0.04 || 1,
+              YP = (p) =>
+                top + 12 + ((ph + pp - p) / (ph - pl + 2 * pp)) *
+                  (bot - top - 24),
+              sl = pcW / Math.max(3, cv2.length);
+            cv2.forEach((c, i) => {
               const xm = pa + sl * (i + 0.5),
                 col = c.up ? "#089981" : "#000000";
               g.strokeStyle = g.fillStyle = col;
               g.beginPath();
-              g.moveTo(xm, Y(c.h));
-              g.lineTo(xm, Y(c.l));
+              g.moveTo(xm, YP(c.h));
+              g.lineTo(xm, YP(c.l));
               g.stroke();
-              const yo = Y(c.o),
-                yc = Y(c.c);
+              const yo = YP(c.o),
+                yc = YP(c.c);
               g.fillRect(
                 xm - sl * 0.3,
                 Math.min(yo, yc),
@@ -2243,6 +2254,11 @@
             g.fillText("POC candles", pm, bot + 10);
             if (!cds.length)
               g.fillText("no pair yet", pm, (top + bot) / 2);
+            else {
+              /* the scale's top and bottom prices */
+              g.fillText(ph.toFixed(DP), pm, top + 8);
+              g.fillText(pl.toFixed(DP), pm, bot - 6);
+            }
           }
 
           /* candles */
@@ -2872,8 +2888,11 @@
             return;
           }
           if (divDrag && view) {
+            /* "pc": the POC candles edge, else the profiles' */
             const xd = x - 5 - (view.pcOff || 0);
-            tpoFrac = Math.max(80, Math.min(W * 0.75, xd)) / W;
+            if (divDrag === "pc")
+              pcPx = Math.max(50, Math.min(W * 0.4, x - 5));
+            else tpoFrac = Math.max(80, Math.min(W * 0.75, xd)) / W;
             draw();
             return;
           }
@@ -2993,16 +3012,20 @@
           }
         });
 
+        /* which divider is under x, y: "pc", "tpo" or false */
         function isDiv(x, y) {
-          return !!(
-            cfg.tpo &&
-            view &&
-            !boxTool &&
-            !dotTool &&
-            Math.abs(x - (view.x0 - 5)) <= 5 &&
-            y >= view.top &&
-            y <= view.bot
-          );
+          if (
+            !cfg.tpo ||
+            !view ||
+            boxTool ||
+            dotTool ||
+            y < view.top ||
+            y > view.bot
+          )
+            return false;
+          if (view.pcOff && Math.abs(x - (view.pcOff - 5)) <= 5)
+            return "pc";
+          return Math.abs(x - (view.x0 - 5)) <= 5 ? "tpo" : false;
         }
         /* candle under x, clamped to the first/last one */
         function at(x) {
@@ -3207,10 +3230,12 @@
           }
           {
             const rc0 = cv.getBoundingClientRect();
-            if (
-              isDiv(e.clientX - rc0.left, e.clientY - rc0.top)
-            ) {
-              divDrag = true;
+            const dv = isDiv(
+              e.clientX - rc0.left,
+              e.clientY - rc0.top,
+            );
+            if (dv) {
+              divDrag = dv;
               e.preventDefault();
               return;
             }
@@ -3286,7 +3311,8 @@
             cv.style.cursor = "crosshair";
             draw();
           } else if (mouse && isDiv(mouse.x, mouse.y)) {
-            tpoFrac = null;
+            if (isDiv(mouse.x, mouse.y) === "pc") pcPx = null;
+            else tpoFrac = null;
             draw();
           } else if (view && mouse && mouse.x > view.px0) {
             ysc = 1;
@@ -3595,7 +3621,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 6;
+      const DEFAULTS_VER = 7;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -3674,7 +3700,9 @@
           setHlLad(st.hlLad);
         if (cur4 && typeof st.showGrid === "boolean")
           setShowGrid(st.showGrid);
-        if (typeof st.pocC === "boolean") setPocC(st.pocC);
+        /* PC: default changed in version 7 */
+        if (st.dv >= 7 && typeof st.pocC === "boolean")
+          setPocC(st.pocC);
         if (cur5 && typeof st.showVA === "boolean")
           setShowVA(st.showVA);
         /* O / L: defaults changed in version 6 */
