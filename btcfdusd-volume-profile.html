@@ -350,6 +350,12 @@
                 title="POC candles from sub POCs, vs the previous POC"
               >
                 SPoc
+              </button
+              ><button
+                id="pfTog"
+                title="Aggression P&amp;F: new column on taker flip"
+              >
+                P&amp;F
               </button></span
             ></span
         ></span>
@@ -382,13 +388,6 @@
                 title="POC bands and tags on / off"
               >
                 POC
-              </button>
-              <button
-                id="aggrTog"
-                class=""
-                title="Bricks by taker side: green buys, black sells"
-              >
-                Aggr
               </button></span
             ></span
           ></span
@@ -469,12 +468,7 @@
     <div id="toast"></div>
     <div id="mini">
       <div id="mhead">
-        <b id="mttl">15s</b><span id="mst"></span
-        ><button
-          id="pfTog"
-          title="Aggression P&amp;F: new column when takers flip side"
-        >
-          P&amp;F</button
+        <b>15s</b><span id="mst"></span
         ><button id="mx" title="Hide">×</button>
       </div>
       <div id="mbody"><canvas id="mc"></canvas></div>
@@ -749,27 +743,20 @@
         schedule();
       }
       /*
-       * Aggression per TPO brick (Aggr button): every trade
-       * of the profile days from Binance aggTrades, where m =
+       * Trades from Binance aggTrades for the P&F, where m =
        * the buyer was the maker, so the taker sold. Loaded
-       * only while Aggr is on (about 13 requests a day); today
-       * topped up every 30s. aggrT: day -> { tr: [time, price,
-       * qty, taker sold], last: last trade id, end, at }.
+       * only while the P&F shows (about 13 requests a day);
+       * today topped up every 5s. aggrT: day -> { tr: [time,
+       * price, qty, taker sold], last: last trade id, end,
+       * at }.
        */
-      let showAggr = false;
       const aggrT = new Map(),
-        aggrBusy = new Set(),
-        aggrC = new Map();
-      function setShowAggr(v) {
-        showAggr = !!v;
-        $("aggrTog").className = showAggr ? "a" : "";
-        schedule();
-      }
+        aggrBusy = new Set();
       async function loadAggr(dS) {
         const d0 = aggrT.get(dS);
         if (aggrBusy.has(dS) || (d0 && d0.end)) return;
         /* today: every 5s while the P&F shows, else 30s */
-        if (d0 && Date.now() - d0.at < (pfOn ? 5000 : 30000)) return;
+        if (d0 && Date.now() - d0.at < 5000) return;
         aggrBusy.add(dS);
         const d = d0 || { tr: [], last: null, end: false, at: 0 },
           dE = nextDay(dS);
@@ -805,49 +792,15 @@
           schedule();
         }
       }
-      /* buy / sell qty per brick: key "period|row" */
-      function aggrCells(dS, step) {
-        const d = aggrT.get(dS);
-        if (!d) return null;
-        const key = dS + "|" + step + "|" + d.tr.length;
-        if (aggrC.has(key)) return aggrC.get(key);
-        const m = new Map();
-        d.tr.forEach(([tt, p, q, s]) => {
-          const i = Math.floor((tt - dS) / TPO_MS),
-            k = i + "|" + Math.floor(p / step),
-            c = m.get(k) || [0, 0];
-          c[s ? 1 : 0] += q;
-          m.set(k, c);
-        });
-        if (aggrC.size > 60) aggrC.clear();
-        aggrC.set(key, m);
-        return m;
-      }
-      /* green = takers bought more, black = sold more; the
-         stronger the imbalance, the darker; grey = no trade */
-      function aggrColor(c) {
-        if (!c) return "rgba(160,166,175,.35)";
-        const r = (c[0] - c[1]) / (c[0] + c[1] || 1),
-          a = (0.25 + 0.7 * Math.abs(r)).toFixed(2);
-        return r >= 0
-          ? "rgba(8,153,129," + a + ")"
-          : "rgba(0,0,0," + a + ")";
-      }
       /*
-       * Aggression point & figure (P&F button, 15s window).
+       * Aggression point & figure (P&F button, in the DPoc
+       * panel).
        * Trades in time order are grouped into visits to a
        * brick; a visit's side is whoever traded more there as
        * taker. A visit on the other side from the current
        * column starts a new column: green = buyers pushing,
        * black = sellers. A column spans the bricks it visited.
        */
-      let pfOn = false;
-      function setPfOn(v) {
-        pfOn = !!v;
-        $("pfTog").className = pfOn ? "a" : "";
-        $("mttl").textContent = pfOn ? "Aggr P&F" : "15s";
-        schedule();
-      }
       function pfCols(days, st) {
         const cols = [];
         let cur = null,
@@ -912,6 +865,16 @@
       function setPcSub(v) {
         pcSub = !!v;
         $("spTog").className = pcSub ? "a" : "";
+        if (pcSub && pcPf) setPcPf(false);
+        schedule();
+      }
+      /* the DPoc panel as aggression P&F (P&F button) */
+      let pcPf = false;
+      function setPcPf(v) {
+        pcPf = !!v;
+        $("pfTog").className = pcPf ? "a" : "";
+        if (pcPf && pcSub) setPcSub(false);
+        if (pcPf && !pocC) setPocC(true);
         schedule();
       }
       /* vertical 6-hour lines (6h button); the midnight
@@ -1751,9 +1714,8 @@
           tpoFrac = null,
           /* DPoc candles shown: 7 at start, wheel 3-60 */
           pcN = 7,
-          /* P&F: column width (wheel) and columns dragged back */
-          pfCw = 9,
-          pfBack = 0,
+          /* DPoc panel P&F: columns shown (wheel) */
+          pfN = 40,
           /* pcPx: DPoc width once dragged (null = as the
              profiles); full: window shown full width */
           pcPx = null,
@@ -1829,130 +1791,8 @@
             }
           }
         }
-        /* the 15s window as aggression P&F: yesterday and
-           today, latest columns that fit, box = the brick */
-        function drawPF() {
-          const DY = 86400000,
-            d1 = dayOf(Date.now()),
-            ref = k15.length ? k15[k15.length - 1].c : 0,
-            va = volPct ? (ref * volN) / 100 : volN,
-            st = va > 0 ? Math.max(1, Math.ceil(va / 10)) : 25;
-          loadAggr(d1 - DY);
-          loadAggr(d1);
-          const cols = pfCols([d1 - DY, d1], st),
-            axW = 54,
-            top = 6,
-            bot = H - 16,
-            cw = pfCw,
-            n = Math.max(1, Math.floor((W - axW - 4) / cw)),
-            pb = Math.max(
-              0,
-              Math.min(Math.round(pfBack), cols.length - 1),
-            ),
-            sh = cols.slice(
-              Math.max(0, cols.length - n - pb),
-              cols.length - pb,
-            );
-          g.font = "10px ui-monospace,Menlo,monospace";
-          g.textBaseline = "middle";
-          g.fillStyle = "#6b7684";
-          g.textAlign = "left";
-          if (!sh.length) {
-            g.fillText("loading trades…", 6, H / 2);
-            return;
-          }
-          /*
-           * box shade by its delta: green buys, black sells,
-           * darker the stronger (by percentile rank of |delta|
-           * over all boxes); the top 5% are red
-           */
-          const ad = [];
-          cols.forEach((c) =>
-            c.d.forEach((v) => ad.push(Math.abs(v))),
-          );
-          ad.sort((p, q) => p - q);
-          const p95 = ad[Math.floor(ad.length * 0.95)] || 1,
-            shade = (v) => {
-              const a = Math.abs(v);
-              if (a >= p95 && a > 0) return "#e5484d";
-              let j = 0,
-                m = ad.length;
-              while (j < m) {
-                const md = (j + m) >> 1;
-                if (ad[md] < a) j = md + 1;
-                else m = md;
-              }
-              const k = (0.15 + 0.85 * (j / ad.length)).toFixed(2);
-              return v >= 0
-                ? "rgba(8,153,129," + k + ")"
-                : "rgba(0,0,0," + k + ")";
-            };
-          /* v95: volume of the top 5% boxes, which get a dot */
-          const av = [];
-          cols.forEach((c) => c.v.forEach((v) => av.push(v)));
-          av.sort((p, q) => p - q);
-          const v95 = av[Math.floor(av.length * 0.95)] || Infinity;
-          const lo = Math.min(...sh.map((c) => c.lo)),
-            hi = Math.max(...sh.map((c) => c.hi)),
-            bh = Math.max(
-              1,
-              Math.min(cw, (bot - top) / (hi - lo + 1)),
-            ),
-            /* centred when the columns are shorter than the box */
-            mg = (bot - top - (hi - lo + 1) * bh) / 2,
-            yb = (r) => bot - mg - (r - lo + 1) * bh;
-          sh.forEach((c, i) => {
-            for (let r = c.lo; r <= c.hi; r++) {
-              g.fillStyle = shade(c.d.get(r) || 0);
-              g.fillRect(4 + i * cw + 1, yb(r) + 1, cw - 2, bh - 2);
-            }
-          });
-          /* big-volume dots, as on the charts: green where
-             buyers won the box, black where sellers did, ringed
-             white so they show on any shade */
-          sh.forEach((c, i) =>
-            c.v.forEach((v, r) => {
-              if (v < v95) return;
-              const rd = Math.max(2, Math.min(cw, bh) * 0.3),
-                buyW = (c.d.get(r) || 0) >= 0;
-              g.beginPath();
-              g.arc(4 + (i + 0.5) * cw, yb(r) + bh / 2, rd, 0, 7);
-              g.fillStyle = buyW ? "#4caf50" : "#000";
-              g.strokeStyle = "#fff";
-              g.lineWidth = 1.5;
-              g.fill();
-              g.stroke();
-              g.lineWidth = 1;
-            }),
-          );
-          /* last price: dashed line and tag */
-          const lp = mid != null ? mid : ref,
-            y = bot - mg - (lp / st - lo) * bh;
-          g.strokeStyle = "#000";
-          g.setLineDash([3, 3]);
-          g.beginPath();
-          g.moveTo(4, y);
-          g.lineTo(W - axW, y);
-          g.stroke();
-          g.setLineDash([]);
-          g.fillStyle = "#6b7684";
-          const ax = W - axW + 4;
-          g.fillText(((hi + 1) * st).toFixed(0), ax, yb(hi));
-          g.fillText((lo * st).toFixed(0), ax, yb(lo) + bh);
-          g.fillStyle = "#000";
-          g.fillRect(W - axW + 2, y - 7, axW - 4, 14);
-          g.fillStyle = "#fff";
-          g.fillText(lp.toFixed(0), W - axW + 4, y);
-          g.fillStyle = "#6b7684";
-          g.fillText(
-            cols.length + " columns, box " + st,
-            6,
-            H - 6,
-          );
-        }
         function drawInner() {
           g.clearRect(0, 0, W, H);
-          if (!cfg.main && pfOn) return drawPF();
           const arr = mode === "lb" ? lbBars(src()) : src();
           arrLen = arr.length;
           /*
@@ -2396,18 +2236,11 @@
                 rowH,
               );
             }
-            /* Aggr: colour each brick by its takers instead */
-            if (showAggr) loadAggr(tpoDays[d]);
-            const AC = showAggr
-              ? aggrCells(tpoDays[d], P.step)
-              : null;
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
               lst.forEach((idx, k) => {
-                g.fillStyle = AC
-                  ? aggrColor(AC.get(idx + "|" + r))
-                  : tpoColor(idx, 0.72);
+                g.fillStyle = tpoColor(idx, 0.72);
                 g.fillRect(
                   cx0 + k * lw,
                   yT + 0.5,
@@ -2844,6 +2677,74 @@
             g.stroke();
             g.restore();
           };
+          /*
+           * the P&F columns in the DPoc panel, on the chart's
+           * price scale. Box shade by its delta (taker buys -
+           * sells): green buys, black sells, darker by
+           * percentile rank of |delta| over all boxes; the top
+           * 5% are red. A column whose volume is in the top 5%
+           * gets a dot: green below a buyer column, black above
+           * a seller column, as on the candles.
+           */
+          const drawPfCols = (all, shown, jOf, pa, sl, st) => {
+            const ad = [],
+              cv = new Map();
+            all.forEach((c) => {
+              let s = 0;
+              c.v.forEach((v) => (s += v));
+              c.d.forEach((v) => ad.push(Math.abs(v)));
+              cv.set(c, s);
+            });
+            ad.sort((p, q) => p - q);
+            const sv = [...cv.values()].sort((p, q) => p - q),
+              v95 = sv[Math.floor(sv.length * 0.95)] || Infinity,
+              p95 = ad[Math.floor(ad.length * 0.95)] || 1,
+              shade = (v) => {
+                const a = Math.abs(v);
+                if (a >= p95 && a > 0) return "#e5484d";
+                let j = 0,
+                  m = ad.length;
+                while (j < m) {
+                  const md = (j + m) >> 1;
+                  if (ad[md] < a) j = md + 1;
+                  else m = md;
+                }
+                const k = (0.15 + 0.85 * (j / ad.length)).toFixed(2);
+                return v >= 0
+                  ? "rgba(8,153,129," + k + ")"
+                  : "rgba(0,0,0," + k + ")";
+              };
+            shown.forEach((c, i) => {
+              const xm = pa + sl * jOf(i),
+                x = xm - sl * 0.4,
+                w = Math.max(1, sl * 0.8);
+              for (let r = c.lo; r <= c.hi; r++) {
+                const yT = Y((r + 1) * st),
+                  yB = Y(r * st);
+                g.fillStyle = shade(c.d.get(r) || 0);
+                g.fillRect(x, yT + 0.5, w, Math.max(1, yB - yT - 1));
+              }
+              pcGeo.push({
+                xa: xm - sl / 2,
+                xb: xm + sl / 2,
+                c: {
+                  o: c.lo * st,
+                  h: (c.hi + 1) * st,
+                  l: c.lo * st,
+                  c: (c.hi + 1) * st,
+                },
+              });
+              if (cv.get(c) < v95) return;
+              const rd = Math.max(2.5, Math.min(5, sl * 0.3)),
+                y = c.up
+                  ? Y(c.lo * st) + rd + 3
+                  : Y((c.hi + 1) * st) - rd - 3;
+              g.beginPath();
+              g.arc(xm, y, rd, 0, 7);
+              g.fillStyle = c.up ? "#4caf50" : "#000";
+              g.fill();
+            });
+          };
           /* pcGeo: DPoc candles and their x, for the magnet */
           const pcGeo = [];
           let pcShow = 0,
@@ -2941,15 +2842,27 @@
               }
             });
             cds.sort((m, n) => m.t - n.t || m.k - n.k || 0);
+            /* P&F: columns from yesterday's and today's trades,
+               box = the brick */
+            const pst =
+                volAmt > 0 ? Math.max(1, Math.ceil(volAmt / 10)) : 25,
+              d1 = dayOf(Date.now());
+            if (pcPf) {
+              loadAggr(d1 - DAY);
+              loadAggr(d1);
+            }
+            const pfc = pcPf ? pfCols([d1 - DAY, d1], pst) : [];
             /* one candle per profile-column width, as many as
                fit; fetch older 15m days until they are there */
-            const nFit =
-                pcN || Math.max(3, Math.floor(pcW / (colW + gap))),
+            const nFit = pcPf
+                ? pfN
+                : pcN || Math.max(3, Math.floor(pcW / (colW + gap))),
               sl = pcW / nFit;
             pcShow = nFit;
             pcSl = sl;
             const need = nFit + pcBack;
-            if (cds.length < need && !olderEnd["15m"]) older("15m");
+            if (!pcPf && cds.length < need && !olderEnd["15m"])
+              older("15m");
             g.save();
             g.beginPath();
             g.rect(pa, top, pcW, bot - top);
@@ -2957,18 +2870,22 @@
             /* same price scale as the chart */
             /* pb = what is loaded so far; pcBack waits for more;
                negative = empty slots on the right */
-            const room = cds.length - nFit,
+            const items = pcPf ? pfc : cds,
+              room = items.length - nFit,
               pb = Math.max(1 - nFit, Math.min(pcBack, room));
             if (olderEnd["15m"]) pcBack = pb;
             /* ib whole candles back; the newest sits in slot
                nFit - 1 + pb */
             const ib = Math.floor(pb),
-              k0 = Math.max(0, cds.length - nFit - ib - 1),
-              k1 = Math.min(cds.length, cds.length - ib),
-              cv2 = cds.slice(k0, k1),
-              YP = Y;
+              k0 = Math.max(0, items.length - nFit - ib - 1),
+              k1 = Math.min(items.length, items.length - ib),
+              cv2 = items.slice(k0, k1),
+              YP = Y,
+              jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
+            if (pcPf) drawPfCols(pfc, cv2, jOf, pa, sl, pst);
+            else
             cv2.forEach((c, i) => {
-              const j = nFit - cds.length + k0 + i + pb + 0.5,
+              const j = jOf(i),
                 xm = pa + sl * j,
                 col = c.up ? "#089981" : "#000000";
               pcGeo.push({ xa: xm - sl / 2, xb: xm + sl / 2, c });
@@ -2997,12 +2914,20 @@
             g.textAlign = "center";
             const pm = pa + pcW / 2;
             g.fillText(
-              pcSub ? "sub POC candles" : "POC candles",
+              pcPf
+                ? "P&F, box " + pst
+                : pcSub
+                  ? "sub POC candles"
+                  : "POC candles",
               pm,
               bot + 10,
             );
-            if (!cds.length)
-              g.fillText("no pair yet", pm, (top + bot) / 2);
+            if (!items.length)
+              g.fillText(
+                pcPf ? "loading trades" : "no pair yet",
+                pm,
+                (top + bot) / 2,
+              );
 
           }
 
@@ -3672,13 +3597,6 @@
             draw();
             return;
           }
-          if (pan && pan.pf) {
-            /* P&F: drag right shows older columns */
-            const dx = t.clientX - pan.x;
-            pfBack = Math.max(0, pan.b0 + dx / pfCw);
-            draw();
-            return;
-          }
           if (pan && view) {
             const dx = t.clientX - pan.x;
             /* dragging right shows older, as on the chart */
@@ -4028,14 +3946,6 @@
            * and keep receiving moves outside the canvas
            */
           move(e);
-          if (!cfg.main && pfOn) {
-            pan = { pf: true, x: e.clientX, b0: pfBack };
-            try {
-              cv.setPointerCapture(e.pointerId);
-            } catch (err) {}
-            e.preventDefault();
-            return;
-          }
           if (view && view.icons) {
             const rc = cv.getBoundingClientRect(),
               ix = e.clientX - rc.left,
@@ -4238,13 +4148,6 @@
              * so N can exceed what exists)
              */
 
-            /* P&F in the 15s window: the wheel sets column width */
-            if (!cfg.main && pfOn) {
-              const f2 = e.deltaY > 0 ? 1 / 1.15 : 1.15;
-              pfCw = Math.max(3, Math.min(40, pfCw * f2));
-              draw();
-              return;
-            }
             const sg = Math.sign(e.deltaY),
               wx = e.clientX - cv.getBoundingClientRect().left;
             /* over DPoc: its candle count; over the profiles:
@@ -4252,8 +4155,15 @@
                profiles keep their width, so the chart does not
                shrink) */
             if (view && view.pcOff && wx < view.pcOff - 5) {
-              const n0 = view.pcN;
-              pcN = Math.max(3, Math.min(60, n0 + (sg > 0 ? 1 : -1)));
+              const n0 = view.pcN,
+                f2 = sg > 0 ? 1.15 : 1 / 1.15;
+              if (pcPf)
+                pfN = Math.max(5, Math.min(600, Math.round(n0 * f2)));
+              else
+                pcN = Math.max(
+                  3,
+                  Math.min(60, n0 + (sg > 0 ? 1 : -1)),
+                );
               draw();
               return;
             }
@@ -4349,8 +4259,7 @@
             lock = null;
             tpoFrac = null;
             pcN = 7;
-            pfCw = 9;
-            pfBack = 0;
+            pfN = 40;
             pcPx = null;
             full = null;
             pcBack = 0;
@@ -4537,8 +4446,7 @@
           showGrid,
           showVA,
           showPOC,
-          showAggr,
-          pfOn,
+          pcPf,
           pocC,
           pcSub,
           showOrders,
@@ -4589,9 +4497,7 @@
         if (cur4 && typeof st.showGrid === "boolean")
           setShowGrid(st.showGrid);
         /* POC: default changed in version 8 */
-        if (typeof st.pfOn === "boolean") setPfOn(st.pfOn);
-        if (typeof st.showAggr === "boolean")
-          setShowAggr(st.showAggr);
+        if (typeof st.pcPf === "boolean") setPcPf(st.pcPf);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         /* DPoc: default changed in version 7 */
@@ -4758,7 +4664,6 @@
       $("mx").onclick = () => {
         mini.style.display = "none";
       };
-      $("pfTog").onclick = () => setPfOn(!pfOn);
 
       /* Alt+R: default zoom and pan, floating window back to
          its corner. Alt+X: the same, plus drawings deleted. */
@@ -4807,8 +4712,8 @@
       $("vaTog").onclick = () => setShowVA(!showVA);
       $("pcTog").onclick = () => setPocC(!pocC);
       $("spTog").onclick = () => setPcSub(!pcSub);
+      $("pfTog").onclick = () => setPcPf(!pcPf);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
-      $("aggrTog").onclick = () => setShowAggr(!showAggr);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
