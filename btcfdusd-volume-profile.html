@@ -806,9 +806,11 @@
         const cols = [];
         let cur = null,
           b = null,
+          vt = 0,
           buy = 0,
           sell = 0;
-        /* d: delta (taker buys - sells) per brick of a column */
+        /* d: delta (taker buys - sells) per brick of a column;
+           t0: time of its first trade, for the crosshair */
         const fin = () => {
           if (b == null) return;
           const up = buy >= sell;
@@ -816,6 +818,7 @@
             cols.push(
               (cur = {
                 up,
+                t0: vt,
                 lo: b,
                 hi: b,
                 d: new Map(),
@@ -832,11 +835,12 @@
         days.forEach((dS) => {
           const d = aggrT.get(dS);
           if (!d) return;
-          d.tr.forEach(([, p, q, s]) => {
+          d.tr.forEach(([tt, p, q, s]) => {
             const bb = Math.floor(p / st);
             if (bb !== b) {
               fin();
               b = bb;
+              vt = tt;
               buy = sell = 0;
             }
             if (s) sell += q;
@@ -2734,6 +2738,7 @@
               const xm = pa + sl * jOf(i),
                 x = xm - sl * 0.4,
                 w = Math.max(1, sl * 0.8);
+              pfX.push([c.t0, xm]);
               for (let r = c.lo; r <= c.hi; r++) {
                 const yT = Y((r + 1) * st),
                   yB = Y(r * st);
@@ -2763,7 +2768,9 @@
             });
           };
           /* pcGeo: DPoc candles and their x, for the magnet */
-          const pcGeo = [];
+          const pcGeo = [],
+            /* pfX: shown P&F columns [start time, x] */
+            pfX = [];
           let pcShow = 0,
             pcSl = 0;
           if (pcW) {
@@ -3085,6 +3092,7 @@
             x0,
             pcOff,
             pcGeo,
+            pfX,
             icons,
             pcN: pcShow,
             pcSl,
@@ -3490,6 +3498,51 @@
             }
             if (lbl) ttag(cx, lbl, XB, XF);
           }
+          /*
+           * the P&F gets the crosshair's time too: a line on the
+           * last column started by then (end of the hovered 5m
+           * candle, or the 15s brick hovered in the other chart)
+           */
+          {
+            const o =
+                mouse && mouse.x >= x0 && hover >= 0 && geo[hover],
+              tx = o
+                ? o.c.t + (TF === "5m" ? 300000 : 15000) - 1
+                : xh && xh.from !== api && xh.t != null
+                  ? xh.t
+                  : null;
+            let px = null;
+            if (tx != null && pfX.length && tx >= pfX[0][0])
+              for (const [t0, xm] of pfX) if (t0 <= tx) px = xm;
+            if (px != null) {
+              g.save();
+              g.beginPath();
+              g.rect(4, top, pcW, bot - top);
+              g.clip();
+              g.strokeStyle = XH;
+              g.setLineDash([4, 4]);
+              g.beginPath();
+              g.moveTo(px, top);
+              g.lineTo(px, bot);
+              g.stroke();
+              g.restore();
+            }
+          }
+          /* hovering a P&F column: its time on this chart too */
+          if (pcW && mouse && mouse.x < pcOff - 5) {
+            const ro = geoAt(pfTime(mouse.x));
+            if (ro && pfTime(mouse.x) != null) {
+              const rx = ro.x + ro.w / 2;
+              g.strokeStyle = XH;
+              g.setLineDash([4, 4]);
+              g.beginPath();
+              g.moveTo(rx, top);
+              g.lineTo(rx, bot);
+              g.stroke();
+              g.setLineDash([]);
+              ttag(rx, dlabel(ro.c.t), XB, XF);
+            }
+          }
           /* crosshair mirrored from the other chart */
           if (
             xh &&
@@ -3713,7 +3766,7 @@
                   t:
                     hover >= 0 && geo[hover]
                       ? geo[hover].c.t
-                      : null,
+                      : pfTime(x),
                   from: api,
                 }
               : null;
@@ -3735,6 +3788,14 @@
           }
         });
 
+        /* start time of the P&F column under x, if any */
+        function pfTime(x) {
+          if (!view || !view.pfX || !view.pcSl) return null;
+          const q = view.pfX.find(
+            ([, xm]) => Math.abs(x - xm) <= view.pcSl / 2,
+          );
+          return q ? q[0] : null;
+        }
         /* the profiles / chart divider under x, y */
         function isDiv(x, y) {
           if (
