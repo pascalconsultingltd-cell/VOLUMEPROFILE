@@ -1740,6 +1740,9 @@
           tpoFrac = null,
           /* DPoc candles shown: 7 at start, wheel 3-60 */
           pcN = 7,
+          /* P&F: column width (wheel) and columns dragged back */
+          pfCw = 9,
+          pfBack = 0,
           /* pcPx: DPoc width once dragged (null = as the
              profiles); full: window shown full width */
           pcPx = null,
@@ -1829,9 +1832,16 @@
             axW = 54,
             top = 6,
             bot = H - 16,
-            cw = 9,
+            cw = pfCw,
             n = Math.max(1, Math.floor((W - axW - 4) / cw)),
-            sh = cols.slice(-n);
+            pb = Math.max(
+              0,
+              Math.min(Math.round(pfBack), cols.length - 1),
+            ),
+            sh = cols.slice(
+              Math.max(0, cols.length - n - pb),
+              cols.length - pb,
+            );
           g.font = "10px ui-monospace,Menlo,monospace";
           g.textBaseline = "middle";
           g.fillStyle = "#6b7684";
@@ -3601,6 +3611,13 @@
             draw();
             return;
           }
+          if (pan && pan.pf) {
+            /* P&F: drag right shows older columns */
+            const dx = t.clientX - pan.x;
+            pfBack = Math.max(0, pan.b0 + dx / pfCw);
+            draw();
+            return;
+          }
           if (pan && view) {
             const dx = t.clientX - pan.x;
             /* dragging right shows older, as on the chart */
@@ -3950,6 +3967,14 @@
            * and keep receiving moves outside the canvas
            */
           move(e);
+          if (!cfg.main && pfOn) {
+            pan = { pf: true, x: e.clientX, b0: pfBack };
+            try {
+              cv.setPointerCapture(e.pointerId);
+            } catch (err) {}
+            e.preventDefault();
+            return;
+          }
           if (view && view.icons) {
             const rc = cv.getBoundingClientRect(),
               ix = e.clientX - rc.left,
@@ -4152,6 +4177,13 @@
              * so N can exceed what exists)
              */
 
+            /* P&F in the 15s window: the wheel sets column width */
+            if (!cfg.main && pfOn) {
+              const f2 = e.deltaY > 0 ? 1 / 1.15 : 1.15;
+              pfCw = Math.max(3, Math.min(40, pfCw * f2));
+              draw();
+              return;
+            }
             const sg = Math.sign(e.deltaY),
               wx = e.clientX - cv.getBoundingClientRect().left;
             /* over DPoc: its candle count; over the profiles:
@@ -4256,6 +4288,8 @@
             lock = null;
             tpoFrac = null;
             pcN = 7;
+            pfCw = 9;
+            pfBack = 0;
             pcPx = null;
             full = null;
             pcBack = 0;
@@ -4525,11 +4559,11 @@
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
          * scale, floating window) always starts from its
-         * default, so only mode / timeframe / TPO days are
-         * taken from the saved chart state.
+         * default, so only timeframe and TPO days are taken
+         * from the saved chart state; the main chart always
+         * opens on volume candles (VC).
          */
-        const keep = (s) =>
-          s && { mode: s.mode, TF: s.TF, nTpo: s.nTpo };
+        const keep = (s) => s && { TF: s.TF, nTpo: s.nTpo };
         mainChart.setState(keep(st.main));
         miniChart.setState(keep(st.mini));
         schedule();
