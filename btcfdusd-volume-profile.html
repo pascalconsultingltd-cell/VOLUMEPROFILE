@@ -3319,6 +3319,52 @@
             g.restore();
             g.lineWidth = 1;
           }
+          /*
+           * the same orders in the P&F: a time maps to the last
+           * column started by then; older than the first shown
+           * column = its left edge, still open = the right edge
+           */
+          if (showOrders && orders.length && pcPf && pfX.length) {
+            const mq = Math.max(...orders.map((o) => o.qty)),
+              xR = 4 + pcW,
+              xAt = (tt) => {
+                let x = 4;
+                for (const [t0, xm] of pfX) if (t0 <= tt) x = xm;
+                return x;
+              };
+            g.save();
+            g.beginPath();
+            g.rect(4, top, pcW, bot - top);
+            g.clip();
+            orders.forEach((o) => {
+              const y = Y(o.price),
+                ended = o.t1 != null;
+              if (y < top || y > bot) return;
+              if (ended && o.t1 < pfX[0][0]) return;
+              let xs = xAt(o.t0),
+                xe = ended ? xAt(o.t1) : xR;
+              if (xe - xs < 6) {
+                xs -= 3;
+                xe = xs + 6;
+              }
+              const col = o.buy ? "#56b4e9" : "#e69f00";
+              g.strokeStyle = g.fillStyle = col;
+              g.lineWidth = Math.max(1.5, (10 * o.qty) / mq);
+              g.globalAlpha = ended ? 0.55 : 0.9;
+              g.beginPath();
+              g.moveTo(xs, y);
+              g.lineTo(xe, y);
+              if (showLines) g.stroke();
+              g.globalAlpha = 1;
+              if (ended && o.filled) {
+                g.beginPath();
+                g.arc(xe, y, 2 + 4 * Math.sqrt(o.qty / mq), 0, 7);
+                g.fill();
+              }
+            });
+            g.restore();
+            g.lineWidth = 1;
+          }
           lines.forEach((l) => {
             const sel = l === hl || l === drag;
             g.strokeStyle = g.fillStyle = "#8e44ad";
