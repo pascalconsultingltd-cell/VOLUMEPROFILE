@@ -859,12 +859,21 @@
           if (b == null) return;
           const up = buy >= sell;
           if (!cur || cur.up !== up)
-            cols.push((cur = { up, lo: b, hi: b, d: new Map() }));
+            cols.push(
+              (cur = {
+                up,
+                lo: b,
+                hi: b,
+                d: new Map(),
+                v: new Map(),
+              }),
+            );
           else {
             cur.lo = Math.min(cur.lo, b);
             cur.hi = Math.max(cur.hi, b);
           }
           cur.d.set(b, (cur.d.get(b) || 0) + buy - sell);
+          cur.v.set(b, (cur.v.get(b) || 0) + buy + sell);
         };
         days.forEach((dS) => {
           const d = aggrT.get(dS);
@@ -1878,6 +1887,11 @@
                 ? "rgba(8,153,129," + k + ")"
                 : "rgba(0,0,0," + k + ")";
             };
+          /* v95: volume of the top 5% boxes, which get a dot */
+          const av = [];
+          cols.forEach((c) => c.v.forEach((v) => av.push(v)));
+          av.sort((p, q) => p - q);
+          const v95 = av[Math.floor(av.length * 0.95)] || Infinity;
           const lo = Math.min(...sh.map((c) => c.lo)),
             hi = Math.max(...sh.map((c) => c.hi)),
             bh = Math.max(
@@ -1893,6 +1907,24 @@
               g.fillRect(4 + i * cw + 1, yb(r) + 1, cw - 2, bh - 2);
             }
           });
+          /* big-volume dots, as on the charts: green where
+             buyers won the box, black where sellers did, ringed
+             white so they show on any shade */
+          sh.forEach((c, i) =>
+            c.v.forEach((v, r) => {
+              if (v < v95) return;
+              const rd = Math.max(2, Math.min(cw, bh) * 0.3),
+                buyW = (c.d.get(r) || 0) >= 0;
+              g.beginPath();
+              g.arc(4 + (i + 0.5) * cw, yb(r) + bh / 2, rd, 0, 7);
+              g.fillStyle = buyW ? "#4caf50" : "#000";
+              g.strokeStyle = "#fff";
+              g.lineWidth = 1.5;
+              g.fill();
+              g.stroke();
+              g.lineWidth = 1;
+            }),
+          );
           /* last price: dashed line and tag */
           const lp = mid != null ? mid : ref,
             y = bot - mg - (lp / st - lo) * bh;
