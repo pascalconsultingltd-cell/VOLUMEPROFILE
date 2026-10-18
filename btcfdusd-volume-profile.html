@@ -4522,7 +4522,9 @@
         /* DPoc: default changed in version 7 */
         if (st.dv >= 7 && typeof st.pocC === "boolean")
           setPocC(st.pocC);
-        if (typeof st.pcSub === "boolean") setPcSub(st.pcSub);
+        /* SPoc would switch P&F off: older saves ignored */
+        if (st.dv >= 9 && typeof st.pcSub === "boolean")
+          setPcSub(st.pcSub);
         if (cur5 && typeof st.showVA === "boolean")
           setShowVA(st.showVA);
         /* O / L: defaults changed in version 6 */
