@@ -2777,14 +2777,15 @@
                 Math.abs(v) >= p95 && v !== 0,
               ];
             shown.forEach((c, i) => {
+              /* bricks wide (at least 7px), line hairline-thin */
               const xm = pa + sl * jOf(i),
-                x = xm - sl * 0.4,
-                w = Math.max(1, sl * 0.8);
+                w = Math.max(7, sl * 0.9),
+                x = xm - w / 2;
               pfX.push([c.t0, xm]);
               /* the column as one line, buyers green / sellers
                  black, then a real brick on the strongest boxes */
               g.strokeStyle = c.up ? "#089981" : "#000";
-              g.lineWidth = 2;
+              g.lineWidth = 1;
               g.beginPath();
               g.moveTo(xm, Y((c.hi + 1) * st));
               g.lineTo(xm, Y(c.lo * st));
@@ -2793,10 +2794,12 @@
               for (let r = c.lo; r <= c.hi; r++) {
                 const [col, solid] = shade(c.d.get(r) || 0);
                 if (!solid) continue;
+                /* at least 6px tall, centred on its box */
                 const yT = Y((r + 1) * st),
-                  h = Math.max(1, Y(r * st) - yT - 1);
+                  yB = Y(r * st),
+                  h = Math.max(6, yB - yT - 1);
                 g.fillStyle = col;
-                g.fillRect(x, yT + 0.5, w, h);
+                g.fillRect(x, (yT + yB) / 2 - h / 2, w, h);
               }
               pcGeo.push({
                 xa: xm - sl / 2,
