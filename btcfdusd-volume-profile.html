@@ -3456,11 +3456,8 @@
           const last = vis[vis.length - 1],
             lp = mid != null ? mid : last.c,
             ly = Math.max(top, Math.min(bot, Y(lp)));
-          /* thin solid blue: no other line on the chart is blue;
-             a narrow golden glow behind it */
+          /* thin solid blue: no other line on the chart is blue */
           const LP = "#2962ff";
-          g.fillStyle = "rgba(212,160,23,.28)";
-          g.fillRect(4, Math.round(ly) - 2.5, px0 - 4, 6);
           g.strokeStyle = LP;
           g.setLineDash([]);
           g.lineWidth = 1;
