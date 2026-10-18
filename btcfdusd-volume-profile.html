@@ -148,6 +148,7 @@
       }
       /* buttons that go together, framed like a cell border */
       .ctl .box {
+        flex-wrap: wrap;
         margin-left: 0;
         padding: 2px;
         border: 1px solid #5b6470;
@@ -378,6 +379,13 @@
                 title="POC bands and tags on / off"
               >
                 POC
+              </button>
+              <button
+                id="aggrTog"
+                class=""
+                title="Bricks by taker side: green buys, black sells"
+              >
+                Aggr
               </button></span
             ></span
           ></span
@@ -731,6 +739,90 @@
         showVA = !!v;
         $("vaTog").className = showVA ? "a" : "";
         schedule();
+      }
+      /*
+       * Aggression per TPO brick (Aggr button): every trade
+       * of the profile days from Binance aggTrades, where m =
+       * the buyer was the maker, so the taker sold. Loaded
+       * only while Aggr is on (about 13 requests a day); today
+       * topped up every 30s. aggrT: day -> { tr: [time, price,
+       * qty, taker sold], last: last trade id, end, at }.
+       */
+      let showAggr = false;
+      const aggrT = new Map(),
+        aggrBusy = new Set(),
+        aggrC = new Map();
+      function setShowAggr(v) {
+        showAggr = !!v;
+        $("aggrTog").className = showAggr ? "a" : "";
+        schedule();
+      }
+      async function loadAggr(dS) {
+        const d0 = aggrT.get(dS);
+        if (aggrBusy.has(dS) || (d0 && d0.end)) return;
+        if (d0 && Date.now() - d0.at < 30000) return;
+        aggrBusy.add(dS);
+        const d = d0 || { tr: [], last: null, end: false, at: 0 },
+          dE = nextDay(dS);
+        try {
+          for (let n = 0; n < 300 && !d.end; n++) {
+            const q =
+                d.last == null
+                  ? "startTime=" + dS
+                  : "fromId=" + (d.last + 1),
+              u = "/api/v3/aggTrades?symbol=" + SYM + "&limit=1000&";
+            let j = null;
+            for (const h of REST) {
+              try {
+                j = await fj(h + u + q);
+                if (Array.isArray(j)) break;
+              } catch (e) {}
+            }
+            if (!Array.isArray(j)) break;
+            for (const a of j) {
+              if (a.T >= dE) {
+                d.end = true;
+                break;
+              }
+              d.tr.push([a.T, +a.p, +a.q, a.m]);
+              d.last = a.a;
+            }
+            if (j.length < 1000) break;
+          }
+        } finally {
+          d.at = Date.now();
+          aggrT.set(dS, d);
+          aggrBusy.delete(dS);
+          schedule();
+        }
+      }
+      /* buy / sell qty per brick: key "period|row" */
+      function aggrCells(dS, step) {
+        const d = aggrT.get(dS);
+        if (!d) return null;
+        const key = dS + "|" + step + "|" + d.tr.length;
+        if (aggrC.has(key)) return aggrC.get(key);
+        const m = new Map();
+        d.tr.forEach(([tt, p, q, s]) => {
+          const i = Math.floor((tt - dS) / TPO_MS),
+            k = i + "|" + Math.floor(p / step),
+            c = m.get(k) || [0, 0];
+          c[s ? 1 : 0] += q;
+          m.set(k, c);
+        });
+        if (aggrC.size > 60) aggrC.clear();
+        aggrC.set(key, m);
+        return m;
+      }
+      /* green = takers bought more, black = sold more; the
+         stronger the imbalance, the darker; grey = no trade */
+      function aggrColor(c) {
+        if (!c) return "rgba(160,166,175,.35)";
+        const r = (c[0] - c[1]) / (c[0] + c[1] || 1),
+          a = (0.25 + 0.7 * Math.abs(r)).toFixed(2);
+        return r >= 0
+          ? "rgba(8,153,129," + a + ")"
+          : "rgba(0,0,0," + a + ")";
       }
       /* POC bands and tags on the chart (POC button) */
       let showPOC = false;
@@ -2110,11 +2202,18 @@
                 rowH,
               );
             }
+            /* Aggr: colour each brick by its takers instead */
+            if (showAggr) loadAggr(tpoDays[d]);
+            const AC = showAggr
+              ? aggrCells(tpoDays[d], P.step)
+              : null;
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
               lst.forEach((idx, k) => {
-                g.fillStyle = tpoColor(idx, 0.72);
+                g.fillStyle = AC
+                  ? aggrColor(AC.get(idx + "|" + r))
+                  : tpoColor(idx, 0.72);
                 g.fillRect(
                   cx0 + k * lw,
                   yT + 0.5,
@@ -4220,6 +4319,7 @@
           showGrid,
           showVA,
           showPOC,
+          showAggr,
           pocC,
           pcSub,
           showOrders,
@@ -4270,6 +4370,8 @@
         if (cur4 && typeof st.showGrid === "boolean")
           setShowGrid(st.showGrid);
         /* POC: default changed in version 8 */
+        if (typeof st.showAggr === "boolean")
+          setShowAggr(st.showAggr);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         /* DPoc: default changed in version 7 */
@@ -4485,6 +4587,7 @@
       $("pcTog").onclick = () => setPocC(!pocC);
       $("spTog").onclick = () => setPcSub(!pcSub);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
+      $("aggrTog").onclick = () => setShowAggr(!showAggr);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
