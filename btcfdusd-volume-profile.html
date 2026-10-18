@@ -1950,7 +1950,7 @@
             g.lineWidth = 1;
             g.strokeStyle = "#c3ccd6";
             g.beginPath();
-            g.roundRect(x + 0.5, top - 3.5, w - 1, bot - top + 7, 7);
+            g.roundRect(x + 0.5, top - 3.5, w - 1, bot - top + 7, 4);
             g.stroke();
             g.restore();
           };
@@ -2376,6 +2376,8 @@
           }
           /* the profiles sit in a soft rounded frame, like DPoc */
           if (cfg.tpo && tpoW) panel(pcOff + 1, x0 - 6 - pcOff);
+          /* and the main chart, axis included */
+          if (cfg.main) panel(x0 - 3, W - x0 + 1);
           /* session legend + day labels under each profile */
 
           g.font = "10px ui-monospace,Menlo,monospace";
