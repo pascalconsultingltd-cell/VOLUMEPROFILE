@@ -2065,13 +2065,18 @@
             tpoDays = [dayStart - tb * DAY];
           while (tpoDays.length < cnt + ex)
             tpoDays.unshift(prevDay(tpoDays[0]));
-          /* sub POCs start from a third of the widest day
-             shown; born no lower than the vol step */
+          /* sub POCs start from a third of the widest profile
+             day (counted even when the profiles are hidden, as
+             in DPoc full width); born no lower than the vol
+             step */
           const zp = [],
             subStart =
             Math.max(
               0,
-              ...tpoDays.map((s) =>
+              ...Array.from(
+                { length: nTpo },
+                (_, k) => dayStart - (tb + k) * DAY,
+              ).map((s) =>
                 dayR.has(s) ? dayR.get(s).h - dayR.get(s).l : 0,
               ),
             ) / 3;
