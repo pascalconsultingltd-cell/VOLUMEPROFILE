@@ -2703,31 +2703,44 @@
            * the previous POC instead of the day before's.
            */
           /*
-           * full-width icons, top right of each window: a
-           * square with corner ticks; filled when that window
-           * is the full one. icons = their boxes, for clicks.
+           * full-width icons, top right of each window: four
+           * bare corner brackets, light grey, darker while the
+           * mouse is over that window; pointing inward (exit)
+           * when that window is the full one. xl = the
+           * window's left edge. icons = their boxes, for clicks.
            */
           const icons = [];
-          const icon = (k, xr) => {
+          const icon = (k, xl, xr) => {
             const x = xr - 16,
               y = top + 3,
-              on = full === k;
-            icons.push({ k, x, y, w: 13, h: 13 });
+              on = full === k,
+              over =
+                mouse &&
+                mouse.x >= xl &&
+                mouse.x <= xr &&
+                mouse.y >= top &&
+                mouse.y <= bot;
+            /* click area a little larger than the drawing */
+            icons.push({ k, x: x - 3, y: y - 3, w: 19, h: 19 });
             g.save();
             g.setLineDash([]);
-            g.lineWidth = 1;
-            g.strokeStyle = "#5b6470";
-            g.fillStyle = on ? "#5b6470" : "rgba(255,255,255,.85)";
-            g.fillRect(x, y, 13, 13);
-            g.strokeRect(x + 0.5, y + 0.5, 12, 12);
-            g.strokeStyle = on ? "#fff" : "#5b6470";
+            g.lineWidth = 1.5;
+            g.strokeStyle = over || on ? "#5b6470" : "#b4bdc8";
             g.beginPath();
-            [
-              [3, 6, 3, 3, 6, 3],
-              [7, 3, 10, 3, 10, 6],
-              [10, 7, 10, 10, 7, 10],
-              [6, 10, 3, 10, 3, 7],
-            ].forEach(([a, b, c, d, e2, f2]) => {
+            (on
+              ? [
+                  [3, 5, 5, 5, 5, 3],
+                  [8, 3, 8, 5, 10, 5],
+                  [10, 8, 8, 8, 8, 10],
+                  [5, 10, 5, 8, 3, 8],
+                ]
+              : [
+                  [3, 6, 3, 3, 6, 3],
+                  [7, 3, 10, 3, 10, 6],
+                  [10, 7, 10, 10, 7, 10],
+                  [6, 10, 3, 10, 3, 7],
+                ]
+            ).forEach(([a, b, c, d, e2, f2]) => {
               g.moveTo(x + a, y + b);
               g.lineTo(x + c, y + d);
               g.lineTo(x + e2, y + f2);
@@ -3476,9 +3489,9 @@
           }
           /* full-width icons, on top of the drawings */
           if (cfg.main) {
-            if (pcW) icon("pc", 4 + pcW);
-            if (tpoW) icon("tpo", x0 - 6);
-            icon("main", px0 - 2);
+            if (pcW) icon("pc", 4, 4 + pcW);
+            if (tpoW) icon("tpo", pcW ? 4 + pcW : 1, x0 - 6);
+            icon("main", x0 - 3, px0 - 2);
           }
           /* last price */
 
