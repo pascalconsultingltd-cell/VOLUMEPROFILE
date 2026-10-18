@@ -3334,10 +3334,15 @@
             return;
           }
           if (divDrag && view) {
-            /* each divider sets its own window's width */
-            if (divDrag === "pc")
-              pcPx = Math.max(50, Math.min(W * 0.5, x - 5));
-            else {
+            /* each divider moves on its own: the DPoc edge
+               trades width with the profiles, so the profiles /
+               chart edge (x0) stays put */
+            if (divDrag === "pc") {
+              const x0 = view.x0,
+                pw = Math.max(50, Math.min(x0 - 100 - 10, x - 5));
+              pcPx = pw;
+              tpoFrac = (x0 - 10 - (pw + 10)) / W;
+            } else {
               const xd = x - 5 - (view.pcOff || 0);
               tpoFrac = Math.max(80, Math.min(W * 0.75, xd)) / W;
             }
