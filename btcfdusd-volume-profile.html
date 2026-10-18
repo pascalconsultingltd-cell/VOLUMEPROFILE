@@ -200,6 +200,9 @@
         padding: 0 6px;
         line-height: 16px;
       }
+      #mhead #mx {
+        margin-left: 4px;
+      }
       #mbody {
         flex: 1;
         min-height: 0;
@@ -466,7 +469,12 @@
     <div id="toast"></div>
     <div id="mini">
       <div id="mhead">
-        <b>15s</b><span id="mst"></span
+        <b id="mttl">15s</b><span id="mst"></span
+        ><button
+          id="pfTog"
+          title="Aggression P&amp;F: new column when takers flip side"
+        >
+          P&amp;F</button
         ><button id="mx" title="Hide">×</button>
       </div>
       <div id="mbody"><canvas id="mc"></canvas></div>
@@ -760,7 +768,8 @@
       async function loadAggr(dS) {
         const d0 = aggrT.get(dS);
         if (aggrBusy.has(dS) || (d0 && d0.end)) return;
-        if (d0 && Date.now() - d0.at < 30000) return;
+        /* today: every 5s while the P&F shows, else 30s */
+        if (d0 && Date.now() - d0.at < (pfOn ? 5000 : 30000)) return;
         aggrBusy.add(dS);
         const d = d0 || { tr: [], last: null, end: false, at: 0 },
           dE = nextDay(dS);
@@ -823,6 +832,55 @@
         return r >= 0
           ? "rgba(8,153,129," + a + ")"
           : "rgba(0,0,0," + a + ")";
+      }
+      /*
+       * Aggression point & figure (P&F button, 15s window).
+       * Trades in time order are grouped into visits to a
+       * brick; a visit's side is whoever traded more there as
+       * taker. A visit on the other side from the current
+       * column starts a new column: green = buyers pushing,
+       * black = sellers. A column spans the bricks it visited.
+       */
+      let pfOn = false;
+      function setPfOn(v) {
+        pfOn = !!v;
+        $("pfTog").className = pfOn ? "a" : "";
+        $("mttl").textContent = pfOn ? "Aggr P&F" : "15s";
+        schedule();
+      }
+      function pfCols(days, st) {
+        const cols = [];
+        let cur = null,
+          b = null,
+          buy = 0,
+          sell = 0;
+        const fin = () => {
+          if (b == null) return;
+          const up = buy >= sell;
+          if (!cur || cur.up !== up)
+            cols.push((cur = { up, lo: b, hi: b }));
+          else {
+            cur.lo = Math.min(cur.lo, b);
+            cur.hi = Math.max(cur.hi, b);
+          }
+        };
+        days.forEach((dS) => {
+          const d = aggrT.get(dS);
+          if (!d) return;
+          d.tr.forEach(([, p, q, s]) => {
+            const bb = Math.floor(p / st);
+            if (bb !== b) {
+              fin();
+              b = bb;
+              buy = sell = 0;
+            }
+            if (s) sell += q;
+            else buy += q;
+          });
+        });
+        /* the brick being traded now counts too */
+        fin();
+        return cols;
       }
       /* POC bands and tags on the chart (POC button) */
       let showPOC = false;
@@ -1757,8 +1815,73 @@
             }
           }
         }
+        /* the 15s window as aggression P&F: yesterday and
+           today, latest columns that fit, box = the brick */
+        function drawPF() {
+          const DY = 86400000,
+            d1 = dayOf(Date.now()),
+            ref = k15.length ? k15[k15.length - 1].c : 0,
+            va = volPct ? (ref * volN) / 100 : volN,
+            st = va > 0 ? Math.max(1, Math.ceil(va / 10)) : 25;
+          loadAggr(d1 - DY);
+          loadAggr(d1);
+          const cols = pfCols([d1 - DY, d1], st),
+            axW = 54,
+            top = 6,
+            bot = H - 16,
+            cw = 9,
+            n = Math.max(1, Math.floor((W - axW - 4) / cw)),
+            sh = cols.slice(-n);
+          g.font = "10px ui-monospace,Menlo,monospace";
+          g.textBaseline = "middle";
+          g.fillStyle = "#6b7684";
+          g.textAlign = "left";
+          if (!sh.length) {
+            g.fillText("loading trades…", 6, H / 2);
+            return;
+          }
+          const lo = Math.min(...sh.map((c) => c.lo)),
+            hi = Math.max(...sh.map((c) => c.hi)),
+            bh = Math.max(
+              1,
+              Math.min(cw, (bot - top) / (hi - lo + 1)),
+            ),
+            /* centred when the columns are shorter than the box */
+            mg = (bot - top - (hi - lo + 1) * bh) / 2,
+            yb = (r) => bot - mg - (r - lo + 1) * bh;
+          sh.forEach((c, i) => {
+            g.fillStyle = c.up ? "#089981" : "#000000";
+            for (let r = c.lo; r <= c.hi; r++)
+              g.fillRect(4 + i * cw + 1, yb(r) + 1, cw - 2, bh - 2);
+          });
+          /* last price: dashed line and tag */
+          const lp = mid != null ? mid : ref,
+            y = bot - mg - (lp / st - lo) * bh;
+          g.strokeStyle = "#000";
+          g.setLineDash([3, 3]);
+          g.beginPath();
+          g.moveTo(4, y);
+          g.lineTo(W - axW, y);
+          g.stroke();
+          g.setLineDash([]);
+          g.fillStyle = "#6b7684";
+          const ax = W - axW + 4;
+          g.fillText(((hi + 1) * st).toFixed(0), ax, yb(hi));
+          g.fillText((lo * st).toFixed(0), ax, yb(lo) + bh);
+          g.fillStyle = "#000";
+          g.fillRect(W - axW + 2, y - 7, axW - 4, 14);
+          g.fillStyle = "#fff";
+          g.fillText(lp.toFixed(0), W - axW + 4, y);
+          g.fillStyle = "#6b7684";
+          g.fillText(
+            cols.length + " columns, box " + st,
+            6,
+            H - 6,
+          );
+        }
         function drawInner() {
           g.clearRect(0, 0, W, H);
+          if (!cfg.main && pfOn) return drawPF();
           const arr = mode === "lb" ? lbBars(src()) : src();
           arrLen = arr.length;
           /*
@@ -4320,6 +4443,7 @@
           showVA,
           showPOC,
           showAggr,
+          pfOn,
           pocC,
           pcSub,
           showOrders,
@@ -4370,6 +4494,7 @@
         if (cur4 && typeof st.showGrid === "boolean")
           setShowGrid(st.showGrid);
         /* POC: default changed in version 8 */
+        if (typeof st.pfOn === "boolean") setPfOn(st.pfOn);
         if (typeof st.showAggr === "boolean")
           setShowAggr(st.showAggr);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
@@ -4538,6 +4663,7 @@
       $("mx").onclick = () => {
         mini.style.display = "none";
       };
+      $("pfTog").onclick = () => setPfOn(!pfOn);
 
       /* Alt+R: default zoom and pan, floating window back to
          its corner. Alt+X: the same, plus drawings deleted. */
