@@ -2441,6 +2441,20 @@
               else segs.push({ dS, xa: o.x, xb: o.x + o.w });
             });
           if (segs.length) segs[segs.length - 1].xb = px0;
+          /*
+           * HL off: one fixed ladder for every day, from the
+           * latest day's reference (yesterday's POC); HL on:
+           * each day from its own day before's POC
+           */
+          const zDay = segs.length
+              ? prevDay(segs[segs.length - 1].dS)
+              : null,
+            zR = zDay != null ? dayProf(zDay) : null,
+            zFix =
+              zR && zR.poc != null && zR.full
+                ? (zR.poc + 0.5) * zR.step
+                : null,
+            zCol = zFix != null ? "rgb(" + pocRgb(zDay) + ")" : null;
           segs.forEach((sg, i) => {
             const R = dayProf(prevDay(sg.dS));
             if (R.poc == null || !R.full) return;
@@ -2459,14 +2473,16 @@
               pc = (pT + pB) / 2,
               vah = (R.b + 1) * R.step,
               val = R.a * R.step,
-              v = volPct ? (pc * volN) / 100 : volN,
+              fx = !hlLad && zFix != null,
+              z0 = fx ? zFix : pc,
+              v = volPct ? (z0 * volN) / 100 : volN,
               /* kS thins the ladder below 16px spacing */
               kS = Math.max(
                 1,
                 Math.ceil(16 / ((v * ch) / (hi - lo))),
               ),
               inK = (k) =>
-                k < 5000 && (pc + k * v <= hi || pc - k * v >= lo);
+                k < 5000 && (z0 + k * v <= hi || z0 - k * v >= lo);
             g.save();
             g.beginPath();
             g.rect(0, top, px0, bot - top);
@@ -2550,11 +2566,11 @@
             const lv = ({ ref, refUp }) => {
               const a = [];
               if (ref == null) {
-                a.push([pc, "0", pCol, 1]);
+                a.push([z0, "0", fx ? zCol : pCol, 1]);
                 for (let k = kS; inK(k); k += kS)
                   a.push(
-                    [pc + k * v, "+" + k, "#000000"],
-                    [pc - k * v, "−" + k, "#000000"],
+                    [z0 + k * v, "+" + k, "#000000"],
+                    [z0 - k * v, "−" + k, "#000000"],
                   );
                 return a;
               }
