@@ -851,6 +851,44 @@
         fin();
         return cols;
       }
+      /*
+       * P&F highlights, rolling like isBig: a box is hot when
+       * its |delta| beats the 95th percentile of the BIG_WIN
+       * boxes before it (in the order they printed, itself
+       * included); a column gets a dot when its volume beats
+       * that of the BIG_WIN columns before it. Cached until a
+       * trade changes the columns.
+       */
+      let pfHotC = null;
+      function pfHot(all, st) {
+        const z = all[all.length - 1],
+          zv = z ? [...z.v.values()].reduce((a, b) => a + b, 0) : 0,
+          key = [st, all.length, z && z.d.size, z && z.lo, zv].join();
+        if (pfHotC && pfHotC.key === key) return pfHotC;
+        const r = Math.ceil(BIG_PERC * BIG_WIN) - 1,
+          top = (xs, k) =>
+            xs.slice(k - BIG_WIN + 1, k + 1).sort((p, q) => p - q)[r],
+          seq = [],
+          ad = [],
+          hot = new Set(),
+          dot = new Set(),
+          cv = all.map((c) => {
+            let s = 0;
+            c.v.forEach((v) => (s += v));
+            return s;
+          });
+        all.forEach((c, k) =>
+          c.d.forEach((v, row) => {
+            seq.push(k + "|" + row);
+            ad.push(Math.abs(v));
+          }),
+        );
+        for (let k = BIG_WIN - 1; k < ad.length; k++)
+          if (ad[k] > top(ad, k)) hot.add(seq[k]);
+        for (let k = BIG_WIN - 1; k < cv.length; k++)
+          if (cv[k] > top(cv, k)) dot.add(k);
+        return (pfHotC = { key, hot, dot });
+      }
       /* POC bands and tags on the chart (POC button) */
       let showPOC = false;
       function setShowPOC(v) {
@@ -2752,29 +2790,20 @@
            * the P&F columns in the DPoc panel, on the chart's
            * price scale. Box colour by its delta (taker buys -
            * sells). Each column is a line (green buyers, black
-           * sellers); the top 5% |delta| boxes are drawn as real
-           * bricks, green buys, black sells.
-           * A column whose volume is in the top 5% gets a dot:
-           * green below a buyer column, black above a seller
-           * column, as on the candles.
+           * sellers); a box whose |delta| tops the 95th
+           * percentile of the BIG_WIN boxes before it is drawn
+           * as a real brick, green buys, black sells. A column
+           * whose volume tops that of the BIG_WIN columns
+           * before it gets a dot: green below a buyer column,
+           * black above a seller one. Rolling, as on the
+           * candles (see pfHot).
            */
           const drawPfCols = (all, shown, jOf, pa, sl, st) => {
-            const ad = [],
-              cv = new Map();
-            all.forEach((c) => {
-              let s = 0;
-              c.v.forEach((v) => (s += v));
-              c.d.forEach((v) => ad.push(Math.abs(v)));
-              cv.set(c, s);
-            });
-            ad.sort((p, q) => p - q);
-            const sv = [...cv.values()].sort((p, q) => p - q),
-              v95 = sv[Math.floor(sv.length * 0.95)] || Infinity,
-              p95 = ad[Math.floor(ad.length * 0.95)] || 1,
-              /* [colour, solid]: solid only for the top 5% */
-              shade = (v) => [
-                v < 0 ? "#000" : "#089981",
-                Math.abs(v) >= p95 && v !== 0,
+            const hs = pfHot(all, st),
+              ci = new Map(all.map((c, k) => [c, k])),
+              shade = (c, r) => [
+                (c.d.get(r) || 0) < 0 ? "#000" : "#089981",
+                hs.hot.has(ci.get(c) + "|" + r),
               ];
             shown.forEach((c, i) => {
               /* bricks wide (at least 7px), line hairline-thin */
@@ -2792,7 +2821,7 @@
               g.stroke();
               g.lineWidth = 1;
               for (let r = c.lo; r <= c.hi; r++) {
-                const [col, solid] = shade(c.d.get(r) || 0);
+                const [col, solid] = shade(c, r);
                 if (!solid) continue;
                 /* at least 6px tall, centred on its box */
                 const yT = Y((r + 1) * st),
@@ -2811,7 +2840,7 @@
                   c: (c.hi + 1) * st,
                 },
               });
-              if (cv.get(c) < v95) return;
+              if (!hs.dot.has(ci.get(c))) return;
               /* radius 5, as the big-candle circles */
               const rd = 5,
                 y = c.up
