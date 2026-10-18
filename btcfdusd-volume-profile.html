@@ -365,7 +365,7 @@
             ><span class="box"
               ><input
                 id="vol"
-                value="230"
+                value="255"
                 inputmode="decimal"
                 autocomplete="off"
                 placeholder="vol"
@@ -952,6 +952,31 @@
         };
         s.onerror = () => next(false);
         s.src = "orders.js?t=" + Date.now();
+        document.head.appendChild(s);
+      }
+      /*
+       * vol.js, written when "v" is typed in Telegram:
+       * window.VOL = 255; the chart takes it as its vol step
+       * unless the box was typed in since the page opened.
+       * Checked every 30s; absent (office, phone) = default.
+       */
+      let volTyped = false;
+      function loadVol() {
+        const s = document.createElement("script");
+        window.VOL = undefined;
+        s.onload = s.onerror = () => {
+          s.remove();
+          const v = window.VOL;
+          if (Number.isFinite(v) && v > 0 && !volTyped) {
+            const sv = String(Math.round(v));
+            if ($("vol").value !== sv) {
+              $("vol").value = sv;
+              setVol(sv);
+            }
+          }
+          setTimeout(loadVol, 30000);
+        };
+        s.src = "vol.js?t=" + Date.now();
         document.head.appendChild(s);
       }
       let volN = 0,
@@ -4718,9 +4743,10 @@
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
-      $("vol").addEventListener("input", (e) =>
-        setVol(e.target.value),
-      );
+      $("vol").addEventListener("input", (e) => {
+        volTyped = true;
+        setVol(e.target.value);
+      });
       $("vol").addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === "Escape") e.target.blur();
       });
@@ -4731,6 +4757,7 @@
       )
         navigator.serviceWorker.register("sw.js").catch(() => {});
       loadOrders();
+      loadVol();
       connect();
       hist(IV, () => seedIv(IV));
       hist("15m", () => seedIv("15m"));

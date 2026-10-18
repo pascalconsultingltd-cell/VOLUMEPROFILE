@@ -32,8 +32,8 @@ self.addEventListener("fetch", (e) => {
   const u = new URL(e.request.url);
   const own = u.origin === self.location.origin;
   if (!own || e.request.method !== "GET") return;
-  /* the orders file is private and local: never cached */
-  if (u.pathname.endsWith("/orders.js")) return;
+  /* the orders and vol files are local: never cached */
+  if (/\/(orders|vol)\.js$/.test(u.pathname)) return;
   e.respondWith(
     fetch(e.request)
       .then((r) => {
