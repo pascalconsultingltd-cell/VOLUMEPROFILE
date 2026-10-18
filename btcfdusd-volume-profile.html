@@ -353,6 +353,7 @@
               </button
               ><button
                 id="pfTog"
+                class="a"
                 title="Aggression P&amp;F: new column on taker flip"
               >
                 P&amp;F
@@ -869,7 +870,7 @@
         schedule();
       }
       /* the DPoc panel as aggression P&F (P&F button) */
-      let pcPf = false;
+      let pcPf = true;
       function setPcPf(v) {
         pcPf = !!v;
         $("pfTog").className = pcPf ? "a" : "";
@@ -4430,7 +4431,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 8;
+      const DEFAULTS_VER = 9;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -4513,7 +4514,9 @@
         if (cur4 && typeof st.showGrid === "boolean")
           setShowGrid(st.showGrid);
         /* POC: default changed in version 8 */
-        if (typeof st.pcPf === "boolean") setPcPf(st.pcPf);
+        /* P&F: default changed in version 9 */
+        if (st.dv >= 9 && typeof st.pcPf === "boolean")
+          setPcPf(st.pcPf);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         /* DPoc: default changed in version 7 */
