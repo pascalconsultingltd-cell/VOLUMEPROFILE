@@ -854,15 +854,17 @@
           b = null,
           buy = 0,
           sell = 0;
+        /* d: delta (taker buys - sells) per brick of a column */
         const fin = () => {
           if (b == null) return;
           const up = buy >= sell;
           if (!cur || cur.up !== up)
-            cols.push((cur = { up, lo: b, hi: b }));
+            cols.push((cur = { up, lo: b, hi: b, d: new Map() }));
           else {
             cur.lo = Math.min(cur.lo, b);
             cur.hi = Math.max(cur.hi, b);
           }
+          cur.d.set(b, (cur.d.get(b) || 0) + buy - sell);
         };
         days.forEach((dS) => {
           const d = aggrT.get(dS);
@@ -1850,6 +1852,32 @@
             g.fillText("loading trades…", 6, H / 2);
             return;
           }
+          /*
+           * box shade by its delta: green buys, black sells,
+           * darker the stronger (by percentile rank of |delta|
+           * over all boxes); the top 2% are red
+           */
+          const ad = [];
+          cols.forEach((c) =>
+            c.d.forEach((v) => ad.push(Math.abs(v))),
+          );
+          ad.sort((p, q) => p - q);
+          const p98 = ad[Math.floor(ad.length * 0.98)] || 1,
+            shade = (v) => {
+              const a = Math.abs(v);
+              if (a >= p98 && a > 0) return "#e5484d";
+              let j = 0,
+                m = ad.length;
+              while (j < m) {
+                const md = (j + m) >> 1;
+                if (ad[md] < a) j = md + 1;
+                else m = md;
+              }
+              const k = (0.15 + 0.85 * (j / ad.length)).toFixed(2);
+              return v >= 0
+                ? "rgba(8,153,129," + k + ")"
+                : "rgba(0,0,0," + k + ")";
+            };
           const lo = Math.min(...sh.map((c) => c.lo)),
             hi = Math.max(...sh.map((c) => c.hi)),
             bh = Math.max(
@@ -1860,9 +1888,10 @@
             mg = (bot - top - (hi - lo + 1) * bh) / 2,
             yb = (r) => bot - mg - (r - lo + 1) * bh;
           sh.forEach((c, i) => {
-            g.fillStyle = c.up ? "#089981" : "#000000";
-            for (let r = c.lo; r <= c.hi; r++)
+            for (let r = c.lo; r <= c.hi; r++) {
+              g.fillStyle = shade(c.d.get(r) || 0);
               g.fillRect(4 + i * cw + 1, yb(r) + 1, cw - 2, bh - 2);
+            }
           });
           /* last price: dashed line and tag */
           const lp = mid != null ? mid : ref,
