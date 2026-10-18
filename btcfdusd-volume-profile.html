@@ -3456,6 +3456,10 @@
           const last = vis[vis.length - 1],
             lp = mid != null ? mid : last.c,
             ly = Math.max(top, Math.min(bot, Y(lp)));
+          /* glow: a soft highlighter band behind the line, so
+             the last price stands out among the black lines */
+          g.fillStyle = "rgba(255,196,0,.3)";
+          g.fillRect(4, ly - 5, px0 - 4, 10);
           g.strokeStyle = "#000000";
           g.setLineDash([4, 3]);
           g.lineWidth = 2;
