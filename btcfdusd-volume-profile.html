@@ -2751,8 +2751,8 @@
           /*
            * the P&F columns in the DPoc panel, on the chart's
            * price scale. Box colour by its delta (taker buys -
-           * sells): green buys, black sells; faint normally,
-           * full colour for the top 5% |delta| over all boxes.
+           * sells): green buys, black sells; hollow normally,
+           * filled for the top 5% |delta| over all boxes.
            * A column whose volume is in the top 5% gets a dot:
            * green below a buyer column, black above a seller
            * column, as on the candles.
@@ -2770,11 +2770,11 @@
             const sv = [...cv.values()].sort((p, q) => p - q),
               v95 = sv[Math.floor(sv.length * 0.95)] || Infinity,
               p95 = ad[Math.floor(ad.length * 0.95)] || 1,
-              shade = (v) => {
-                const k = Math.abs(v) >= p95 && v !== 0;
-                if (v < 0) return k ? "#000" : "rgba(0,0,0,.2)";
-                return k ? "#089981" : "rgba(8,153,129,.25)";
-              };
+              /* [colour, solid]: solid only for the top 5% */
+              shade = (v) => [
+                v < 0 ? "#000" : "#089981",
+                Math.abs(v) >= p95 && v !== 0,
+              ];
             shown.forEach((c, i) => {
               const xm = pa + sl * jOf(i),
                 x = xm - sl * 0.4,
@@ -2783,8 +2783,17 @@
               for (let r = c.lo; r <= c.hi; r++) {
                 const yT = Y((r + 1) * st),
                   yB = Y(r * st);
-                g.fillStyle = shade(c.d.get(r) || 0);
-                g.fillRect(x, yT + 0.5, w, Math.max(1, yB - yT - 1));
+                const [col, solid] = shade(c.d.get(r) || 0),
+                  h = Math.max(1, yB - yT - 1);
+                /* normal boxes hollow, the strongest filled */
+                if (solid) {
+                  g.fillStyle = col;
+                  g.fillRect(x, yT + 0.5, w, h);
+                } else {
+                  g.strokeStyle = col;
+                  g.lineWidth = 1;
+                  g.strokeRect(x + 0.5, yT + 1, w - 1, h - 1);
+                }
               }
               pcGeo.push({
                 xa: xm - sl / 2,
