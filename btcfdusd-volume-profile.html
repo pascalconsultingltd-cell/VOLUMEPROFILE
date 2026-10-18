@@ -2750,7 +2750,8 @@
                 },
               });
               if (cv.get(c) < v95) return;
-              const rd = Math.max(2.5, Math.min(5, sl * 0.3)),
+              /* radius 5, as the big-candle circles */
+              const rd = 5,
                 y = c.up
                   ? Y(c.lo * st) + rd + 3
                   : Y((c.hi + 1) * st) - rd - 3;
