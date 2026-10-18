@@ -2704,12 +2704,12 @@
           };
           /*
            * the P&F columns in the DPoc panel, on the chart's
-           * price scale. Box shade by its delta (taker buys -
-           * sells): green buys, black sells, darker by
-           * percentile rank of |delta| over all boxes; the top
-           * 5% are red. A column whose volume is in the top 5%
-           * gets a dot: green below a buyer column, black above
-           * a seller column, as on the candles.
+           * price scale. Box colour by its delta (taker buys -
+           * sells): green buys, black sells; faint normally,
+           * full colour for the top 5% |delta| over all boxes.
+           * A column whose volume is in the top 5% gets a dot:
+           * green below a buyer column, black above a seller
+           * column, as on the candles.
            */
           const drawPfCols = (all, shown, jOf, pa, sl, st) => {
             const ad = [],
@@ -2725,19 +2725,9 @@
               v95 = sv[Math.floor(sv.length * 0.95)] || Infinity,
               p95 = ad[Math.floor(ad.length * 0.95)] || 1,
               shade = (v) => {
-                const a = Math.abs(v);
-                if (a >= p95 && a > 0) return "#e5484d";
-                let j = 0,
-                  m = ad.length;
-                while (j < m) {
-                  const md = (j + m) >> 1;
-                  if (ad[md] < a) j = md + 1;
-                  else m = md;
-                }
-                const k = (0.15 + 0.85 * (j / ad.length)).toFixed(2);
-                return v >= 0
-                  ? "rgba(8,153,129," + k + ")"
-                  : "rgba(0,0,0," + k + ")";
+                const k = Math.abs(v) >= p95 && v !== 0;
+                if (v < 0) return k ? "#000" : "rgba(0,0,0,.2)";
+                return k ? "#089981" : "rgba(8,153,129,.25)";
               };
             shown.forEach((c, i) => {
               const xm = pa + sl * jOf(i),
