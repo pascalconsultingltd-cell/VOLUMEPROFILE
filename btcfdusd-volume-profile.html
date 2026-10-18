@@ -1590,6 +1590,10 @@
           tpoFrac = null,
           /* DPoc candles shown: 7 at start, wheel 3-60 */
           pcN = 7,
+          /* pcPx: DPoc width once dragged (null = as the
+             profiles); full: window shown full width */
+          pcPx = null,
+          full = null,
           /* pcBack / tpoBack: candles / days dragged back */
           pcBack = 0,
           /* subX: the chart's slide between two candles, 0-1 */
@@ -1704,19 +1708,6 @@
            * labels
            */
           const axW = 62,
-            tpoW = cfg.tpo
-              ? tpoFrac != null
-                ? Math.max(80, Math.min(W * 0.75, tpoFrac * W))
-                : Math.max(80, W * 0.2 - 5)
-              : 0,
-            legendH = cfg.main ? 22 : 0,
-            timeH = 16,
-            px0 = W - axW;
-          /* pcW = DPoc panel at the far left, as wide as the
-             profiles; pcOff shifts the profiles right of it */
-          const pcW = cfg.main && cfg.tpo && pocC ? tpoW : 0,
-            pcOff = pcW ? pcW + 10 : 0,
-            x0 = tpoW + 10 + pcOff,
             x1 =
               W -
               axW -
@@ -1724,6 +1715,35 @@
                 cfg.main ? 60 : 24,
                 W * (cfg.main ? 0.07 : 0.04),
               ),
+            tpoW0 = cfg.tpo
+              ? tpoFrac != null
+                ? Math.max(80, Math.min(W * 0.75, tpoFrac * W))
+                : Math.max(80, W * 0.2 - 5)
+              : 0,
+            /*
+             * full = "main" / "tpo" / "pc": that window takes
+             * the width, the others hide (the chart keeps a
+             * strip so its scale still works)
+             */
+            fl = cfg.main ? full : null,
+            tpoW = !cfg.tpo || fl === "main" || fl === "pc"
+              ? 0
+              : fl === "tpo"
+                ? x1 - 50
+                : tpoW0,
+            pcW = !(cfg.main && cfg.tpo && pocC) ||
+              fl === "main" || fl === "tpo"
+              ? 0
+              : fl === "pc"
+                ? x1 - 60
+                : pcPx || tpoW0,
+            legendH = cfg.main ? 22 : 0,
+            timeH = 16,
+            px0 = W - axW;
+          /* pcW = DPoc panel at the far left; pcOff shifts the
+             profiles right of it */
+          const pcOff = pcW ? pcW + 10 : 0,
+            x0 = tpoW + 10 + pcOff,
             top = 8,
             bot = H - legendH - timeH - 6,
             ch = bot - top;
@@ -2035,7 +2055,7 @@
           };
           /* the TPO profiles drawn at the left of the chart */
           const colW = (tpoW - 6 - (nTpo - 1) * gap) / nTpo,
-            cnt = cfg.tpo ? nTpo : 0;
+            cnt = cfg.tpo && tpoW > 0 ? nTpo : 0;
           profs = [];
           /* tb whole days back, tf = the slide in between; one
              more day on the left while sliding */
@@ -2492,6 +2512,39 @@
            * (by earliest brick within a day), each against
            * the previous POC instead of the day before's.
            */
+          /*
+           * full-width icons, top right of each window: a
+           * square with corner ticks; filled when that window
+           * is the full one. icons = their boxes, for clicks.
+           */
+          const icons = [];
+          const icon = (k, xr) => {
+            const x = xr - 16,
+              y = top + 3,
+              on = full === k;
+            icons.push({ k, x, y, w: 13, h: 13 });
+            g.save();
+            g.setLineDash([]);
+            g.lineWidth = 1;
+            g.strokeStyle = "#5b6470";
+            g.fillStyle = on ? "#5b6470" : "rgba(255,255,255,.85)";
+            g.fillRect(x, y, 13, 13);
+            g.strokeRect(x + 0.5, y + 0.5, 12, 12);
+            g.strokeStyle = on ? "#fff" : "#5b6470";
+            g.beginPath();
+            [
+              [3, 6, 3, 3, 6, 3],
+              [7, 3, 10, 3, 10, 6],
+              [10, 7, 10, 10, 7, 10],
+              [6, 10, 3, 10, 3, 7],
+            ].forEach(([a, b, c, d, e2, f2]) => {
+              g.moveTo(x + a, y + b);
+              g.lineTo(x + c, y + d);
+              g.lineTo(x + e2, y + f2);
+            });
+            g.stroke();
+            g.restore();
+          };
           /* pcGeo: DPoc candles and their x, for the magnet */
           const pcGeo = [];
           let pcShow = 0,
@@ -2772,6 +2825,7 @@
             x0,
             pcOff,
             pcGeo,
+            icons,
             pcN: pcShow,
             pcSl,
             tpoSl: colW + gap,
@@ -3077,6 +3131,12 @@
               top + 10,
             );
           }
+          /* full-width icons, on top of the drawings */
+          if (cfg.main) {
+            if (pcW) icon("pc", 4 + pcW);
+            if (tpoW) icon("tpo", x0 - 6);
+            icon("main", px0 - 2);
+          }
           /* last price */
 
           const last = vis[vis.length - 1],
@@ -3268,14 +3328,13 @@
             return;
           }
           if (divDrag && view) {
-            /* with DPoc on, the panel is as wide as the profiles */
-            const xd =
-              divDrag === "pc"
-                ? x - 5
-                : view.pcOff
-                  ? (x - 15) / 2
-                  : x - 5;
-            tpoFrac = Math.max(80, Math.min(W * 0.75, xd)) / W;
+            /* each divider sets its own window's width */
+            if (divDrag === "pc")
+              pcPx = Math.max(50, Math.min(W * 0.5, x - 5));
+            else {
+              const xd = x - 5 - (view.pcOff || 0);
+              tpoFrac = Math.max(80, Math.min(W * 0.75, xd)) / W;
+            }
             draw();
             return;
           }
@@ -3413,6 +3472,7 @@
           if (
             !cfg.tpo ||
             !view ||
+            full ||
             boxTool ||
             dotTool ||
             y < view.top ||
@@ -3420,7 +3480,7 @@
           )
             return false;
           /* "pc" = DPoc / profiles edge, "tpo" = profiles /
-             chart; both resize the two windows together */
+             chart */
           if (view.pcOff && Math.abs(x - (view.pcOff - 5)) <= 5)
             return "pc";
           return Math.abs(x - (view.x0 - 5)) <= 5 ? "tpo" : false;
@@ -3635,6 +3695,24 @@
            * and keep receiving moves outside the canvas
            */
           move(e);
+          if (view && view.icons) {
+            const rc = cv.getBoundingClientRect(),
+              ix = e.clientX - rc.left,
+              iy = e.clientY - rc.top,
+              hit2 = view.icons.find(
+                (q) =>
+                  ix >= q.x &&
+                  ix <= q.x + q.w &&
+                  iy >= q.y &&
+                  iy <= q.y + q.h,
+              );
+            if (hit2) {
+              full = full === hit2.k ? null : hit2.k;
+              draw();
+              e.preventDefault();
+              return;
+            }
+          }
           try {
             cv.setPointerCapture(e.pointerId);
           } catch (err) {}
@@ -3741,7 +3819,8 @@
             cv.style.cursor = "crosshair";
             draw();
           } else if (mouse && isDiv(mouse.x, mouse.y)) {
-            tpoFrac = null;
+            if (isDiv(mouse.x, mouse.y) === "pc") pcPx = null;
+            else tpoFrac = null;
             draw();
           } else if (view && mouse && mouse.x > view.px0) {
             ysc = 1;
@@ -3921,6 +4000,8 @@
             lock = null;
             tpoFrac = null;
             pcN = 7;
+            pcPx = null;
+            full = null;
             pcBack = 0;
             subX = 0;
             tpoBack = 0;
