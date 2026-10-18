@@ -3456,15 +3456,15 @@
           const last = vis[vis.length - 1],
             lp = mid != null ? mid : last.c,
             ly = Math.max(top, Math.min(bot, Y(lp)));
-          g.strokeStyle = "#000000";
-          g.setLineDash([4, 3]);
-          g.lineWidth = 2;
-          g.beginPath();
-          g.moveTo(4, ly);
-          g.lineTo(px0, ly);
-          g.stroke();
-          g.lineWidth = 1;
+          /* thin solid blue: no other line on the chart is blue */
+          const LP = "#2962ff";
+          g.strokeStyle = LP;
           g.setLineDash([]);
+          g.lineWidth = 1;
+          g.beginPath();
+          g.moveTo(4, Math.round(ly) + 0.5);
+          g.lineTo(px0, Math.round(ly) + 0.5);
+          g.stroke();
           /*
            * tag sits left of the axis so it does not cover the
            * level tags of drawings
@@ -3472,7 +3472,7 @@
           {
             const lt = lp.toFixed(DP),
               lw = g.measureText(lt).width + 10;
-            g.fillStyle = "#000000";
+            g.fillStyle = LP;
             g.fillRect(px0 - lw, ly - 9, lw, 18);
             g.fillStyle = "#ffffff";
             g.textAlign = "left";
