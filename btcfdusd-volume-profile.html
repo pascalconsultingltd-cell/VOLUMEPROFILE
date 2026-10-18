@@ -1855,17 +1855,17 @@
           /*
            * box shade by its delta: green buys, black sells,
            * darker the stronger (by percentile rank of |delta|
-           * over all boxes); the top 2% are red
+           * over all boxes); the top 5% are red
            */
           const ad = [];
           cols.forEach((c) =>
             c.d.forEach((v) => ad.push(Math.abs(v))),
           );
           ad.sort((p, q) => p - q);
-          const p98 = ad[Math.floor(ad.length * 0.98)] || 1,
+          const p95 = ad[Math.floor(ad.length * 0.95)] || 1,
             shade = (v) => {
               const a = Math.abs(v);
-              if (a >= p98 && a > 0) return "#e5484d";
+              if (a >= p95 && a > 0) return "#e5484d";
               let j = 0,
                 m = ad.length;
               while (j < m) {
