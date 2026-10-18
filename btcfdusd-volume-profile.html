@@ -2221,7 +2221,8 @@
           profs.forEach((P) => {
             /* legends only under whole profiles */
             const cut = P.cx0 < pcOff + 4 || P.cx0 + colW > x0 - 4;
-            if (!P.show || cut) return;
+            /* no legend for empty (future) days either */
+            if (!P.show || cut || P.poc == null) return;
             const gr = g.createLinearGradient(
               P.cx0,
               0,
@@ -2642,20 +2643,20 @@
             g.rect(pa, top, pcW, bot - top);
             g.clip();
             /* same price scale as the chart */
-            /* pb = what is loaded so far; pcBack waits for more */
+            /* pb = what is loaded so far; pcBack waits for more;
+               negative = empty slots on the right */
             const room = cds.length - nFit,
-              pb = Math.max(0, Math.min(pcBack, room));
+              pb = Math.max(1 - nFit, Math.min(pcBack, room));
             if (olderEnd["15m"]) pcBack = pb;
-            /* ib whole candles back, fr = the slide in between */
+            /* ib whole candles back; the newest sits in slot
+               nFit - 1 + pb */
             const ib = Math.floor(pb),
-              fr = pb - ib,
-              cv2 = cds.slice(
-                Math.max(0, cds.length - nFit - ib - 1),
-                cds.length - ib,
-              ),
+              k0 = Math.max(0, cds.length - nFit - ib - 1),
+              k1 = Math.min(cds.length, cds.length - ib),
+              cv2 = cds.slice(k0, k1),
               YP = Y;
             cv2.forEach((c, i) => {
-              const j = nFit - (cv2.length - i) + 0.5 + fr,
+              const j = nFit - cds.length + k0 + i + pb + 0.5,
                 xm = pa + sl * j,
                 col = c.up ? "#089981" : "#000000";
               pcGeo.push({ xa: xm - sl / 2, xb: xm + sl / 2, c });
@@ -3359,10 +3360,13 @@
             /* dragging right shows older, as on the chart */
             /* fractional, so the windows slide smoothly */
             if (pan.w === "pc")
-              pcBack = Math.max(0, pan.b0 + dx / view.pcSl);
+              pcBack = Math.max(
+                1 - view.pcN,
+                pan.b0 + dx / view.pcSl,
+              );
             else if (pan.w === "tpo")
               tpoBack = Math.max(
-                0,
+                1 - nTpo,
                 Math.min(60, pan.b0 + dx / view.tpoSl),
               );
             else {
