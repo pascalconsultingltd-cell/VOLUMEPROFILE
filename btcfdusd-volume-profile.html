@@ -2608,15 +2608,34 @@
                 const a = s[i - 1],
                   b = s[i];
                 if (up ? b.p <= a.p : b.p >= a.p) continue;
-                let h = -1e12,
-                  l = 1e12;
-                for (let d = a.dS; d <= b.dS; d = nextDay(d)) {
-                  const r = dayR.get(d);
-                  if (r) {
-                    h = Math.max(h, r.h);
-                    l = Math.min(l, r.l);
+                let h = Math.max(a.p, b.p),
+                  l = Math.min(a.p, b.p);
+                if (pcSub) {
+                  /* sub POCs: high / low from the opening POC's
+                     first brick to the closing POC's, 15m */
+                  const ta = a.dS + a.f * TPO_MS,
+                    tb = b.dS + (b.f + 1) * TPO_MS;
+                  let j = 0,
+                    m = k15.length;
+                  while (j < m) {
+                    const md = (j + m) >> 1;
+                    if (k15[md].t < ta) j = md + 1;
+                    else m = md;
                   }
-                }
+                  for (; j < k15.length && k15[j].t < tb; j++) {
+                    const c = k15[j];
+                    if (!okC(c)) continue;
+                    h = Math.max(h, c.h);
+                    l = Math.min(l, c.l);
+                  }
+                } else
+                  for (let d = a.dS; d <= b.dS; d = nextDay(d)) {
+                    const r = dayR.get(d);
+                    if (r) {
+                      h = Math.max(h, r.h);
+                      l = Math.min(l, r.l);
+                    }
+                  }
                 cds.push({
                   t: b.dS,
                   k: b.k,
