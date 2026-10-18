@@ -1943,6 +1943,17 @@
           hi = mid0 + ((hi0 - lo0) / 2) * ysc;
           lo = mid0 - ((hi0 - lo0) / 2) * ysc;
           const Y = (p) => top + ((hi - p) / (hi - lo)) * ch;
+          /* a window frame: light grey, rounded corners */
+          const panel = (x, w) => {
+            g.save();
+            g.setLineDash([]);
+            g.lineWidth = 1;
+            g.strokeStyle = "#c3ccd6";
+            g.beginPath();
+            g.roundRect(x + 0.5, top - 3.5, w - 1, bot - top + 7, 7);
+            g.stroke();
+            g.restore();
+          };
           /*
            * price tag in the axis column / time tag under the
            * chart
@@ -2363,13 +2374,8 @@
                 7200000;
             if (need < k15[0].t) older("15m");
           }
-          if (cfg.tpo) {
-            g.strokeStyle = "#cfd5dc";
-            g.beginPath();
-            g.moveTo(x0 - 5, top);
-            g.lineTo(x0 - 5, bot);
-            g.stroke();
-          }
+          /* the profiles sit in a soft rounded frame, like DPoc */
+          if (cfg.tpo && tpoW) panel(pcOff + 1, x0 - 6 - pcOff);
           /* session legend + day labels under each profile */
 
           g.font = "10px ui-monospace,Menlo,monospace";
@@ -2948,8 +2954,7 @@
             });
             g.restore();
             /* framed, named, and says so when it is empty */
-            g.strokeStyle = "#5b6470";
-            g.strokeRect(pa + 0.5, top + 0.5, pcW - 1, bot - top - 1);
+            panel(pa, pcW);
             g.fillStyle = "#6b7684";
             g.textAlign = "center";
             const pm = pa + pcW / 2;
@@ -3043,7 +3048,9 @@
             if (!mid0 && !showGrid) return;
             /* midnight solid navy like the 0 line, the
                others dashed black like the vol steps */
-            g.strokeStyle = mid0 ? "#003366" : "rgba(0,0,0,.5)";
+            g.strokeStyle = mid0
+              ? "rgba(0,51,102,.35)"
+              : "rgba(0,0,0,.5)";
             g.setLineDash(mid0 ? [] : [3, 3]);
             g.lineWidth = mid0 ? 0.4 : 0.3;
             g.beginPath();
