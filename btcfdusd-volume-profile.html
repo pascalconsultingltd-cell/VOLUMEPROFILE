@@ -926,12 +926,14 @@
         return a > 0 ? Math.max(1, Math.ceil(a / 10)) : 25;
       }
       /*
-       * Alerts: on each window, the up / down triangles arm a
-       * one-shot alert on the next up / down highlight (main
-       * and 15s: big-candle dots; P&F: dots and bricks).
+       * Alerts: on each window, the up / down triangles arm
+       * an alert on each new up / down highlight until
+       * unticked (main and 15s: big-candle dots; P&F: dots
+       * and bricks), once per bar (P&F: per column).
        * Saved per device. alerts["w|dir"] = { ctx, ids }:
-       * the highlights already there, ctx = what they were
-       * computed on (a new ctx resets them, no alert).
+       * the bars already rung or there when armed, ctx =
+       * what they were computed on (a new ctx resets them,
+       * no alert).
        */
       const ALK = "btcfdusd-alerts",
         alName = { main: "Chart", mini: "15s", pf: "P&F" };
@@ -958,14 +960,14 @@
           const c = all[k];
           if (hs.dot.has(k))
             out.push({
-              id: "d" + c.t0,
+              id: c.t0,
               up: c.up,
               txt: "volume dot " + (c.up ? c.lo : c.hi) * st,
             });
           c.d.forEach((v, r) => {
             if (hs.hot.has(k + "|" + r))
               out.push({
-                id: "b" + c.t0 + "|" + r,
+                id: c.t0,
                 up: v >= 0,
                 txt: "brick " + r * st,
               });
@@ -1114,7 +1116,8 @@
             (q) => q.up === (dir === "up") && !a.ids.includes(q.id),
           );
           if (!e) return;
-          delete alerts[k];
+          /* stays armed; this bar is done */
+          a.ids = a.ids.concat(e.id).slice(-50);
           alSave();
           notify(alName[w] + (e.up ? " ▲ " : " ▼ ") + e.txt);
         });
