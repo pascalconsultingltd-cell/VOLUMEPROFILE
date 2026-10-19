@@ -998,10 +998,13 @@
         if (alerts[k]) delete alerts[k];
         else {
           alerts[k] = { ctx: null, ids: [] };
-          /* a tap: the moment the browser allows these */
+          /* a tap: the moment the browser allows these; asked
+             once per page load at most */
           try {
-            if (Notification.permission === "default")
-              Notification.requestPermission();
+            const P = Notification;
+            if (!alToggle.asked && P.permission === "default")
+              P.requestPermission();
+            alToggle.asked = true;
           } catch (e) {}
           try {
             actx = actx || new AudioContext();
