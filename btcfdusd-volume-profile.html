@@ -3123,9 +3123,10 @@
                 (c.d.get(r) || 0) < 0 ? "#000" : "#089981",
                 hs.hot.has(ci.get(c) + "|" + r),
               ];
-            /* Br: bw = brick width; hotB = highlighted boxes,
+            /* Br: bw = brick width, bricks touch (+.5 hides
+               seams); hotB = highlighted boxes,
                drawn last with a brick each side */
-            const bw = Math.max(3, sl * 0.8),
+            const bw = Math.max(3, sl) + 0.5,
               hotB = [];
             shown.forEach((c, i) => {
               /* bricks wide (at least 7px), line hairline-thin */
@@ -3149,7 +3150,7 @@
                     xm - bw / 2,
                     yT,
                     bw,
-                    Math.max(1, yB - yT - 1),
+                    Math.max(1, yB - yT) + 0.5,
                   );
                   if (solid) hotB.push([xm, r, col]);
                 }
