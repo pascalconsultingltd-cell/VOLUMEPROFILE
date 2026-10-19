@@ -929,7 +929,7 @@
        * Alerts: on each window, the up / down triangles arm
        * an alert on each new up / down highlight until
        * unticked (main and 15s: big-candle dots; P&F: dots
-       * and bricks), once per bar (P&F: per column).
+       * and bricks), once per bar (P&F: per dot or brick).
        * Saved per device. alerts["w|dir"] = { ctx, ids }:
        * the bars already rung or there when armed, ctx =
        * what they were computed on (a new ctx resets them,
@@ -960,14 +960,14 @@
           const c = all[k];
           if (hs.dot.has(k))
             out.push({
-              id: c.t0,
+              id: "d" + c.t0,
               up: c.up,
               txt: "volume dot " + (c.up ? c.lo : c.hi) * st,
             });
           c.d.forEach((v, r) => {
             if (hs.hot.has(k + "|" + r))
               out.push({
-                id: c.t0,
+                id: "b" + c.t0 + "|" + r,
                 up: v >= 0,
                 txt: "brick " + r * st,
               });
