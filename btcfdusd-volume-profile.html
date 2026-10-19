@@ -297,6 +297,11 @@
         min-height: 28px;
         border-bottom: 1px solid var(--line);
       }
+      body.fs header,
+      body.fs #info,
+      body.fs #mini {
+        display: none !important;
+      }
       main {
         user-select: none;
         flex: 1;
@@ -1810,6 +1815,32 @@
           const [a, b] = [...pts.values()];
           return Math.max(10, Math.hypot(a.x - b.x, a.y - b.y));
         };
+        const pmid = () => {
+          const [a, b] = [...pts.values()];
+          return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        };
+        /* full screen: one window fills the screen, header,
+           info bar and 15s window hide */
+        function setFull(k) {
+          const was = full,
+            de = document.documentElement;
+          full = k;
+          document.body.classList.toggle("fs", !!k);
+          try {
+            if (k && !document.fullscreenElement)
+              de.requestFullscreen().catch(() => {});
+            if (!k && was && document.fullscreenElement)
+              document.exitFullscreen().catch(() => {});
+          } catch (e) {}
+          requestAnimationFrame(() =>
+            charts.forEach((h) => h.size()),
+          );
+        }
+        /* Esc or the phone's back gesture leaves full screen */
+        if (cfg.main)
+          document.addEventListener("fullscreenchange", () => {
+            if (!document.fullscreenElement && full) setFull(null);
+          });
         function size() {
           const r = cv.getBoundingClientRect(),
             d = devicePixelRatio || 1;
@@ -1845,6 +1876,12 @@
         function draw() {
           try {
             drawInner();
+            /* DPoc / profiles full screen: blank the chart
+               strip, only the price scale stays */
+            if (view && (full === "pc" || full === "tpo")) {
+              g.fillStyle = "#ffffff";
+              g.fillRect(view.x0 - 4, 0, view.px0 - view.x0 + 4, H);
+            }
             if (cfg.main) $("info").style.color = "";
           } catch (e) {
             console.error(e);
@@ -3751,22 +3788,39 @@
           if (pts.has(e.pointerId))
             pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
           /*
-           * two-finger pinch zooms the time axis, same limits
-           * as the mouse wheel
+           * two fingers: spread zooms the time axis, moving
+           * them pans; both act on the window they started in
            */
           if (pinch) {
-            if (pts.size >= 2) {
-              const mx = Math.max(
-                20,
-                Math.min(arrLen || src().length, 3000),
-              );
-              N = Math.max(
-                20,
-                Math.min(
-                  mx,
-                  Math.round((pinch.N * pinch.d) / pdist()),
-                ),
-              );
+            if (pts.size >= 2 && view) {
+              const q = pinch,
+                f = q.d / pdist(),
+                m = pmid(),
+                dx = m.x - q.x,
+                dy = m.y - q.y,
+                cl = (a, b, v) => Math.max(a, Math.min(b, v));
+              q.x = m.x;
+              q.y = m.y;
+              q.ty += dy;
+              if (q.w === "pc") {
+                if (pcPf) pfN = cl(5, 600, Math.round(q.n * f));
+                else pcN = cl(3, 60, Math.round(q.n * f));
+                pcBack = Math.max(
+                  1 - view.pcN,
+                  pcBack + dx / view.pcSl,
+                );
+              } else if (q.w === "tpo") {
+                nTpo = cl(1, 30, Math.round(q.n * f));
+                tpoBack = cl(1 - nTpo, 60, tpoBack + dx / view.tpoSl);
+              } else {
+                const mx = cl(20, 3000, arrLen || src().length);
+                N = cl(20, mx, Math.round(q.n * f));
+                const tot = off + subX + dx / view.pc;
+                off = Math.floor(tot);
+                subX = tot - off;
+                if (Math.abs(q.ty) > 12)
+                  ypan += (dy / view.ch) * (view.hi - view.lo);
+              }
               if (cfg.main) ui();
               draw();
             }
@@ -4139,14 +4193,38 @@
             try {
               cv.setPointerCapture(e.pointerId);
             } catch (err) {}
+            const m = pmid(),
+              rx = m.x - cv.getBoundingClientRect().left,
+              w = !view
+                ? null
+                : view.pcOff && rx < view.pcOff - 5
+                  ? "pc"
+                  : cfg.tpo && rx < view.x0 - 5
+                    ? "tpo"
+                    : null;
             pinch = {
+              w,
               d: pdist(),
-              N: Math.min(N, Math.max(20, arrLen)),
+              x: m.x,
+              y: m.y,
+              ty: 0,
+              n: w === "pc"
+                ? view.pcN
+                : w === "tpo"
+                  ? nTpo
+                  : Math.min(N, Math.max(20, arrLen)),
             };
+            if (!w && !lock && fit) lock = fit;
             pan = null;
             sc = null;
             drag = null;
             divDrag = false;
+            /* the crosshair goes while two fingers are down */
+            hover = -1;
+            mouse = null;
+            if (xh && xh.from === api) xh = null;
+            draw();
+            charts.forEach((h) => h !== api && h.sched());
             e.preventDefault();
             return;
           }
@@ -4168,8 +4246,7 @@
                   iy <= q.y + q.h,
               );
             if (hit2) {
-              full = full === hit2.k ? null : hit2.k;
-              draw();
+              setFull(full === hit2.k ? null : hit2.k);
               e.preventDefault();
               return;
             }
@@ -4229,7 +4306,8 @@
             ) {
               sc = { y: e.clientY, v: ysc };
               cv.style.cursor = "ns-resize";
-            } else {
+            } else if (e.pointerType !== "touch") {
+              /* one finger is the crosshair, two fingers pan */
               if (!lock && fit) lock = fit;
               /* w: the window being dragged, b0 its offset */
               const px = e.clientX - cv.getBoundingClientRect().left,
@@ -4471,7 +4549,7 @@
             pcN = 7;
             pfN = 40;
             pcPx = null;
-            full = null;
+            if (full) setFull(null);
             pcBack = 0;
             subX = 0;
             tpoBack = 0;
