@@ -3210,6 +3210,15 @@
                   h,
                 ),
               );
+              /* black border round the three */
+              g.strokeStyle = "#000";
+              g.lineWidth = 1;
+              g.strokeRect(
+                xm - sl - bw / 2 - 0.5,
+                (yT + yB) / 2 - h / 2 - 0.5,
+                2 * sl + bw + 1,
+                h + 1,
+              );
             });
           };
           /* pcGeo: DPoc candles and their x, for the magnet */
