@@ -2181,27 +2181,30 @@
             /*
              * full = "main" / "tpo" / "pc": that window takes
              * the width, the others hide (the chart keeps a
-             * 2px strip so its scale still works)
+             * thin strip so its scale still works)
              */
             fl = cfg.main ? full : null,
             tpoW = !cfg.tpo || fl === "main" || fl === "pc"
               ? 0
               : fl === "tpo"
-                ? x1 - 22
+                ? x1 - 25
                 : tpoW0,
             pcW = !(cfg.main && cfg.tpo && pocC) ||
               fl === "main" || fl === "tpo"
               ? 0
               : fl === "pc"
-                ? x1 - 22
+                ? x1 - 35
                 : pcPx || tpoW0,
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
             px0 = W - axW;
-          /* pcW = DPoc panel at the far left; pcOff shifts the
-             profiles right of it */
+          /* profiles at the far left, then the DPoc panel (pcW
+             wide, from pL), then the chart from x0; tR = the
+             profiles' right edge */
           const pcOff = pcW ? pcW + 10 : 0,
             x0 = tpoW + 10 + pcOff,
+            pL = x0 - 3 - pcW,
+            tR = pL - 2,
             top = 8,
             bot = H - legendH - timeH - 6,
             ch = bot - top;
@@ -2551,13 +2554,13 @@
             ) / 3;
           g.save();
           g.beginPath();
-          g.rect(pcOff, top, x0 - 5 - pcOff, bot - top);
+          g.rect(0, top, tR, bot - top);
           g.clip();
           g.font = "10px ui-monospace,Menlo,monospace";
           g.textBaseline = "middle";
           for (let d = 0; d < cnt + ex; d++) {
             const Q = dayProf(tpoDays[d]),
-              cx0 = 6 + pcOff + (d - ex + tf) * (colW + gap),
+              cx0 = 6 + (d - ex + tf) * (colW + gap),
               rowH = (ch * Q.step) / (hi - lo),
               lw = Math.min(11, (colW - 2) / Q.maxC),
               P = Object.assign(
@@ -2677,11 +2680,8 @@
             if (need < k15[0].t) older("15m");
           }
           /* the profiles sit in a soft rounded frame, like DPoc */
-          /* frames touch: DPoc | profiles | chart */
-          if (cfg.tpo && tpoW) {
-            const fx = pcW ? 4 + pcW : 1;
-            panel(fx, x0 - 3 - fx);
-          }
+          /* frames touch: profiles | DPoc | chart */
+          if (cfg.tpo && tpoW) panel(1, pL - 1);
           /* and the main chart, axis included */
           if (cfg.main) panel(x0 - 3, W - x0 + 1);
           /* session legend + day labels under each profile */
@@ -2690,7 +2690,7 @@
           g.textBaseline = "middle";
           profs.forEach((P) => {
             /* legends only under whole profiles */
-            const cut = P.cx0 < pcOff + 4 || P.cx0 + colW > x0 - 4;
+            const cut = P.cx0 < 4 || P.cx0 + colW > tR + 1;
             /* no legend for empty (future) days either */
             if (!P.show || cut || P.poc == null) return;
             const gr = g.createLinearGradient(
@@ -3156,7 +3156,7 @@
           let pcShow = 0,
             pcSl = 0;
           if (pcW) {
-            const pa = 4,
+            const pa = pL,
               pv = (dS) => {
                 const P = dayProf(dS);
                 if (P.poc == null || !P.full) return null;
@@ -3372,7 +3372,7 @@
             );
             geo.forEach((o) => {
               const f = fl.get(o.c);
-              if (!f) return;
+              if (!f || side) return;
               const c = o.c;
               if (c.c === c.o) return;
               const bull = c.c > c.o,
@@ -3424,8 +3424,9 @@
           g.fillStyle = "#6b7684";
           g.textAlign = "center";
           const every = Math.ceil(vis.length / 8);
-          /* none in the full-screen strip */
-          let lastX = side ? 1e9 : -1e9;
+          /* none in the full-screen strip, none spilling left
+             of the chart */
+          let lastX = side ? 1e9 : x0 - 26;
           if (marks.length >= 2)
             marks.forEach((o) => {
               /* the line's time on the local clock; the date
@@ -3473,7 +3474,16 @@
             ch,
             px0,
             x0,
-            pcOff,
+            tR,
+            pcW,
+            tpoW,
+            /* the window under px: "pc", "tpo" or the chart */
+            win: (px) =>
+              pcW && px >= tR && px < x0 - 5
+                ? "pc"
+                : tpoW && px < tR
+                  ? "tpo"
+                  : null,
             pcGeo,
             pfX,
             icons,
@@ -3709,15 +3719,15 @@
            */
           if (showOrders && orders.length && pcPf && pfX.length) {
             const mq = Math.max(...orders.map((o) => o.qty)),
-              xR = 4 + pcW,
+              xR = pL + pcW,
               xAt = (tt) => {
-                let x = 4;
+                let x = pL;
                 for (const [t0, xm] of pfX) if (t0 <= tt) x = xm;
                 return x;
               };
             g.save();
             g.beginPath();
-            g.rect(4, top, pcW, bot - top);
+            g.rect(pL, top, pcW, bot - top);
             g.clip();
             orders.forEach((o) => {
               const y = Y(o.price),
@@ -3833,12 +3843,12 @@
              strip, the last price and scale stay */
           if (side) {
             g.fillStyle = "#ffffff";
-            g.fillRect(x1 - 16, 0, px0 - x1 + 16, H);
+            g.fillRect(x0 - 2, 0, px0 - x0 + 2, H);
           }
           if (cfg.main) {
-            if (pcW) icon("pc", 4, 4 + pcW);
-            if (pcW && pcPf) alIcons("pf", 4 + pcW);
-            if (tpoW) icon("tpo", pcW ? 4 + pcW : 1, x0 - 6);
+            if (pcW) icon("pc", pL, pL + pcW);
+            if (pcW && pcPf) alIcons("pf", pL + pcW);
+            if (tpoW) icon("tpo", 1, tR - 1);
             if (!side) {
               icon("main", x0 - 3, px0 - 2);
               alIcons("main", px0 - 2);
@@ -3959,7 +3969,7 @@
             if (px != null) {
               g.save();
               g.beginPath();
-              g.rect(4, top, pcW, bot - top);
+              g.rect(pL, top, pcW, bot - top);
               g.clip();
               g.strokeStyle = XH;
               g.setLineDash([4, 4]);
@@ -3971,7 +3981,7 @@
             }
           }
           /* hovering a P&F column: its time on this chart too */
-          if (pcW && mouse && mouse.x < pcOff - 5) {
+          if (pcW && mouse && mouse.x >= tR && mouse.x < x0 - 5) {
             const ro = geoAt(pfTime(mouse.x));
             if (ro && pfTime(mouse.x) != null) {
               const rx = ro.x + ro.w / 2;
@@ -4101,18 +4111,18 @@
             return;
           }
           if (divDrag && view) {
-            /* each divider moves on its own: the DPoc edge
-               trades width with the profiles, so the profiles /
-               chart edge (x0) stays put */
+            /* each divider moves on its own: the profiles /
+               DPoc edge trades width between them, so the
+               chart edge (x0) stays put; the edge before the
+               chart widens the panel next to it */
+            const cl = (a, b, v) => Math.max(a, Math.min(b, v));
             if (divDrag === "pc") {
-              const x0 = view.x0,
-                pw = Math.max(50, Math.min(x0 - 100 - 10, x - 5));
-              pcPx = pw;
-              tpoFrac = (x0 - 10 - (pw + 10)) / W;
-            } else {
-              const xd = x - 5 - (view.pcOff || 0);
-              tpoFrac = Math.max(80, Math.min(W * 0.75, xd)) / W;
-            }
+              const tw = cl(80, view.x0 - 70, x - 15);
+              tpoFrac = tw / W;
+              pcPx = view.x0 - 20 - tw;
+            } else if (view.pcW)
+              pcPx = cl(50, W * 0.75, x - 15 - view.tpoW);
+            else tpoFrac = cl(80, W * 0.75, x - 5) / W;
             draw();
             return;
           }
@@ -4268,9 +4278,9 @@
             y > view.bot
           )
             return false;
-          /* "pc" = DPoc / profiles edge, "tpo" = profiles /
-             chart */
-          if (view.pcOff && Math.abs(x - (view.pcOff - 5)) <= 5)
+          /* "pc" = profiles / DPoc edge, "tpo" = the edge
+             before the chart */
+          if (view.pcW && view.tpoW && Math.abs(x - view.tR) <= 5)
             return "pc";
           return Math.abs(x - (view.x0 - 5)) <= 5 ? "tpo" : false;
         }
@@ -4469,13 +4479,7 @@
             } catch (err) {}
             const m = pmid(),
               rx = m.x - cv.getBoundingClientRect().left,
-              w = !view
-                ? null
-                : view.pcOff && rx < view.pcOff - 5
-                  ? "pc"
-                  : cfg.tpo && rx < view.x0 - 5
-                    ? "tpo"
-                    : null;
+              w = view ? view.win(rx) : null;
             pinch = {
               w,
               d: pdist(),
@@ -4587,12 +4591,7 @@
               if (!lock && fit) lock = fit;
               /* w: the window being dragged, b0 its offset */
               const px = e.clientX - cv.getBoundingClientRect().left,
-                w =
-                  view.pcOff && px < view.pcOff - 5
-                    ? "pc"
-                    : cfg.tpo && px < view.x0 - 5
-                      ? "tpo"
-                      : null;
+                w = view.win(px);
               pan = {
                 w,
                 b0: w === "pc" ? pcBack : tpoBack,
@@ -4634,8 +4633,8 @@
             cv.style.cursor = "crosshair";
             draw();
           } else if (mouse && isDiv(mouse.x, mouse.y)) {
-            if (isDiv(mouse.x, mouse.y) === "pc") pcPx = null;
-            else tpoFrac = null;
+            pcPx = null;
+            tpoFrac = null;
             draw();
           } else if (view && mouse && mouse.x > view.px0) {
             ysc = 1;
@@ -4718,7 +4717,7 @@
                the number of days, one at a time, 1 to 30 (the
                profiles keep their width, so the chart does not
                shrink) */
-            if (view && view.pcOff && wx < view.pcOff - 5) {
+            if (view && view.win(wx) === "pc") {
               const n0 = view.pcN,
                 f2 = sg > 0 ? 1.15 : 1 / 1.15;
               if (pcPf)
@@ -4731,7 +4730,7 @@
               draw();
               return;
             }
-            if (view && cfg.tpo && wx < view.x0 - 5) {
+            if (view && view.win(wx) === "tpo") {
               const n1 = nTpo + (sg > 0 ? 1 : -1);
               nTpo = Math.max(1, Math.min(30, n1));
               if (cfg.main) ui();
