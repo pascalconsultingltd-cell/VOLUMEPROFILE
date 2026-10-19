@@ -3186,15 +3186,20 @@
                 },
               });
               if (!hs.dot.has(ci.get(c))) return;
-              /* radius 5, as the big-candle circles */
+              /* radius 5, as the big-candle circles, clear of
+                 the column, vivid green as the highlights,
+                 outlined in black */
               const rd = 5,
                 y = c.up
-                  ? Y(c.lo * st) + rd + 3
-                  : Y((c.hi + 1) * st) - rd - 3;
+                  ? Y(c.lo * st) + rd + 8
+                  : Y((c.hi + 1) * st) - rd - 8;
               g.beginPath();
               g.arc(xm, y, rd, 0, 7);
-              g.fillStyle = c.up ? "#4caf50" : "#000";
+              g.fillStyle = c.up ? "#00e676" : "#000";
               g.fill();
+              g.strokeStyle = "#000";
+              g.lineWidth = 1;
+              g.stroke();
             });
             /* highlighted box, green buys / black sells, with
                one more brick each side so it stands out */
