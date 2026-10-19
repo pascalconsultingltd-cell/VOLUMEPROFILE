@@ -4019,9 +4019,10 @@
                 const tot = off + subX + dx / view.pc;
                 off = Math.floor(tot);
                 subX = tot - off;
-                if (Math.abs(q.ty) > 12)
-                  ypan += (dy / view.ch) * (view.hi - view.lo);
               }
+              /* up / down: the price scale all windows share */
+              if (Math.abs(q.ty) > 12) q.vy = true;
+              if (q.vy) ypan += (dy / view.ch) * (view.hi - view.lo);
               if (cfg.main) ui();
               draw();
             }
@@ -4415,7 +4416,7 @@
                   ? nTpo
                   : Math.min(N, Math.max(20, arrLen)),
             };
-            if (!w && !lock && fit) lock = fit;
+            if (!lock && fit) lock = fit;
             pan = null;
             sc = null;
             drag = null;
