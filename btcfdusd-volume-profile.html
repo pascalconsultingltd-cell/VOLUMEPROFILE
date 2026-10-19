@@ -467,6 +467,20 @@
             ></span
           ></span
         >
+        <span class="grp" title="Alerts"
+          ><span class="ttl"
+            ><span class="lbl">Alerts</span
+            ><span class="box"
+              ><button
+                id="alClr"
+                class=""
+                title="Clear all alerts (Alt+A); lit while armed"
+              >
+                Clear
+              </button></span
+            ></span
+          ></span
+        >
       </div>
     </header>
     <div id="info"></div>
@@ -957,9 +971,28 @@
         try {
           localStorage.setItem(ALK, JSON.stringify(alerts));
         } catch (e) {}
+        alBtn();
         wake();
         schedule();
       }
+      /* Clear button and Alt+A: disarm every alert */
+      function alClear() {
+        alerts = {};
+        alSave();
+        toast("Alerts cleared");
+      }
+      /* the header is above this script; $ is defined later */
+      const alBtn = () =>
+        (document.getElementById("alClr").className =
+          Object.keys(alerts).length ? "a" : "");
+      document.getElementById("alClr").onclick = alClear;
+      alBtn();
+      addEventListener("keydown", (e) => {
+        if (e.altKey && e.code === "KeyA") {
+          e.preventDefault();
+          alClear();
+        }
+      });
       function alToggle(w, dir) {
         const k = w + "|" + dir;
         if (alerts[k]) delete alerts[k];
