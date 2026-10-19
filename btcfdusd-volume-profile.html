@@ -3201,7 +3201,8 @@
               const yT = Y((r + 1) * st),
                 yB = Y(r * st),
                 h = Math.max(6, yB - yT - 1);
-              g.fillStyle = col;
+              /* a vivid green, to stand out from the bricks */
+              g.fillStyle = col === "#000" ? col : "#00e676";
               [-1, 0, 1].forEach((k) =>
                 g.fillRect(
                   xm + k * sl - bw / 2,
