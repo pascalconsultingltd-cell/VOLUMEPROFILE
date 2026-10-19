@@ -894,6 +894,163 @@
           if (cv[k] > top(cv, k)) dot.add(k);
         return (pfHotC = { key, hot, dot });
       }
+      /* P&F box: a tenth of the vol step, else 25 */
+      function pfStep() {
+        const ref = k15.length ? k15[k15.length - 1].c : 0,
+          a = volPct ? (ref * volN) / 100 : volN;
+        return a > 0 ? Math.max(1, Math.ceil(a / 10)) : 25;
+      }
+      /*
+       * Alerts: on each window, the up / down triangles arm a
+       * one-shot alert on the next up / down highlight (main
+       * and 15s: big-candle dots; P&F: dots and bricks).
+       * Saved per device. alerts["w|dir"] = { ctx, ids }:
+       * the highlights already there, ctx = what they were
+       * computed on (a new ctx resets them, no alert).
+       */
+      const ALK = "btcfdusd-alerts",
+        alName = { main: "Chart", mini: "15s", pf: "P&F" };
+      let alerts = {},
+        actx = null,
+        wlock = null,
+        alT = 0;
+      try {
+        alerts = JSON.parse(localStorage.getItem(ALK)) || {};
+      } catch (e) {}
+      /* P&F highlights in the last two columns */
+      function pfEvents() {
+        const d1 = dayOf(Date.now()),
+          d0 = d1 - 86400000,
+          st = pfStep(),
+          out = [];
+        loadAggr(d0);
+        loadAggr(d1);
+        if (!aggrT.get(d0) || !aggrT.get(d1)) return null;
+        const all = pfCols([d0, d1], st),
+          hs = pfHot(all, st),
+          n = all.length;
+        for (let k = Math.max(0, n - 2); k < n; k++) {
+          const c = all[k];
+          if (hs.dot.has(k))
+            out.push({
+              id: "d" + c.t0,
+              up: c.up,
+              txt: "volume dot " + (c.up ? c.lo : c.hi) * st,
+            });
+          c.d.forEach((v, r) => {
+            if (hs.hot.has(k + "|" + r))
+              out.push({
+                id: "b" + c.t0 + "|" + r,
+                up: v >= 0,
+                txt: "brick " + r * st,
+              });
+          });
+        }
+        return { ctx: st, ev: out };
+      }
+      function alEvents(w) {
+        if (w === "pf") return pfEvents();
+        const c = charts[w === "main" ? 0 : 1];
+        return c ? c.alertEv() : null;
+      }
+      function alSave() {
+        try {
+          localStorage.setItem(ALK, JSON.stringify(alerts));
+        } catch (e) {}
+        wake();
+        schedule();
+      }
+      function alToggle(w, dir) {
+        const k = w + "|" + dir;
+        if (alerts[k]) delete alerts[k];
+        else {
+          alerts[k] = { ctx: null, ids: [] };
+          /* a tap: the moment the browser allows these */
+          try {
+            if (Notification.permission === "default")
+              Notification.requestPermission();
+          } catch (e) {}
+          try {
+            actx = actx || new AudioContext();
+            actx.resume();
+          } catch (e) {}
+        }
+        alSave();
+      }
+      /* phone: keep the screen on while an alert is armed,
+         a locked phone pauses the page */
+      async function wake() {
+        const want =
+          Object.keys(alerts).length > 0 &&
+          matchMedia("(pointer: coarse)").matches;
+        try {
+          if (want && !wlock && navigator.wakeLock) {
+            wlock = await navigator.wakeLock.request("screen");
+            wlock.addEventListener("release", () => (wlock = null));
+          } else if (!want && wlock) {
+            wlock.release();
+            wlock = null;
+          }
+        } catch (e) {}
+      }
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) wake();
+      });
+      wake();
+      /* toast, vibration, beep and a system notification */
+      function notify(t) {
+        toast(t);
+        try {
+          navigator.vibrate([200, 100, 200]);
+        } catch (e) {}
+        try {
+          const o = actx.createOscillator(),
+            gn = actx.createGain();
+          o.frequency.value = 880;
+          gn.gain.value = 0.2;
+          o.connect(gn).connect(actx.destination);
+          o.start();
+          o.stop(actx.currentTime + 0.3);
+        } catch (e) {}
+        try {
+          if (Notification.permission !== "granted") return;
+          const sw = navigator.serviceWorker,
+            opt = { body: t, tag: t, icon: "icon-192.png" };
+          (sw ? sw.getRegistration() : Promise.resolve(null))
+            .then((r) =>
+              r
+                ? r.showNotification("BTCFDUSD", opt)
+                : new Notification("BTCFDUSD", opt),
+            )
+            .catch(() => {});
+        } catch (e) {}
+      }
+      /* at most once a second: from the feed, and a timer */
+      function alTick() {
+        const now = Date.now();
+        if (now - alT < 1000) return;
+        alT = now;
+        Object.keys(alerts).forEach((k) => {
+          const [w, dir] = k.split("|"),
+            a = alerts[k],
+            r = alEvents(w);
+          if (!r) return;
+          if (a.ctx !== r.ctx) {
+            a.ctx = r.ctx;
+            a.ids = r.ev.map((e) => e.id);
+            alSave();
+            return;
+          }
+          const e = r.ev.find(
+            (q) => q.up === (dir === "up") && !a.ids.includes(q.id),
+          );
+          if (!e) return;
+          delete alerts[k];
+          alSave();
+          notify(alName[w] + (e.up ? " ▲ " : " ▼ ") + e.txt);
+        });
+      }
+      setInterval(alTick, 1000);
       /* POC bands and tags on the chart (POC button) */
       let showPOC = false;
       function setShowPOC(v) {
@@ -1715,6 +1872,8 @@
           /* bookTicker */
           else if (m.b !== undefined && m.a !== undefined)
             setMid(m.b, m.a);
+          /* the feed keeps coming in a background tab */
+          alTick();
         };
         w.onclose = () => {
           if (!polling) {
@@ -2785,6 +2944,39 @@
            * window's left edge. icons = their boxes, for clicks.
            */
           const icons = [];
+          /* alert toggles left of it: up / down triangles,
+             filled green / black while armed */
+          const alIcons = (w, xr) =>
+            ["dn", "up"].forEach((dir, i) => {
+              const x = xr - 36 - i * 18,
+                y = top + 3,
+                up = dir === "up",
+                on = alerts[w + "|" + dir];
+              icons.push({
+                k: "a|" + w + "|" + dir,
+                x: x - 3,
+                y: y - 3,
+                w: 18,
+                h: 19,
+              });
+              g.save();
+              g.setLineDash([]);
+              g.beginPath();
+              g.moveTo(x + 1, up ? y + 10 : y + 3);
+              g.lineTo(x + 11, up ? y + 10 : y + 3);
+              g.lineTo(x + 6, up ? y + 2 : y + 11);
+              g.closePath();
+              g.lineWidth = 1.2;
+              g.strokeStyle = on
+                ? up
+                  ? "#089981"
+                  : "#000"
+                : "#b4bdc8";
+              g.fillStyle = up ? "#089981" : "#000";
+              if (on) g.fill();
+              else g.stroke();
+              g.restore();
+            });
           const icon = (k, xl, xr) => {
             const x = xr - 16,
               y = top + 3,
@@ -2990,8 +3182,7 @@
             cds.sort((m, n) => m.t - n.t || m.k - n.k || 0);
             /* P&F: columns from yesterday's and today's trades,
                box = the brick */
-            const pst =
-                volAmt > 0 ? Math.max(1, Math.ceil(volAmt / 10)) : 25,
+            const pst = pfStep(),
               d1 = dayOf(Date.now());
             if (pcPf) {
               loadAggr(d1 - DAY);
@@ -3571,9 +3762,11 @@
           /* full-width icons, on top of the drawings */
           if (cfg.main) {
             if (pcW) icon("pc", 4, 4 + pcW);
+            if (pcW && pcPf) alIcons("pf", 4 + pcW);
             if (tpoW) icon("tpo", pcW ? 4 + pcW : 1, x0 - 6);
             icon("main", x0 - 3, px0 - 2);
-          }
+            alIcons("main", px0 - 2);
+          } else alIcons("mini", px0 - 2);
           /* last price */
 
           const last = vis[vis.length - 1],
@@ -4246,7 +4439,9 @@
                   iy <= q.y + q.h,
               );
             if (hit2) {
-              setFull(full === hit2.k ? null : hit2.k);
+              const [a, w, dir] = hit2.k.split("|");
+              if (a === "a") alToggle(w, dir);
+              else setFull(full === hit2.k ? null : hit2.k);
               e.preventDefault();
               return;
             }
@@ -4524,6 +4719,23 @@
             if (isBig(arr, k)) out.set(arr[k], true);
           return out;
         }
+        /* alerts: big-candle dots on the last two candles
+           or bricks; ctx = interval and chart type */
+        function alertEv() {
+          const arr = mode === "lb" ? lbBars(src()) : src(),
+            out = [];
+          if (arr.length < BIG_WIN) return null;
+          for (let k = arr.length - 2; k < arr.length; k++) {
+            const c = arr[k];
+            if (c.c != null && c.c !== c.o && isBig(arr, k))
+              out.push({
+                id: c.t,
+                up: c.c > c.o,
+                txt: "big candle " + c.c.toFixed(0),
+              });
+          }
+          return { ctx: (cfg.main ? TF : "") + mode, ev: out };
+        }
         /* line-break views re-anchor on bricks in drawInner */
         function newCandle(a) {
           if (mode !== "lb" && src() === a && off > 0) off++;
@@ -4537,6 +4749,7 @@
         const api = {
           sched,
           draw,
+          alertEv,
           newCandle,
           size,
           resetView: () => {

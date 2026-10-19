@@ -28,6 +28,19 @@ self.addEventListener("activate", (e) => {
       .then(() => self.clients.claim()),
   );
 });
+/* tapping an alert opens the chart */
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients
+      .matchAll({ type: "window" })
+      .then((cs) =>
+        cs.length
+          ? cs[0].focus()
+          : self.clients.openWindow("./btcfdusd-volume-profile.html"),
+      ),
+  );
+});
 self.addEventListener("fetch", (e) => {
   const u = new URL(e.request.url);
   const own = u.origin === self.location.origin;
