@@ -3827,17 +3827,20 @@
           g.stroke();
           /*
            * tag sits left of the axis so it does not cover the
-           * level tags of drawings
+           * level tags of drawings; a second one at the line's
+           * left end
            */
           {
             const lt = lp.toFixed(DP),
               lw = g.measureText(lt).width + 10;
-            g.fillStyle = LP;
-            g.fillRect(px0 - lw, ly - 9, lw, 18);
-            g.fillStyle = "#ffffff";
             g.textAlign = "left";
             g.textBaseline = "middle";
-            g.fillText(lt, px0 - lw + 5, ly);
+            [px0 - lw, 4].forEach((tx) => {
+              g.fillStyle = LP;
+              g.fillRect(tx, ly - 9, lw, 18);
+              g.fillStyle = "#ffffff";
+              g.fillText(lt, tx + 5, ly);
+            });
           }
           /* hover */
 
