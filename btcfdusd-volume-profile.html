@@ -4171,6 +4171,8 @@
               const sn = snap(x, y);
               drag.p = sn.p;
               drag.t = sn.o.c.t;
+              /* over P&F / profiles the start is a screen x */
+              drag.l = sn.left;
             } else if (drag.k === "b") {
               if (dragEdge === "move" && moveInfo) {
                 const dp =
