@@ -2035,12 +2035,6 @@
         function draw() {
           try {
             drawInner();
-            /* DPoc / profiles full screen: blank the chart
-               strip, only the price scale stays */
-            if (view && (full === "pc" || full === "tpo")) {
-              g.fillStyle = "#ffffff";
-              g.fillRect(view.x0 - 4, 0, view.px0 - view.x0 + 4, H);
-            }
             if (cfg.main) $("info").style.color = "";
           } catch (e) {
             console.error(e);
@@ -2097,14 +2091,19 @@
            * legendH = room for the TPO session legend and day
            * labels
            */
+          /* DPoc / profiles full screen: no room right of the
+             chart, they reach the price scale */
           const axW = 62,
+            side = cfg.main && (full === "pc" || full === "tpo"),
             x1 =
               W -
               axW -
-              Math.max(
-                cfg.main ? 60 : 24,
-                W * (cfg.main ? 0.07 : 0.04),
-              ),
+              (side
+                ? 4
+                : Math.max(
+                    cfg.main ? 60 : 24,
+                    W * (cfg.main ? 0.07 : 0.04),
+                  )),
             tpoW0 = cfg.tpo
               ? tpoFrac != null
                 ? Math.max(80, Math.min(W * 0.75, tpoFrac * W))
@@ -2113,19 +2112,19 @@
             /*
              * full = "main" / "tpo" / "pc": that window takes
              * the width, the others hide (the chart keeps a
-             * strip so its scale still works)
+             * 2px strip so its scale still works)
              */
             fl = cfg.main ? full : null,
             tpoW = !cfg.tpo || fl === "main" || fl === "pc"
               ? 0
               : fl === "tpo"
-                ? x1 - 50
+                ? x1 - 22
                 : tpoW0,
             pcW = !(cfg.main && cfg.tpo && pocC) ||
               fl === "main" || fl === "tpo"
               ? 0
               : fl === "pc"
-                ? x1 - 60
+                ? x1 - 22
                 : pcPx || tpoW0,
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
@@ -3356,7 +3355,8 @@
           g.fillStyle = "#6b7684";
           g.textAlign = "center";
           const every = Math.ceil(vis.length / 8);
-          let lastX = -1e9;
+          /* none in the full-screen strip */
+          let lastX = side ? 1e9 : -1e9;
           if (marks.length >= 2)
             marks.forEach((o) => {
               /* the line's time on the local clock; the date
@@ -3760,12 +3760,20 @@
             );
           }
           /* full-width icons, on top of the drawings */
+          /* DPoc / profiles full screen: blank the chart
+             strip, the last price and scale stay */
+          if (side) {
+            g.fillStyle = "#ffffff";
+            g.fillRect(x1 - 16, 0, px0 - x1 + 16, H);
+          }
           if (cfg.main) {
             if (pcW) icon("pc", 4, 4 + pcW);
             if (pcW && pcPf) alIcons("pf", 4 + pcW);
             if (tpoW) icon("tpo", pcW ? 4 + pcW : 1, x0 - 6);
-            icon("main", x0 - 3, px0 - 2);
-            alIcons("main", px0 - 2);
+            if (!side) {
+              icon("main", x0 - 3, px0 - 2);
+              alIcons("main", px0 - 2);
+            }
           } else alIcons("mini", px0 - 2);
           /* last price */
 
