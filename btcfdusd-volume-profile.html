@@ -373,6 +373,13 @@
                 title="Aggression P&amp;F: new column on taker flip"
               >
                 P&amp;F
+              </button
+              ><button
+                id="pfBrTog"
+                class="a"
+                title="P&amp;F bricks coloured by time; off = lines"
+              >
+                Br
               </button></span
             ></span
         ></span>
@@ -853,6 +860,7 @@
                 hi: b,
                 d: new Map(),
                 v: new Map(),
+                tm: new Map(),
               }),
             );
           else {
@@ -861,6 +869,8 @@
           }
           cur.d.set(b, (cur.d.get(b) || 0) + buy - sell);
           cur.v.set(b, (cur.v.get(b) || 0) + buy + sell);
+          /* tm: when the column first traded a brick */
+          if (!cur.tm.has(b)) cur.tm.set(b, vt);
         };
         days.forEach((dS) => {
           const d = aggrT.get(dS);
@@ -1152,6 +1162,14 @@
         $("pfTog").className = pcPf ? "a" : "";
         if (pcPf && pcSub) setPcSub(false);
         if (pcPf && !pocC) setPocC(true);
+        schedule();
+      }
+      /* P&F drawn as bricks coloured like the profiles (Br
+         button); off = the column lines */
+      let pfBr = true;
+      function setPfBr(v) {
+        pfBr = !!v;
+        $("pfBrTog").className = pfBr ? "a" : "";
         schedule();
       }
       /* vertical 6-hour lines (6h button); the midnight
@@ -3105,30 +3123,56 @@
                 (c.d.get(r) || 0) < 0 ? "#000" : "#089981",
                 hs.hot.has(ci.get(c) + "|" + r),
               ];
+            /* Br: bw = brick width; hotB = highlighted boxes,
+               drawn last with a brick each side */
+            const bw = Math.max(3, sl * 0.8),
+              hotB = [];
             shown.forEach((c, i) => {
               /* bricks wide (at least 7px), line hairline-thin */
               const xm = pa + sl * jOf(i),
                 w = Math.max(7, sl * 0.9),
                 x = xm - w / 2;
               pfX.push([c.t0, xm]);
+              /* Br: every box a brick, coloured by the time the
+                 column first traded it, as the profiles */
+              if (pfBr)
+                for (let r = c.lo; r <= c.hi; r++) {
+                  const t = c.tm.get(r);
+                  if (t == null) continue;
+                  const yT = Y((r + 1) * st),
+                    yB = Y(r * st),
+                    [col, solid] = shade(c, r);
+                  g.fillStyle = tpoColor(
+                    Math.floor((t % 86400000) / TPO_MS),
+                  );
+                  g.fillRect(
+                    xm - bw / 2,
+                    yT,
+                    bw,
+                    Math.max(1, yB - yT - 1),
+                  );
+                  if (solid) hotB.push([xm, r, col]);
+                }
               /* the column as one line, buyers green / sellers
                  black, then a real brick on the strongest boxes */
-              g.strokeStyle = c.up ? "#089981" : "#000";
-              g.lineWidth = 1;
-              g.beginPath();
-              g.moveTo(xm, Y((c.hi + 1) * st));
-              g.lineTo(xm, Y(c.lo * st));
-              g.stroke();
-              g.lineWidth = 1;
-              for (let r = c.lo; r <= c.hi; r++) {
-                const [col, solid] = shade(c, r);
-                if (!solid) continue;
-                /* at least 6px tall, centred on its box */
-                const yT = Y((r + 1) * st),
-                  yB = Y(r * st),
-                  h = Math.max(6, yB - yT - 1);
-                g.fillStyle = col;
-                g.fillRect(x, (yT + yB) / 2 - h / 2, w, h);
+              if (!pfBr) {
+                g.strokeStyle = c.up ? "#089981" : "#000";
+                g.lineWidth = 1;
+                g.beginPath();
+                g.moveTo(xm, Y((c.hi + 1) * st));
+                g.lineTo(xm, Y(c.lo * st));
+                g.stroke();
+                g.lineWidth = 1;
+                for (let r = c.lo; r <= c.hi; r++) {
+                  const [col, solid] = shade(c, r);
+                  if (!solid) continue;
+                  /* at least 6px tall, centred on its box */
+                  const yT = Y((r + 1) * st),
+                    yB = Y(r * st),
+                    h = Math.max(6, yB - yT - 1);
+                  g.fillStyle = col;
+                  g.fillRect(x, (yT + yB) / 2 - h / 2, w, h);
+                }
               }
               pcGeo.push({
                 xa: xm - sl / 2,
@@ -3150,6 +3194,22 @@
               g.arc(xm, y, rd, 0, 7);
               g.fillStyle = c.up ? "#4caf50" : "#000";
               g.fill();
+            });
+            /* highlighted box, green buys / black sells, with
+               one more brick each side so it stands out */
+            hotB.forEach(([xm, r, col]) => {
+              const yT = Y((r + 1) * st),
+                yB = Y(r * st),
+                h = Math.max(6, yB - yT - 1);
+              g.fillStyle = col;
+              [-1, 0, 1].forEach((k) =>
+                g.fillRect(
+                  xm + k * sl - bw / 2,
+                  (yT + yB) / 2 - h / 2,
+                  bw,
+                  h,
+                ),
+              );
             });
           };
           /* pcGeo: DPoc candles and their x, for the magnet */
@@ -5033,6 +5093,7 @@
           showVA,
           showPOC,
           pcPf,
+          pfBr,
           pocC,
           pcSub,
           showOrders,
@@ -5086,6 +5147,7 @@
         /* P&F: default changed in version 9 */
         if (st.dv >= 9 && typeof st.pcPf === "boolean")
           setPcPf(st.pcPf);
+        if (typeof st.pfBr === "boolean") setPfBr(st.pfBr);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         /* DPoc: default changed in version 7 */
@@ -5303,6 +5365,7 @@
       $("pcTog").onclick = () => setPocC(!pocC);
       $("spTog").onclick = () => setPcSub(!pcSub);
       $("pfTog").onclick = () => setPcPf(!pcPf);
+      $("pfBrTog").onclick = () => setPfBr(!pfBr);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
