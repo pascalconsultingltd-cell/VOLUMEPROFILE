@@ -83,6 +83,16 @@
       .dot.on {
         background: var(--up);
       }
+      #ctlTog {
+        border: none;
+        background: none;
+        padding: 0 4px;
+        font-size: 16px;
+        color: var(--mu);
+      }
+      body.noctl .ctl {
+        display: none;
+      }
       .ctl {
         display: flex;
         gap: 6px 10px;
@@ -326,6 +336,7 @@
         ><i class="dot" id="dot"></i
         ><span id="st">connecting</span></span
       >
+      <button id="ctlTog" title="Hide / show the toggles">▾</button>
       <div class="ctl">
         <!-- groups: chart, profile and levels, channels,
              orders, view; .box = buttons that go together -->
@@ -986,6 +997,28 @@
         (document.getElementById("alClr").className =
           Object.keys(alerts).length ? "a" : "");
       document.getElementById("alClr").onclick = alClear;
+      /* arrow next to the price: hide / show the toggles,
+         remembered per device */
+      {
+        const b = document.getElementById("ctlTog"),
+          set = (h) => {
+            document.body.classList.toggle("noctl", h);
+            b.textContent = h ? "▸" : "▾";
+            try {
+              localStorage.setItem("btcfdusd-ctl", h ? "1" : "");
+            } catch (e) {}
+            requestAnimationFrame(() =>
+              charts.forEach((c) => c.size()),
+            );
+          };
+        let h0 = false;
+        try {
+          h0 = !!localStorage.getItem("btcfdusd-ctl");
+        } catch (e) {}
+        set(h0);
+        b.onclick = () =>
+          set(!document.body.classList.contains("noctl"));
+      }
       alBtn();
       addEventListener("keydown", (e) => {
         if (e.altKey && e.code === "KeyA") {
