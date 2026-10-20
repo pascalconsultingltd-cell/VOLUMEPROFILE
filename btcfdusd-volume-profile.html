@@ -1080,8 +1080,9 @@
         if (!document.hidden) wake();
       });
       wake();
-      /* toast, vibration, beep and a system notification */
-      function notify(t) {
+      /* toast, vibration, beep and a system notification;
+         the beep: A (880 Hz) up, the E below (659 Hz) down */
+      function notify(t, up = true) {
         toast(t);
         try {
           navigator.vibrate([200, 100, 200]);
@@ -1089,7 +1090,7 @@
         try {
           const o = actx.createOscillator(),
             gn = actx.createGain();
-          o.frequency.value = 880;
+          o.frequency.value = up ? 880 : 659.25;
           gn.gain.value = 0.2;
           o.connect(gn).connect(actx.destination);
           o.start();
@@ -1131,7 +1132,10 @@
           /* stays armed; this bar is done */
           a.ids = a.ids.concat(e.id).slice(-50);
           alSave();
-          notify(alName[w] + (e.up ? " ▲ " : " ▼ ") + e.txt);
+          notify(
+            alName[w] + (e.up ? " ▲ " : " ▼ ") + e.txt,
+            e.up,
+          );
         });
       }
       setInterval(alTick, 1000);
