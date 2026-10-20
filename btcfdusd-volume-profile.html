@@ -2726,6 +2726,23 @@
             g.setLineDash([]);
           }
           g.restore();
+          /* golden rays from both ends of the last solid leg,
+             right across DPoc and the chart, price tagged */
+          zs.slice(-2).forEach(({ q }, i, a) => {
+            if (a.length < 2 || q.y < top || q.y > bot) return;
+            g.save();
+            g.beginPath();
+            g.rect(0, top, px0, bot - top);
+            g.clip();
+            g.strokeStyle = "rgba(230,159,0,.9)";
+            g.lineWidth = 1.5;
+            g.beginPath();
+            g.moveTo(Math.max(0, q.x), q.y);
+            g.lineTo(px0, q.y);
+            g.stroke();
+            g.restore();
+            ptag(q.y, q.p.toFixed(DP), "#e69f00");
+          });
           /*
            * 15m history needed: three days before the oldest
            * day on the chart (its previous day, plus the two
