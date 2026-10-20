@@ -3424,11 +3424,13 @@
             g.clip();
             /* same price scale as the chart */
             /* pb = what is loaded so far; pcBack waits for more;
-               negative = empty slots on the right */
+               negative = empty slots on the right. P&F keeps
+               15% of them (home), so new columns push it left */
             const items = pcPf ? pfc : cds,
               room = items.length - nFit,
-              pb = Math.max(1 - nFit, Math.min(pcBack, room));
-            if (olderEnd["15m"]) pcBack = pb;
+              home = pcPf ? -Math.round(nFit * 0.15) : 0,
+              pb = Math.max(1 - nFit, Math.min(pcBack + home, room));
+            if (olderEnd["15m"]) pcBack = pb - home;
             /* ib whole candles back; the newest sits in slot
                nFit - 1 + pb */
             const ib = Math.floor(pb),
