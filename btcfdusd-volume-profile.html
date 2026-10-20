@@ -946,7 +946,7 @@
        * no alert).
        */
       const ALK = "btcfdusd-alerts",
-        alName = { main: "Chart", mini: "15s", pf: "P&F" };
+        alName = { main: "Chart", mini: "15s", pf: "P&F", fb: "FB" };
       let alerts = {},
         actx = null,
         wlock = null,
@@ -987,8 +987,8 @@
       }
       function alEvents(w) {
         if (w === "pf") return pfEvents();
-        const c = charts[w === "main" ? 0 : 1];
-        return c ? c.alertEv() : null;
+        const c = charts[w === "mini" ? 1 : 0];
+        return !c ? null : w === "fb" ? c.fbEv() : c.alertEv();
       }
       function alSave() {
         try {
@@ -3034,11 +3034,19 @@
            */
           const icons = [];
           /* alert toggles left of it: up / down triangles,
-             filled green / black while armed */
-          const alIcons = (w, xr) =>
+             filled green / black while armed; row = 0 or 1
+             (under), lb = a name on their left */
+          const alIcons = (w, xr, row = 0, lb) => {
+            if (lb) {
+              g.font = "10px ui-monospace,Menlo,monospace";
+              g.fillStyle = "#6b7684";
+              g.textAlign = "right";
+              g.textBaseline = "middle";
+              g.fillText(lb, xr - 58, top + 9.5 + row * 18);
+            }
             ["dn", "up"].forEach((dir, i) => {
               const x = xr - 36 - i * 18,
-                y = top + 3,
+                y = top + 3 + row * 18,
                 up = dir === "up",
                 on = alerts[w + "|" + dir];
               icons.push({
@@ -3066,6 +3074,7 @@
               else g.stroke();
               g.restore();
             });
+          };
           const icon = (k, xl, xr) => {
             const x = xr - 16,
               y = top + 3,
@@ -3930,7 +3939,8 @@
             if (tpoW) icon("tpo", 1, tR - 1);
             if (!side) {
               icon("main", x0 - 3, px0 - 2);
-              alIcons("main", px0 - 2);
+              alIcons("main", px0 - 2, 0, "HA");
+              alIcons("fb", px0 - 2, 1, "FB");
             }
           } else alIcons("mini", px0 - 2);
           /* last price */
@@ -4897,6 +4907,41 @@
           }
           return { ctx: (cfg.main ? TF : "") + mode, ev: out };
         }
+        /* alerts: the following box (FB) turning, on the
+           newest big candle's channels, as drawn; a turn
+           up = it now follows the highs */
+        function fbEv() {
+          const arr = mode === "lb" ? lbBars(src()) : src(),
+            n = arr.length,
+            out = [];
+          let k = n - 1;
+          while (
+            k >= BIG_WIN - 1 &&
+            !(okC(arr[k]) && arr[k].c !== arr[k].o && isBig(arr, k))
+          )
+            k--;
+          if (k < BIG_WIN - 1) return null;
+          const A = arr[k],
+            ht = A.h - A.l;
+          let dn = A.c < A.o,
+            ext = dn ? A.l : A.h;
+          for (let j = k + 1; j < n; j++) {
+            const q = arr[j];
+            if (!okC(q)) continue;
+            ext = dn ? Math.min(ext, q.l) : Math.max(ext, q.h);
+            if (!(dn ? q.c > ext + ht : q.c < ext - ht)) continue;
+            dn = !dn;
+            ext = dn ? q.l : q.h;
+            if (j >= n - 2)
+              out.push({
+                id: q.t,
+                up: !dn,
+                txt:
+                  "box turns " + (dn ? "down " : "up ") + q.c.toFixed(0),
+              });
+          }
+          return { ctx: (cfg.main ? TF : "") + mode, ev: out };
+        }
         /* line-break views re-anchor on bricks in drawInner */
         function newCandle(a) {
           if (mode !== "lb" && src() === a && off > 0) off++;
@@ -4911,6 +4956,7 @@
           sched,
           draw,
           alertEv,
+          fbEv,
           newCandle,
           size,
           resetView: () => {
