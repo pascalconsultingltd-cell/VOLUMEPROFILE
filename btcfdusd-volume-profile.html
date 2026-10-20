@@ -3962,28 +3962,29 @@
               }
             } else if (l.k === "d") {
               /* marine blue above the last price, dark red below */
-              const xs = xsOf(l),
-                y = Y(l.p),
+              const y = Y(l.p),
                 lp = mid != null ? mid : arr[arr.length - 1].c,
                 col = l.p >= lp ? "#0b2e6b" : "#8b0000";
               if (y >= top && y <= bot) {
-                /* drawn over P&F / profiles: that part runs to
-                   their edge, the chart part starts at the
-                   candle of its time (or just before) */
-                const pf = l.l && cfg.main,
-                  o = pf ? geoAt(l.t) : null,
-                  xm = !pf ? xs : o ? o.x + o.w / 2 : x0;
+                /* the chart part starts at the candle of its
+                   time (or just before); on the main chart a
+                   part over the P&F / profiles too (dSide),
+                   wherever the line was drawn */
+                const o = geoAt(l.t),
+                  xm = o ? o.x + o.w / 2 : x0,
+                  xp = dSide(l);
                 g.strokeStyle = g.fillStyle = col;
                 g.lineWidth = sel ? 3 : 2;
                 g.beginPath();
-                g.moveTo(xs, y);
-                if (xm !== xs) {
+                g.moveTo(xp != null ? xp : xm, y);
+                if (xp != null) {
                   g.lineTo(x0 - 5, y);
                   g.moveTo(xm, y);
                 }
                 g.lineTo(px0, y);
                 g.stroke();
-                [...new Set([xs, xm])].forEach((x) => {
+                [xp, xm].forEach((x) => {
+                  if (x == null) return;
                   g.beginPath();
                   g.arc(x, y, sel ? 2.5 : 1.5, 0, 6.2832);
                   g.fill();
@@ -4479,15 +4480,25 @@
            over the P&F, at the column of its time (the
            panel's left edge if older than those shown) */
         function xsOf(l) {
-          if (l.l === "pf" && cfg.main) {
-            let x = view.tR + 2;
-            for (const [t0, xm] of view.pfX || [])
-              if (t0 <= l.t) x = xm;
-            return x;
-          }
+          if (l.l === "pf" && cfg.main) return pfXAt(l.t);
           if (l.l && cfg.main) return l.l;
           const o = geoAt(l.t);
           return o ? o.x + o.w / 2 : view ? view.x0 : 0;
+        }
+        /* the P&F column of time t, or the panel's left edge
+           if t is older than the columns shown */
+        function pfXAt(t) {
+          let x = view.tR + 2;
+          for (const [t0, xm] of view.pfX || []) if (t0 <= t) x = xm;
+          return x;
+        }
+        /* a level line's start on the main chart's side
+           windows: its own x over the profiles, else the P&F
+           column of its time while the P&F shows */
+        function dSide(l) {
+          if (!cfg.main || !view) return null;
+          if (typeof l.l === "number") return l.l;
+          return view.pfX && view.pfX.length ? pfXAt(l.t) : null;
         }
         function geoAt(t) {
           let r = null;
@@ -4590,7 +4601,8 @@
               )
                 return l;
             } else if (l.k === "d") {
-              const xs = xsOf(l);
+              const sd = dSide(l),
+                xs = sd != null ? sd : xsOf(l);
               if (
                 Math.abs(y - view.Y(l.p)) <= 6 &&
                 x >= xs - 6 &&
