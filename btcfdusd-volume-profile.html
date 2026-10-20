@@ -2715,8 +2715,16 @@
           );
           g.stroke();
           if (zs.length && zp.length - 1 > zs[zs.length - 1].i) {
-            const a = zs[zs.length - 1].q,
-              z = zp[zp.length - 1];
+            /* the open leg runs to the extreme since the last
+               pivot: highest after a low, lowest after a high */
+            const L = zs[zs.length - 1],
+              a = L.q,
+              hiNext = L.up !== true,
+              z = zp
+                .slice(L.i + 1)
+                .reduce((m, q) =>
+                  hiNext ? (q.p >= m.p ? q : m) : q.p <= m.p ? q : m,
+                );
             g.setLineDash([6, 5]);
             g.lineWidth = 2;
             g.beginPath();
