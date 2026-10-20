@@ -4937,7 +4937,9 @@
                 id: q.t,
                 up: !dn,
                 txt:
-                  "box turns " + (dn ? "down " : "up ") + q.c.toFixed(0),
+                  "box turns " +
+                  (dn ? "down " : "up ") +
+                  q.c.toFixed(0),
               });
           }
           return { ctx: (cfg.main ? TF : "") + mode, ev: out };
