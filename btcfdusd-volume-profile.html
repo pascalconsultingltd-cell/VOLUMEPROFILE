@@ -3952,15 +3952,27 @@
                 lp = mid != null ? mid : arr[arr.length - 1].c,
                 col = l.p >= lp ? "#0b2e6b" : "#8b0000";
               if (y >= top && y <= bot) {
+                /* drawn over P&F / profiles: that part runs to
+                   their edge, the chart part starts at the
+                   candle of its time (or just before) */
+                const pf = l.l && cfg.main,
+                  o = pf ? geoAt(l.t) : null,
+                  xm = !pf ? xs : o ? o.x + o.w / 2 : x0;
                 g.strokeStyle = g.fillStyle = col;
                 g.lineWidth = sel ? 3 : 2;
                 g.beginPath();
                 g.moveTo(xs, y);
+                if (xm !== xs) {
+                  g.lineTo(x0 - 5, y);
+                  g.moveTo(xm, y);
+                }
                 g.lineTo(px0, y);
                 g.stroke();
-                g.beginPath();
-                g.arc(xs, y, sel ? 2.5 : 1.5, 0, 6.2832);
-                g.fill();
+                [...new Set([xs, xm])].forEach((x) => {
+                  g.beginPath();
+                  g.arc(x, y, sel ? 2.5 : 1.5, 0, 6.2832);
+                  g.fill();
+                });
                 ptag(y, l.p.toFixed(DP), col);
               }
             } else if (l.k === "b") drawBox(l, sel);
@@ -4448,8 +4460,17 @@
         }
         /* where a box or dot starts: its candle, or the x it
            was drawn at over DPoc / the profiles */
+        /* l.l: drawn over the profiles, a main chart x; "pf":
+           over the P&F, at the column of its time (the
+           panel's left edge if older than those shown) */
         function xsOf(l) {
-          if (l.l) return l.l;
+          if (l.l === "pf" && cfg.main) {
+            let x = view.tR + 2;
+            for (const [t0, xm] of view.pfX || [])
+              if (t0 <= l.t) x = xm;
+            return x;
+          }
+          if (l.l && cfg.main) return l.l;
           const o = geoAt(l.t);
           return o ? o.x + o.w / 2 : view ? view.x0 : 0;
         }
@@ -4486,7 +4507,15 @@
                 p = v;
               }
             });
-            return { p, o, left: Math.max(4, x) };
+            /* over the P&F: the column's own time, so the
+               other charts start the line at the candle /
+               brick then (or just before) */
+            const pt = pfTime(x);
+            return {
+              p,
+              o: pt != null ? { c: { t: pt } } : o,
+              left: pt != null ? "pf" : Math.max(4, x),
+            };
           }
           let best = null,
             bd = 14;
