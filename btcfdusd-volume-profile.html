@@ -380,6 +380,12 @@
                 title="P&amp;F bricks coloured by time; off = lines"
               >
                 Br
+              </button
+              ><button
+                id="pfSgTog"
+                title="Bricks past the last green / black signal"
+              >
+                Sg
               </button></span
             ></span
         ></span>
@@ -946,7 +952,27 @@
           if (ad[k] > top(ad, k)) hot.add(seq[k]);
         for (let k = BIG_WIN - 1; k < cv.length; k++)
           if (cv[k] > top(cv, k)) dot.add(k);
-        return (pfHotC = { key, hot, dot });
+        /* gTop[k] / bBot[k]: top of the latest green
+           highlight / bottom of the latest black one, as of
+           column k (Sg button) */
+        const gTop = [],
+          bBot = [];
+        let gt = null,
+          bb = null;
+        all.forEach((c, k) => {
+          let up = -1e9,
+            dn = 1e9;
+          c.d.forEach((v, r) => {
+            if (!hot.has(k + "|" + r)) return;
+            if (v >= 0) up = Math.max(up, (r + 1) * st);
+            else dn = Math.min(dn, r * st);
+          });
+          if (up > -1e9) gt = up;
+          if (dn < 1e9) bb = dn;
+          gTop[k] = gt;
+          bBot[k] = bb;
+        });
+        return (pfHotC = { key, hot, dot, gTop, bBot });
       }
       /* P&F box: a tenth of the vol step, else 25 */
       function pfStep() {
@@ -1193,6 +1219,15 @@
       function setPfBr(v) {
         pfBr = !!v;
         $("pfBrTog").className = pfBr ? "a" : "";
+        schedule();
+      }
+      /* Sg button: P&F bricks above the top of the latest
+         green highlight green, below the bottom of the
+         latest black one black (Br view) */
+      let pfSg = false;
+      function setPfSg(v) {
+        pfSg = !!v;
+        $("pfSgTog").className = pfSg ? "a" : "";
         schedule();
       }
       /* vertical 6-hour lines (6h button); the midnight
@@ -3276,9 +3311,19 @@
                   const yT = Y(Math.min((r + 1) * st, c.ph)),
                     yB = Y(Math.max(r * st, c.pl)),
                     [col, solid] = shade(c, r);
-                  g.fillStyle = tpoColor(
-                    Math.floor((t % 86400000) / TPO_MS),
-                  );
+                  /* Sg: green above the latest green signal,
+                     black below the latest black one */
+                  const k = ci.get(c),
+                    gT = hs.gTop[k],
+                    bB = hs.bBot[k];
+                  g.fillStyle =
+                    pfSg && gT != null && r * st >= gT
+                      ? "#089981"
+                      : pfSg && bB != null && (r + 1) * st <= bB
+                        ? "#000"
+                        : tpoColor(
+                            Math.floor((t % 86400000) / TPO_MS),
+                          );
                   g.fillRect(
                     xm - bw / 2,
                     yT,
@@ -5332,6 +5377,7 @@
           showPOC,
           pcPf,
           pfBr,
+          pfSg,
           pocC,
           pcSub,
           showOrders,
@@ -5386,6 +5432,7 @@
         if (st.dv >= 9 && typeof st.pcPf === "boolean")
           setPcPf(st.pcPf);
         if (typeof st.pfBr === "boolean") setPfBr(st.pfBr);
+        if (typeof st.pfSg === "boolean") setPfSg(st.pfSg);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         /* DPoc: default changed in version 7 */
@@ -5604,6 +5651,7 @@
       $("spTog").onclick = () => setPcSub(!pcSub);
       $("pfTog").onclick = () => setPcPf(!pcPf);
       $("pfBrTog").onclick = () => setPfBr(!pfBr);
+      $("pfSgTog").onclick = () => setPfSg(!pfSg);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
