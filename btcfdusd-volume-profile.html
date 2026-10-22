@@ -387,6 +387,12 @@
                 title="Bricks past the last green / black signal"
               >
                 Sg
+              </button
+              ><button
+                id="pfHlTog"
+                title="P&amp;F signal bricks and volume dots"
+              >
+                Hl
               </button></span
             ></span
         ></span>
@@ -1243,6 +1249,14 @@
       /* Sg button: P&F bricks above the top of the latest
          green highlight green, below the bottom of the
          latest black one black (Br view) */
+      /* Hl button: show the P&F signal bricks and volume
+         dots (off: only the Sg colours) */
+      let pfHl = false;
+      function setPfHl(v) {
+        pfHl = !!v;
+        $("pfHlTog").className = pfHl ? "a" : "";
+        schedule();
+      }
       let pfSg = true;
       function setPfSg(v) {
         pfSg = !!v;
@@ -3370,7 +3384,7 @@
                     w,
                     Math.max(1, yB - yT) + 0.5,
                   );
-                  if (solid) hotB.push([xm, r, col]);
+                  if (solid && pfHl) hotB.push([xm, r, col]);
                 }
               /* the column as one line, buyers green / sellers
                  black, then a real brick on the strongest boxes */
@@ -3384,7 +3398,7 @@
                 g.lineWidth = 1;
                 for (let r = c.lo; r <= c.hi; r++) {
                   const [col, solid] = shade(c, r);
-                  if (!solid) continue;
+                  if (!solid || !pfHl) continue;
                   /* at least 6px tall, centred on its box */
                   const yT = Y((r + 1) * st),
                     yB = Y(r * st),
@@ -3403,7 +3417,7 @@
                   c: c.ph,
                 },
               });
-              if (!hs.dot.has(ci.get(c))) return;
+              if (!pfHl || !hs.dot.has(ci.get(c))) return;
               /* radius 5, as the big-candle circles, clear of
                  the column, vivid green as the highlights,
                  outlined in black */
@@ -5430,6 +5444,7 @@
           pcPf,
           pfBr,
           pfSg,
+          pfHl,
           pocC,
           pcSub,
           showOrders,
@@ -5485,6 +5500,7 @@
           setPcPf(st.pcPf);
         if (typeof st.pfBr === "boolean") setPfBr(st.pfBr);
         if (typeof st.pfSg === "boolean") setPfSg(st.pfSg);
+        if (typeof st.pfHl === "boolean") setPfHl(st.pfHl);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         /* DPoc: default changed in version 7 */
@@ -5711,6 +5727,7 @@
       $("pfTog").onclick = () => setPcPf(!pcPf);
       $("pfBrTog").onclick = () => setPfBr(!pfBr);
       $("pfSgTog").onclick = () => setPfSg(!pfSg);
+      $("pfHlTog").onclick = () => setPfHl(!pfHl);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
