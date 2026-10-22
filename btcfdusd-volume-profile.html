@@ -2291,7 +2291,15 @@
            * chart
            */
 
-          const ptag = (y, txt, bg, fg = "#fff") => {
+          /* axis tags wait in tq until just before the
+             crosshair (tagsNow), the vol ladder's white ones
+             first, so coloured tags (zigzag, boxes, lines)
+             sit on top of them */
+          const tq = [];
+          let tagsNow = false;
+          const ptag = (y, txt, bg, fg = "#fff", font = g.font) => {
+            if (!tagsNow) return void tq.push([y, txt, bg, fg, font]);
+            g.font = font;
             g.fillStyle = bg;
             g.fillRect(px0, y - 9, axW, 18);
             g.fillStyle = fg;
@@ -4070,6 +4078,11 @@
               g.fillText(lt, tx + 5, ly);
             });
           }
+          /* the waiting axis tags, ladder ones underneath */
+          tagsNow = true;
+          tq.filter((a) => a[2] === "#fff")
+            .concat(tq.filter((a) => a[2] !== "#fff"))
+            .forEach((a) => ptag(...a));
           /* hover */
 
           /* crosshair line / tag background / tag text */
