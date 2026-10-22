@@ -3818,8 +3818,8 @@
               xs = xsOf(l),
               p66 = l.hi + 0.66 * (l.lo - l.hi),
               y66 = Y(p66),
-              /* drawn upwards dark green, downwards black */
-              rgb = l.hi >= l.lo ? "0,100,0" : "0,0,0";
+              /* drawn upwards candle green, downwards black */
+              rgb = l.hi >= l.lo ? "8,153,129" : "0,0,0";
             g.save();
             g.beginPath();
             g.rect(xs, top, px0 - xs, bot - top);
