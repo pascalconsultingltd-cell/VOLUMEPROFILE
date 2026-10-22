@@ -2126,6 +2126,10 @@
           tpoFrac = null,
           /* DPoc candles shown: 7 at start, wheel 3-60 */
           pcN = 7,
+          /* SPoc window: width once dragged, candles shown
+             (0 = as many as fit, 12px each) */
+          spPx = null,
+          spN = 0,
           /* DPoc panel P&F: columns shown (wheel) */
           pfN = 200,
           /* pcPx: DPoc width once dragged (null = as the
@@ -2319,7 +2323,7 @@
                     : pcPf
                       ? Math.round(0.4 * (W - tpoW - 20))
                       : tpoW0),
-            spW = four ? Math.round(W * 0.1) : 0,
+            spW = four ? spPx || Math.round(W * 0.07) : 0,
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
             px0 = W - axW;
@@ -3478,7 +3482,8 @@
             /* pfX: shown P&F columns [start time, x] */
             pfX = [];
           let pcShow = 0,
-            pcSl = 0;
+            pcSl = 0,
+            spShow = 0;
           if (pcW) {
             const pa = pL,
               pv = (dS) => {
@@ -3649,7 +3654,7 @@
                candles that fit, 12px each, newest on the right */
             if (spW) {
               const sc = pocCds(true),
-                n = Math.max(3, Math.floor(spW / 12)),
+                n = spN || Math.max(3, Math.floor(spW / 12)),
                 ssl = spW / n,
                 sh = sc.slice(-n),
                 sa = sL + 5;
@@ -3663,6 +3668,7 @@
               g.fillStyle = "#6b7684";
               g.textAlign = "center";
               g.fillText("SPoc", sL + spOff / 2, bot + 10);
+              spShow = n;
               if (!sh.length)
                 g.fillText(
                   "no pair yet",
@@ -3853,6 +3859,9 @@
             pcN: pcShow,
             pcSl,
             tpoSl: colW + gap,
+            sL,
+            spW,
+            spN: spShow,
             Y,
             pc: cw / slots,
           };
@@ -4484,7 +4493,8 @@
               q.x = m.x;
               q.y = m.y;
               q.ty += dy;
-              if (q.w === "sp");
+              if (q.w === "sp")
+                spN = cl(3, 60, Math.round(q.n * f));
               else if (q.w === "pc") {
                 if (pcPf) pfN = cl(5, 600, Math.round(q.n * f));
                 else pcN = cl(3, 60, Math.round(q.n * f));
@@ -4516,7 +4526,16 @@
                chart edge (x0) stays put; the edge before the
                chart widens the panel next to it */
             const cl = (a, b, v) => Math.max(a, Math.min(b, v));
-            if (divDrag === "pc") {
+            /* SPoc | P&F edge: they trade width, x0 stays */
+            if (divDrag === "sp") {
+              const sw = cl(
+                30,
+                view.spW + view.pcW - 50,
+                x - view.sL - 8,
+              );
+              pcPx = view.pcW - (sw - view.spW);
+              spPx = sw;
+            } else if (divDrag === "pc") {
               const tw = cl(80, view.x0 - 70 - view.spOff, x - 15);
               tpoFrac = tw / W;
               pcPx = view.x0 - 20 - tw - view.spOff;
@@ -4687,6 +4706,7 @@
             return false;
           /* "pc" = profiles / DPoc edge, "tpo" = the edge
              before the chart */
+          if (view.spW && Math.abs(x - view.pS) <= 5) return "sp";
           if (view.pcW && view.tpoW && Math.abs(x - view.tR) <= 5)
             return "pc";
           return Math.abs(x - (view.x0 - 5)) <= 5 ? "tpo" : false;
@@ -4923,7 +4943,9 @@
               ty: 0,
               n: w === "pc"
                 ? view.pcN
-                : w === "tpo"
+                : w === "sp"
+                  ? view.spN
+                  : w === "tpo"
                   ? nTpo
                   : Math.min(N, Math.max(20, arrLen)),
             };
@@ -5069,6 +5091,7 @@
             draw();
           } else if (mouse && isDiv(mouse.x, mouse.y)) {
             pcPx = null;
+            spPx = null;
             tpoFrac = null;
             draw();
           } else if (view && mouse && mouse.x > view.px0) {
@@ -5152,7 +5175,11 @@
                the number of days, one at a time, 1 to 30 (the
                profiles keep their width, so the chart does not
                shrink) */
-            if (view && view.win(wx) === "sp") return;
+            if (view && view.win(wx) === "sp") {
+              spN = Math.max(3, Math.min(60, view.spN + sg));
+              draw();
+              return;
+            }
             if (view && view.win(wx) === "pc") {
               const n0 = view.pcN,
                 f2 = sg > 0 ? 1.15 : 1 / 1.15;
@@ -5315,6 +5342,8 @@
             pocHome = !!cfg.main;
             tpoFrac = null;
             pcN = 7;
+            spN = 0;
+            spPx = null;
             pfN = 200;
             pcPx = null;
             if (full) setFull(null);
