@@ -383,6 +383,7 @@
               </button
               ><button
                 id="pfSgTog"
+                class="a"
                 title="Bricks past the last green / black signal"
               >
                 Sg
@@ -1234,7 +1235,7 @@
       /* Sg button: P&F bricks above the top of the latest
          green highlight green, below the bottom of the
          latest black one black (Br view) */
-      let pfSg = false;
+      let pfSg = true;
       function setPfSg(v) {
         pfSg = !!v;
         $("pfSgTog").className = pfSg ? "a" : "";
