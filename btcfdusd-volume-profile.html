@@ -849,22 +849,27 @@
           buy = 0,
           sell = 0,
           vHi = 0,
-          vLo = 0;
+          vLo = 0,
+          last = null,
+          vFrom = null;
         /* d: delta (taker buys - sells) per brick of a column;
            t0: time of its first trade, for the crosshair;
-           ph / pl: its real highest / lowest trade */
+           ph / pl: its real highest / lowest trade. A new
+           column starts from the last trade before it (vFrom),
+           so a price jump leaves no blank between columns */
         const fin = () => {
           if (b == null) return;
-          const up = buy >= sell;
+          const up = buy >= sell,
+            f = vFrom == null ? vLo : vFrom;
           if (!cur || cur.up !== up)
             cols.push(
               (cur = {
                 up,
                 t0: vt,
-                lo: b,
-                hi: b,
-                ph: vHi,
-                pl: vLo,
+                lo: Math.min(b, Math.floor(f / st)),
+                hi: Math.max(b, Math.floor(f / st)),
+                ph: Math.max(vHi, f),
+                pl: Math.min(vLo, f),
                 d: new Map(),
                 v: new Map(),
                 tm: new Map(),
@@ -892,9 +897,11 @@
               vt = tt;
               buy = sell = 0;
               vHi = vLo = p;
+              vFrom = last;
             }
             vHi = Math.max(vHi, p);
             vLo = Math.min(vLo, p);
+            last = p;
             if (s) sell += q;
             else buy += q;
           });
@@ -3264,8 +3271,8 @@
                  end bricks cut at the real high / low */
               if (pfBr)
                 for (let r = c.lo; r <= c.hi; r++) {
-                  const t = c.tm.get(r);
-                  if (t == null) continue;
+                  /* a brick the column jumped over: its start time */
+                  const t = c.tm.has(r) ? c.tm.get(r) : c.t0;
                   const yT = Y(Math.min((r + 1) * st, c.ph)),
                     yB = Y(Math.max(r * st, c.pl)),
                     [col, solid] = shade(c, r);
