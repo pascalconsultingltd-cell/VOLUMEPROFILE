@@ -4212,16 +4212,22 @@
            * left end
            */
           {
+            /* bigger and bold on the main chart */
+            g.save();
+            if (cfg.main)
+              g.font = "bold 14px ui-monospace,Menlo,monospace";
             const lt = lp.toFixed(DP),
-              lw = g.measureText(lt).width + 10;
+              lw = g.measureText(lt).width + 12,
+              th = cfg.main ? 24 : 18;
             g.textAlign = "left";
             g.textBaseline = "middle";
             [px0 - lw, 4].forEach((tx) => {
               g.fillStyle = LP;
-              g.fillRect(tx, ly - 9, lw, 18);
+              g.fillRect(tx, ly - th / 2, lw, th);
               g.fillStyle = "#ffffff";
-              g.fillText(lt, tx + 5, ly);
+              g.fillText(lt, tx + 6, ly);
             });
+            g.restore();
           }
           /* the waiting axis tags, ladder ones underneath */
           tagsNow = true;
