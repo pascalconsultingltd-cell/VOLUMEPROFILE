@@ -898,6 +898,8 @@
             cur.ph = Math.max(cur.ph, vHi);
             cur.pl = Math.min(cur.pl, vLo);
           }
+          /* lp: the column's last trade, for the alerts */
+          cur.lp = last;
           cur.d.set(b, (cur.d.get(b) || 0) + buy - sell);
           cur.v.set(b, (cur.v.get(b) || 0) + buy + sell);
           /* tm: when the column first traded a brick */
@@ -1010,7 +1012,8 @@
       try {
         alerts = JSON.parse(localStorage.getItem(ALK)) || {};
       } catch (e) {}
-      /* P&F highlights in the last two columns */
+      /* P&F: the last two columns turning green or black
+         (Sg colours) */
       function pfEvents() {
         const d1 = dayOf(Date.now()),
           d0 = d1 - 86400000,
@@ -1022,22 +1025,27 @@
         const all = pfCols([d0, d1], st),
           hs = pfHot(all, st),
           n = all.length;
-        for (let k = Math.max(0, n - 2); k < n; k++) {
-          const c = all[k];
-          if (hs.dot.has(k))
+        /* a column's Sg colour at its last trade: 1 green,
+           -1 black, 0 neutral (as the bricks are drawn) */
+        const zone = (k) => {
+          const r = Math.floor(all[k].lp / st),
+            gT = hs.gTop[k],
+            bB = hs.bBot[k];
+          return gT != null && r * st >= gT
+            ? 1
+            : bB != null && (r + 1) * st <= bB
+              ? -1
+              : 0;
+        };
+        for (let k = Math.max(1, n - 2); k < n; k++) {
+          const z = zone(k);
+          if (z && z !== zone(k - 1))
             out.push({
-              id: "d" + c.t0,
-              up: c.up,
-              txt: "volume dot " + (c.up ? c.lo : c.hi) * st,
+              id: "z" + all[k].t0 + "|" + z,
+              up: z > 0,
+              txt:
+                (z > 0 ? "green " : "black ") + all[k].lp.toFixed(0),
             });
-          c.d.forEach((v, r) => {
-            if (hs.hot.has(k + "|" + r))
-              out.push({
-                id: "b" + c.t0 + "|" + r,
-                up: v >= 0,
-                txt: "brick " + r * st,
-              });
-          });
         }
         return { ctx: st, ev: out };
       }
