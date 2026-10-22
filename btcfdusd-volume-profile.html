@@ -363,6 +363,7 @@
               </button
               ><button
                 id="spTog"
+                class="a"
                 title="POC candles from sub POCs, vs the previous POC"
               >
                 SPoc
@@ -1222,11 +1223,10 @@
         schedule();
       }
       /* POC candles from the sub POCs (SPoc button) */
-      let pcSub = false;
+      let pcSub = true;
       function setPcSub(v) {
         pcSub = !!v;
         $("spTog").className = pcSub ? "a" : "";
-        if (pcSub && pcPf) setPcPf(false);
         schedule();
       }
       /* the DPoc panel as aggression P&F (P&F button) */
@@ -1234,7 +1234,6 @@
       function setPcPf(v) {
         pcPf = !!v;
         $("pfTog").className = pcPf ? "a" : "";
-        if (pcPf && pcSub) setPcSub(false);
         if (pcPf && !pocC) setPocC(true);
         schedule();
       }
@@ -2298,6 +2297,10 @@
              * thin strip so its scale still works)
              */
             fl = cfg.main ? full : null,
+            /* SPoc and P&F both on: 4 windows, profiles 20%,
+               sub POC candles 10%, P&F 30%, chart 40% */
+            four =
+              cfg.main && cfg.tpo && pocC && pcPf && pcSub && !fl,
             tpoW = !cfg.tpo || fl === "main" || fl === "pc"
               ? 0
               : fl === "tpo"
@@ -2311,7 +2314,12 @@
                 : pcPx ||
                   /* P&F 40%, the chart 60% of what the profiles
                      leave */
-                  (pcPf ? Math.round(0.4 * (W - tpoW - 20)) : tpoW0),
+                  (four
+                    ? Math.round(0.3 * W)
+                    : pcPf
+                      ? Math.round(0.4 * (W - tpoW - 20))
+                      : tpoW0),
+            spW = four ? Math.round(W * 0.1) : 0,
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
             px0 = W - axW;
@@ -2319,9 +2327,14 @@
              wide, from pL), then the chart from x0; tR = the
              profiles' right edge */
           const pcOff = pcW ? pcW + 10 : 0,
-            x0 = tpoW + 10 + pcOff,
+            spOff = spW ? spW + 10 : 0,
+            x0 = tpoW + 10 + spOff + pcOff,
             pL = x0 - 3 - pcW,
-            tR = pL - 2,
+            /* sL: the SPoc window's left edge; pS: where the
+               DPoc / P&F window starts */
+            sL = pL - spOff,
+            pS = pL - 2,
+            tR = sL - 2,
             top = 8,
             bot = H - legendH - timeH - 6,
             ch = bot - top;
@@ -2908,7 +2921,7 @@
           }
           /* the profiles sit in a soft rounded frame, like DPoc */
           /* frames touch: profiles | DPoc | chart */
-          if (cfg.tpo && tpoW) panel(1, pL - 1);
+          if (cfg.tpo && tpoW) panel(1, sL - 1);
           /* and the main chart, axis included */
           if (cfg.main) panel(x0 - 3, W - x0 + 1);
           /* session legend + day labels under each profile */
@@ -3480,85 +3493,90 @@
               d = nextDay(d)
             )
               days.push(d);
-            const seq = [];
-            if (pcSub)
-              days.forEach((dS) => {
-                const P = dayProf(dS);
-                if (P.poc == null || !P.full) return;
-                const vf = volAmt > 0 ? volAmt : P.step * 10;
-                subPocs(dS, P.ps, subStart, vf, P.step)
-                  .map((S) => {
-                    const r = P.rows.get(Math.floor(S.px / P.step));
-                    return {
-                      dS,
-                      p: S.px,
-                      f: r ? Math.min(...r) : 99,
-                    };
-                  })
-                  .sort((a, b) => a.f - b.f)
-                  .forEach((o) => seq.push(o));
-              });
-            const info = (
-                pcSub
-                  ? seq.map((o, k) => ({
-                      ...o,
-                      k,
-                      up: k ? o.p >= seq[k - 1].p : null,
-                    }))
-                  : days.map((dS) => {
-                      const p = pv(dS),
-                        q = pv(prevDay(dS)),
-                        up = p == null || q == null ? null : p >= q;
-                      return { dS, p, up };
+            /* POC candles: day POCs, or sub POCs (sub) */
+            const pocCds = (sub) => {
+              const seq = [];
+              if (sub)
+                days.forEach((dS) => {
+                  const P = dayProf(dS);
+                  if (P.poc == null || !P.full) return;
+                  const vf = volAmt > 0 ? volAmt : P.step * 10;
+                  subPocs(dS, P.ps, subStart, vf, P.step)
+                    .map((S) => {
+                      const r = P.rows.get(Math.floor(S.px / P.step));
+                      return {
+                        dS,
+                        p: S.px,
+                        f: r ? Math.min(...r) : 99,
+                      };
                     })
-              ).filter((o) => o.up != null),
-              cds = [];
-            [true, false].forEach((up) => {
-              const s = info.filter((o) => o.up === up);
-              for (let i = 1; i < s.length; i++) {
-                const a = s[i - 1],
-                  b = s[i];
-                if (up ? b.p <= a.p : b.p >= a.p) continue;
-                let h = Math.max(a.p, b.p),
-                  l = Math.min(a.p, b.p);
-                if (pcSub) {
-                  /* sub POCs: high / low from the opening POC's
-                     first brick to the closing POC's, 15m */
-                  const ta = a.dS + a.f * TPO_MS,
-                    tb = b.dS + (b.f + 1) * TPO_MS;
-                  let j = 0,
-                    m = k15.length;
-                  while (j < m) {
-                    const md = (j + m) >> 1;
-                    if (k15[md].t < ta) j = md + 1;
-                    else m = md;
-                  }
-                  for (; j < k15.length && k15[j].t < tb; j++) {
-                    const c = k15[j];
-                    if (!okC(c)) continue;
-                    h = Math.max(h, c.h);
-                    l = Math.min(l, c.l);
-                  }
-                } else
-                  for (let d = a.dS; d <= b.dS; d = nextDay(d)) {
-                    const r = dayR.get(d);
-                    if (r) {
-                      h = Math.max(h, r.h);
-                      l = Math.min(l, r.l);
-                    }
-                  }
-                cds.push({
-                  t: b.dS,
-                  k: b.k,
-                  o: a.p,
-                  c: b.p,
-                  h,
-                  l,
-                  up,
+                    .sort((a, b) => a.f - b.f)
+                    .forEach((o) => seq.push(o));
                 });
-              }
-            });
-            cds.sort((m, n) => m.t - n.t || m.k - n.k || 0);
+              const info = (
+                  sub
+                    ? seq.map((o, k) => ({
+                        ...o,
+                        k,
+                        up: k ? o.p >= seq[k - 1].p : null,
+                      }))
+                    : days.map((dS) => {
+                        const p = pv(dS),
+                          q = pv(prevDay(dS)),
+                          up = p == null || q == null ? null : p >= q;
+                        return { dS, p, up };
+                      })
+                ).filter((o) => o.up != null),
+                cds = [];
+              [true, false].forEach((up) => {
+                const s = info.filter((o) => o.up === up);
+                for (let i = 1; i < s.length; i++) {
+                  const a = s[i - 1],
+                    b = s[i];
+                  if (up ? b.p <= a.p : b.p >= a.p) continue;
+                  let h = Math.max(a.p, b.p),
+                    l = Math.min(a.p, b.p);
+                  if (sub) {
+                    /* sub POCs: high / low from the opening POC's
+                       first brick to the closing POC's, 15m */
+                    const ta = a.dS + a.f * TPO_MS,
+                      tb = b.dS + (b.f + 1) * TPO_MS;
+                    let j = 0,
+                      m = k15.length;
+                    while (j < m) {
+                      const md = (j + m) >> 1;
+                      if (k15[md].t < ta) j = md + 1;
+                      else m = md;
+                    }
+                    for (; j < k15.length && k15[j].t < tb; j++) {
+                      const c = k15[j];
+                      if (!okC(c)) continue;
+                      h = Math.max(h, c.h);
+                      l = Math.min(l, c.l);
+                    }
+                  } else
+                    for (let d = a.dS; d <= b.dS; d = nextDay(d)) {
+                      const r = dayR.get(d);
+                      if (r) {
+                        h = Math.max(h, r.h);
+                        l = Math.min(l, r.l);
+                      }
+                    }
+                  cds.push({
+                    t: b.dS,
+                    k: b.k,
+                    o: a.p,
+                    c: b.p,
+                    h,
+                    l,
+                    up,
+                  });
+                }
+              });
+              cds.sort((m, n) => m.t - n.t || m.k - n.k || 0);
+              return cds;
+            };
+            const cds = pcPf ? [] : pocCds(pcSub);
             /* P&F: columns from yesterday's and today's trades,
                box = the brick */
             const pst = pfStep(),
@@ -3600,9 +3618,9 @@
               cv2 = items.slice(k0, k1),
               YP = Y,
               jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
-            if (pcPf) drawPfCols(pfc, cv2, jOf, pa, sl, pst);
-            else
-            cv2.forEach((c, i) => {
+            /* POC candles: slot j of width sl from pa */
+            const drawCds = (list, pa, sl, jOf) =>
+            list.forEach((c, i) => {
               const j = jOf(i),
                 xm = pa + sl * j,
                 col = c.up ? "#089981" : "#000000";
@@ -3624,7 +3642,34 @@
                 Math.max(1, Math.abs(yo - yc)),
               );
             });
+            if (pcPf) drawPfCols(pfc, cv2, jOf, pa, sl, pst);
+            else drawCds(cv2, pa, sl, jOf);
             g.restore();
+            /* the SPoc window (4 windows): the latest sub POC
+               candles that fit, 12px each, newest on the right */
+            if (spW) {
+              const sc = pocCds(true),
+                n = Math.max(3, Math.floor(spW / 12)),
+                ssl = spW / n,
+                sh = sc.slice(-n),
+                sa = sL + 5;
+              g.save();
+              g.beginPath();
+              g.rect(sa, top, spW, bot - top);
+              g.clip();
+              drawCds(sh, sa, ssl, (i) => n - sh.length + i + 0.5);
+              g.restore();
+              panel(sL, spOff);
+              g.fillStyle = "#6b7684";
+              g.textAlign = "center";
+              g.fillText("SPoc", sL + spOff / 2, bot + 10);
+              if (!sh.length)
+                g.fillText(
+                  "no pair yet",
+                  sL + spOff / 2,
+                  (top + bot) / 2,
+                );
+            }
             /* framed, named, and says so when it is empty */
             panel(pa, pcW);
             g.fillStyle = "#6b7684";
@@ -3788,15 +3833,20 @@
             px0,
             x0,
             tR,
+            pS,
+            spOff,
             pcW,
             tpoW,
-            /* the window under px: "pc", "tpo" or the chart */
+            /* the window under px: "pc", "sp", "tpo" or the
+               chart */
             win: (px) =>
-              pcW && px >= tR && px < x0 - 5
+              pcW && px >= pS && px < x0 - 5
                 ? "pc"
-                : tpoW && px < tR
-                  ? "tpo"
-                  : null,
+                : spW && px >= tR && px < pS
+                  ? "sp"
+                  : tpoW && px < tR
+                    ? "tpo"
+                    : null,
             pcGeo,
             pfX,
             icons,
@@ -4330,7 +4380,7 @@
             }
           }
           /* hovering a P&F column: its time on this chart too */
-          if (pcW && mouse && mouse.x >= tR && mouse.x < x0 - 5) {
+          if (pcW && mouse && mouse.x >= pS && mouse.x < x0 - 5) {
             const ro = geoAt(pfTime(mouse.x));
             if (ro && pfTime(mouse.x) != null) {
               const rx = ro.x + ro.w / 2;
@@ -4434,7 +4484,8 @@
               q.x = m.x;
               q.y = m.y;
               q.ty += dy;
-              if (q.w === "pc") {
+              if (q.w === "sp");
+              else if (q.w === "pc") {
                 if (pcPf) pfN = cl(5, 600, Math.round(q.n * f));
                 else pcN = cl(3, 60, Math.round(q.n * f));
                 pcBack = Math.max(
@@ -4466,11 +4517,15 @@
                chart widens the panel next to it */
             const cl = (a, b, v) => Math.max(a, Math.min(b, v));
             if (divDrag === "pc") {
-              const tw = cl(80, view.x0 - 70, x - 15);
+              const tw = cl(80, view.x0 - 70 - view.spOff, x - 15);
               tpoFrac = tw / W;
-              pcPx = view.x0 - 20 - tw;
+              pcPx = view.x0 - 20 - tw - view.spOff;
             } else if (view.pcW)
-              pcPx = cl(50, W * 0.75, x - 15 - view.tpoW);
+              pcPx = cl(
+                50,
+                W * 0.75,
+                x - 15 - view.tpoW - view.spOff,
+              );
             else tpoFrac = cl(80, W * 0.75, x - 5) / W;
             draw();
             return;
@@ -4495,6 +4550,7 @@
                 1 - view.pcN,
                 pan.b0 + dx / view.pcSl,
               );
+            else if (pan.w === "sp");
             else if (pan.w === "tpo")
               tpoBack = Math.max(
                 1 - nTpo,
@@ -4656,7 +4712,7 @@
         /* the P&F column of time t, or the panel's left edge
            if t is older than the columns shown */
         function pfXAt(t) {
-          let x = view.tR + 2;
+          let x = view.pS + 2;
           for (const [t0, xm] of view.pfX || []) if (t0 <= t) x = xm;
           return x;
         }
@@ -5096,6 +5152,7 @@
                the number of days, one at a time, 1 to 30 (the
                profiles keep their width, so the chart does not
                shrink) */
+            if (view && view.win(wx) === "sp") return;
             if (view && view.win(wx) === "pc") {
               const n0 = view.pcN,
                 f2 = sg > 0 ? 1.15 : 1 / 1.15;
@@ -5415,7 +5472,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 9;
+      const DEFAULTS_VER = 10;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -5513,7 +5570,8 @@
         if (st.dv >= 7 && typeof st.pocC === "boolean")
           setPocC(st.pocC);
         /* SPoc would switch P&F off: older saves ignored */
-        if (st.dv >= 9 && typeof st.pcSub === "boolean")
+        /* SPoc: default changed in version 10 */
+        if (st.dv >= 10 && typeof st.pcSub === "boolean")
           setPcSub(st.pcSub);
         if (cur5 && typeof st.showVA === "boolean")
           setShowVA(st.showVA);
