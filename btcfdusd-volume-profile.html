@@ -847,9 +847,12 @@
           b = null,
           vt = 0,
           buy = 0,
-          sell = 0;
+          sell = 0,
+          vHi = 0,
+          vLo = 0;
         /* d: delta (taker buys - sells) per brick of a column;
-           t0: time of its first trade, for the crosshair */
+           t0: time of its first trade, for the crosshair;
+           ph / pl: its real highest / lowest trade */
         const fin = () => {
           if (b == null) return;
           const up = buy >= sell;
@@ -860,6 +863,8 @@
                 t0: vt,
                 lo: b,
                 hi: b,
+                ph: vHi,
+                pl: vLo,
                 d: new Map(),
                 v: new Map(),
                 tm: new Map(),
@@ -868,6 +873,8 @@
           else {
             cur.lo = Math.min(cur.lo, b);
             cur.hi = Math.max(cur.hi, b);
+            cur.ph = Math.max(cur.ph, vHi);
+            cur.pl = Math.min(cur.pl, vLo);
           }
           cur.d.set(b, (cur.d.get(b) || 0) + buy - sell);
           cur.v.set(b, (cur.v.get(b) || 0) + buy + sell);
@@ -884,7 +891,10 @@
               b = bb;
               vt = tt;
               buy = sell = 0;
+              vHi = vLo = p;
             }
+            vHi = Math.max(vHi, p);
+            vLo = Math.min(vLo, p);
             if (s) sell += q;
             else buy += q;
           });
@@ -3233,13 +3243,14 @@
                 x = xm - w / 2;
               pfX.push([c.t0, xm]);
               /* Br: every box a brick, coloured by the time the
-                 column first traded it, as the profiles */
+                 column first traded it, as the profiles; the
+                 end bricks cut at the real high / low */
               if (pfBr)
                 for (let r = c.lo; r <= c.hi; r++) {
                   const t = c.tm.get(r);
                   if (t == null) continue;
-                  const yT = Y((r + 1) * st),
-                    yB = Y(r * st),
+                  const yT = Y(Math.min((r + 1) * st, c.ph)),
+                    yB = Y(Math.max(r * st, c.pl)),
                     [col, solid] = shade(c, r);
                   g.fillStyle = tpoColor(
                     Math.floor((t % 86400000) / TPO_MS),
@@ -3258,8 +3269,8 @@
                 g.strokeStyle = c.up ? "#089981" : "#000";
                 g.lineWidth = 1;
                 g.beginPath();
-                g.moveTo(xm, Y((c.hi + 1) * st));
-                g.lineTo(xm, Y(c.lo * st));
+                g.moveTo(xm, Y(c.ph));
+                g.lineTo(xm, Y(c.pl));
                 g.stroke();
                 g.lineWidth = 1;
                 for (let r = c.lo; r <= c.hi; r++) {
@@ -3277,10 +3288,10 @@
                 xa: xm - sl / 2,
                 xb: xm + sl / 2,
                 c: {
-                  o: c.lo * st,
-                  h: (c.hi + 1) * st,
-                  l: c.lo * st,
-                  c: (c.hi + 1) * st,
+                  o: c.pl,
+                  h: c.ph,
+                  l: c.pl,
+                  c: c.ph,
                 },
               });
               if (!hs.dot.has(ci.get(c))) return;
@@ -3289,8 +3300,8 @@
                  outlined in black */
               const rd = 5,
                 y = c.up
-                  ? Y(c.lo * st) + rd + 8
-                  : Y((c.hi + 1) * st) - rd - 8;
+                  ? Y(c.pl) + rd + 8
+                  : Y(c.ph) - rd - 8;
               g.beginPath();
               g.arc(xm, y, rd, 0, 7);
               g.fillStyle = c.up ? "#00e676" : "#000";
