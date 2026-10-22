@@ -2597,78 +2597,6 @@
                 dayR.has(s) ? dayR.get(s).h - dayR.get(s).l : 0,
               ),
             ) / 3;
-          g.save();
-          g.beginPath();
-          g.rect(0, top, tR, bot - top);
-          g.clip();
-          g.font = "10px ui-monospace,Menlo,monospace";
-          g.textBaseline = "middle";
-          for (let d = 0; d < cnt + ex; d++) {
-            const Q = dayProf(tpoDays[d]),
-              cx0 = 6 + (d - ex + tf) * (colW + gap),
-              rowH = (ch * Q.step) / (hi - lo),
-              lw = Math.min(11, (colW - 2) / Q.maxC),
-              P = Object.assign(
-                { d, cx0, show: true, rowH, lw },
-                Q,
-              );
-            profs.push(P);
-            if (P.poc == null) continue;
-            for (let r = P.a; r <= P.b; r++) {
-              if (!showVA && r !== P.poc) continue;
-              g.fillStyle =
-                r === P.poc
-                  ? "rgba(" + pocRgb(prevDay(tpoDays[d])) + ",.25)"
-                  : "rgba(47,128,200,.08)";
-              g.fillRect(
-                cx0 - 2,
-                Y((r + 1) * P.step),
-                colW + 2,
-                rowH,
-              );
-            }
-            P.rows.forEach((lst, r) => {
-              const yT = Y((r + 1) * P.step);
-              if (yT > bot || yT + rowH < top) return;
-              lst.forEach((idx, k) => {
-                g.fillStyle = tpoColor(idx, 0.72);
-                g.fillRect(
-                  cx0 + k * lw,
-                  yT + 0.5,
-                  Math.max(1, lw - 1),
-                  Math.max(1, rowH - 1),
-                );
-              });
-            });
-            /* sub POCs: P1 solid, P2 dashed, P3 dotted, each
-               tagged with its price and its birth brick */
-            const vf = volAmt > 0 ? volAmt : P.step * 10;
-            const sp = subPocs(P.dS, P.ps, subStart, vf, P.step);
-            sp.forEach(
-              (S, k) => {
-                const y = Y(S.px),
-                  c = ["#003366", "#1f6fb8", "#3d4550"][k],
-                  tx = "P" + (k + 1) + " " + S.px.toFixed(DP) +
-                    " ·" + S.born.toFixed(0);
-                g.strokeStyle = c;
-                g.lineWidth = 3;
-                g.setLineDash([[], [8, 4], [3, 3]][k]);
-                g.beginPath();
-                g.moveTo(cx0 - 2, y);
-                g.lineTo(cx0 + colW, y);
-                g.stroke();
-                g.setLineDash([]);
-                /* white halo so the tag reads over bricks */
-                g.font = "bold 11px ui-monospace,Menlo,monospace";
-                g.textAlign = "left";
-                g.strokeStyle = "#fff";
-                g.lineWidth = 3;
-                g.strokeText(tx, cx0, y - 9);
-                g.fillStyle = c;
-                g.fillText(tx, cx0, y - 9);
-              },
-            );
-          }
           /* zigzag points from the last 15 days, whatever the
              profiles show, so the swings do not depend on the
              view (30 days loads 4x the 15m history, 2.5x the
@@ -2723,9 +2651,98 @@
                 y: Y(z.p),
                 p: z.p,
                 f: z.f,
+                ds: dS,
               }),
             );
           });
+          /* each POC's previous one in time (the day before's
+             last for a day's first), for its colour */
+          const zPrev = new Map(
+            zp.map((q, i) => [
+              q.ds + "|" + q.p,
+              i ? zp[i - 1].p : null,
+            ]),
+          );
+          g.save();
+          g.beginPath();
+          g.rect(0, top, tR, bot - top);
+          g.clip();
+          g.font = "10px ui-monospace,Menlo,monospace";
+          g.textBaseline = "middle";
+          for (let d = 0; d < cnt + ex; d++) {
+            const Q = dayProf(tpoDays[d]),
+              cx0 = 6 + (d - ex + tf) * (colW + gap),
+              rowH = (ch * Q.step) / (hi - lo),
+              lw = Math.min(11, (colW - 2) / Q.maxC),
+              P = Object.assign(
+                { d, cx0, show: true, rowH, lw },
+                Q,
+              );
+            profs.push(P);
+            if (P.poc == null) continue;
+            for (let r = P.a; r <= P.b; r++) {
+              if (!showVA && r !== P.poc) continue;
+              g.fillStyle =
+                r === P.poc
+                  ? "rgba(" + pocRgb(prevDay(tpoDays[d])) + ",.25)"
+                  : "rgba(47,128,200,.08)";
+              g.fillRect(
+                cx0 - 2,
+                Y((r + 1) * P.step),
+                colW + 2,
+                rowH,
+              );
+            }
+            P.rows.forEach((lst, r) => {
+              const yT = Y((r + 1) * P.step);
+              if (yT > bot || yT + rowH < top) return;
+              lst.forEach((idx, k) => {
+                g.fillStyle = tpoColor(idx, 0.72);
+                g.fillRect(
+                  cx0 + k * lw,
+                  yT + 0.5,
+                  Math.max(1, lw - 1),
+                  Math.max(1, rowH - 1),
+                );
+              });
+            });
+            /* sub POCs: P1 solid, P2 dashed, P3 dotted, each
+               tagged with its price and its birth brick; green
+               above the POC before it, black below (navy with
+               none before it) */
+            const vf = volAmt > 0 ? volAmt : P.step * 10;
+            const sp = subPocs(P.dS, P.ps, subStart, vf, P.step);
+            sp.forEach(
+              (S, k) => {
+                const y = Y(S.px),
+                  pv = zPrev.get(P.dS + "|" + S.px),
+                  c =
+                    pv == null
+                      ? "#003366"
+                      : S.px < pv
+                        ? "#000"
+                        : "#089981",
+                  tx = "P" + (k + 1) + " " + S.px.toFixed(DP) +
+                    " ·" + S.born.toFixed(0);
+                g.strokeStyle = c;
+                g.lineWidth = 3;
+                g.setLineDash([[], [8, 4], [3, 3]][k]);
+                g.beginPath();
+                g.moveTo(cx0 - 2, y);
+                g.lineTo(cx0 + colW, y);
+                g.stroke();
+                g.setLineDash([]);
+                /* white halo so the tag reads over bricks */
+                g.font = "bold 11px ui-monospace,Menlo,monospace";
+                g.textAlign = "left";
+                g.strokeStyle = "#fff";
+                g.lineWidth = 3;
+                g.strokeText(tx, cx0, y - 9);
+                g.fillStyle = c;
+                g.fillText(tx, cx0, y - 9);
+              },
+            );
+          }
           /* swing zigzag over the days' POCs; dashed = open */
           const zs = swings(zp);
           g.strokeStyle = "rgba(230,159,0,.9)";
