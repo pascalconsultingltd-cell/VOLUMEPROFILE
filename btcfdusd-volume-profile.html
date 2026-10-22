@@ -2283,7 +2283,10 @@
               ? 0
               : fl === "pc"
                 ? x1 - 35
-                : pcPx || tpoW0,
+                : pcPx ||
+                  /* P&F 40%, the chart 60% of what the profiles
+                     leave */
+                  (pcPf ? Math.round(0.4 * (W - tpoW - 20)) : tpoW0),
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
             px0 = W - axW;
