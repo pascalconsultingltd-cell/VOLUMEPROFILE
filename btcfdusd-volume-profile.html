@@ -3312,7 +3312,8 @@
                     yB = Y(Math.max(r * st, c.pl)),
                     [col, solid] = shade(c, r);
                   /* Sg: green above the latest green signal,
-                     black below the latest black one */
+                     black below the latest black one, a neutral
+                     blue in between */
                   const k = ci.get(c),
                     gT = hs.gTop[k],
                     bB = hs.bBot[k];
@@ -3321,9 +3322,11 @@
                       ? "#089981"
                       : pfSg && bB != null && (r + 1) * st <= bB
                         ? "#000"
-                        : tpoColor(
-                            Math.floor((t % 86400000) / TPO_MS),
-                          );
+                        : pfSg
+                          ? "#7f9fc8"
+                          : tpoColor(
+                              Math.floor((t % 86400000) / TPO_MS),
+                            );
                   g.fillRect(
                     xm - bw / 2,
                     yT,
