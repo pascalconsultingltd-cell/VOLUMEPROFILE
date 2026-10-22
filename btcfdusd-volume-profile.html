@@ -2127,7 +2127,9 @@
           divDrag = false,
           lbT = null,
           fit = null,
-          lock = null;
+          lock = null,
+          /* Alt+R: centre the prices on the latest POC */
+          pocHome = false;
         /* pan position of the default view: latest candle,
            with the empty room at its right */
         const home = () => -Math.round(N * ROOM);
@@ -2727,6 +2729,16 @@
               i ? zp[i - 1].p : null,
             ]),
           );
+          /* Alt+R: prices centred on the latest POC, 6 vol
+             steps above and below (once the POCs are in) */
+          if (pocHome && zp.length && volAmt > 0) {
+            const p = zp[zp.length - 1].p;
+            lock = { hi: p + 6 * volAmt, lo: p - 6 * volAmt };
+            ysc = 1;
+            ypan = 0;
+            pocHome = false;
+            sched();
+          } else if (!cnt || !(volAmt > 0)) pocHome = false;
           g.save();
           g.beginPath();
           g.rect(0, top, tR, bot - top);
@@ -5223,6 +5235,7 @@
             ysc = 1;
             ypan = 0;
             lock = null;
+            pocHome = !!cfg.main;
             tpoFrac = null;
             pcN = 7;
             pfN = 200;
