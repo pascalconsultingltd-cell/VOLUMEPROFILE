@@ -3312,25 +3312,28 @@
                     yB = Y(Math.max(r * st, c.pl)),
                     [col, solid] = shade(c, r);
                   /* Sg: green above the latest green signal,
-                     black below the latest black one, a neutral
-                     blue in between */
+                     black below the latest black one, a thin
+                     neutral blue line in between */
                   const k = ci.get(c),
                     gT = hs.gTop[k],
-                    bB = hs.bBot[k];
-                  g.fillStyle =
-                    pfSg && gT != null && r * st >= gT
-                      ? "#089981"
-                      : pfSg && bB != null && (r + 1) * st <= bB
-                        ? "#000"
-                        : pfSg
-                          ? "#7f9fc8"
-                          : tpoColor(
-                              Math.floor((t % 86400000) / TPO_MS),
-                            );
+                    bB = hs.bBot[k],
+                    up = pfSg && gT != null && r * st >= gT,
+                    dn = pfSg && bB != null && (r + 1) * st <= bB,
+                    thin = pfSg && !up && !dn,
+                    w = thin ? 1.5 : bw;
+                  g.fillStyle = up
+                    ? "#089981"
+                    : dn
+                      ? "#000"
+                      : thin
+                        ? "#7f9fc8"
+                        : tpoColor(
+                            Math.floor((t % 86400000) / TPO_MS),
+                          );
                   g.fillRect(
-                    xm - bw / 2,
+                    xm - w / 2,
                     yT,
-                    bw,
+                    w,
                     Math.max(1, yB - yT) + 0.5,
                   );
                   if (solid) hotB.push([xm, r, col]);
