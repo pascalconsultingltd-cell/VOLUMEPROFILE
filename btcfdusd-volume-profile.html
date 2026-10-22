@@ -5676,8 +5676,6 @@
       /* Drawings Clear button: delete every drawing */
       $("drawClr").onclick = () => {
         if (!lines.length) return toast("No drawings");
-        if (!confirm("Delete all " + lines.length + " drawings?"))
-          return;
         lines = [];
         schedule();
         toast("Drawings deleted");
