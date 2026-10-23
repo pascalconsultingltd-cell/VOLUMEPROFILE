@@ -761,7 +761,8 @@
             U += p + j <= b ? c[p + j] : 0;
             L += p - j >= a ? c[p - j] : 0;
             const v = (U - L) / (U + L || 1),
-              col = !v
+              /* only a clear imbalance (over 60 / 40) */
+              col = Math.abs(v) <= 0.2
                 ? SGREY
                 : (v > 0 ? "rgba(8,153,129," : "rgba(229,57,53,") +
                   (0.15 + 0.85 * Math.abs(v)).toFixed(2) + ")";
@@ -1468,13 +1469,17 @@
        * unless the box was typed in since the page opened.
        * Checked every 30s; absent (office, phone) = default.
        */
-      let volTyped = false;
+      let volTyped = false,
+        /* vol.js value, for the PocStpCol colours (frozen:
+           typing in the vol box does not change them) */
+        volFile = null;
       function loadVol() {
         const s = document.createElement("script");
         window.VOL = undefined;
         s.onload = s.onerror = () => {
           s.remove();
           const v = window.VOL;
+          if (Number.isFinite(v) && v > 0) volFile = v;
           if (Number.isFinite(v) && v > 0 && !volTyped) {
             const sv = String(Math.round(v));
             if ($("vol").value !== sv) {
@@ -2704,8 +2709,10 @@
            * Worked out once per day per frame.
            */
           const profCache = new Map();
-          const dayProf = (dS) => {
-            if (profCache.has(dS)) return profCache.get(dS);
+          /* stp: brick size to use instead of the vol one */
+          const dayProf = (dS, stp) => {
+            const pk = stp ? dS + "|" + stp : dS;
+            if (profCache.has(pk)) return profCache.get(pk);
             const rows = new Map(),
               per = new Map();
             let dh = -Infinity,
@@ -2730,8 +2737,9 @@
              * range when no earlier day is loaded.
              */
             const rng = prevR(dS) || dh - dl,
-              step =
-                volAmt > 0
+              step = stp
+                ? stp
+                : volAmt > 0
                   ? Math.max(1, Math.ceil(volAmt / 10))
                   : rng > 0
                     ? Math.max(1, nice(rng / 40))
@@ -2782,7 +2790,7 @@
               ps,
               full: k15.length > 0 && k15[0].t <= dS,
             };
-            profCache.set(dS, P);
+            profCache.set(pk, P);
             const keys = [...rows.keys()];
             if (!keys.length) return P;
             const kmin = Math.min(...keys),
@@ -2931,22 +2939,39 @@
            * its rows and sub POCs up to then; kept in stFz
            * once that period has closed
            */
+          /*
+           * frozen on the vol.js value (else the vol box) and on
+           * the day's own range so far, so neither the vol box
+           * nor the days shown change them; m.step = their row
+           * size, look colours up by price
+           */
           const stFor = (dS, i) => {
-            const P = dayProf(dS),
-              vf = volAmt > 0 ? volAmt : P.step * 10,
-              key = [dS, i, subStart, vf, P.step].join();
+            const vC = volFile || (volAmt > 0 ? volAmt : 0),
+              P = dayProf(
+                dS,
+                vC ? Math.max(1, Math.ceil(vC / 10)) : undefined,
+              ),
+              vf = vC || P.step * 10,
+              ps = P.ps.filter((q) => q.i <= i),
+              st0 =
+                (Math.max(...ps.map((q) => q.h)) -
+                  Math.min(...ps.map((q) => q.l))) /
+                3,
+              key = [dS, i, st0, vf, P.step].join();
             if (stFz.has(key)) return stFz.get(key);
             const rows = new Map();
             P.rows.forEach((l, r) => {
               const f = l.filter((x) => x <= i);
               if (f.length) rows.set(r, f);
             });
-            const ps = P.ps.filter((q) => q.i <= i),
-              m = stepCols(
-                rows,
-                P.step,
-                subPocs(dS, ps, subStart, vf, P.step),
-              );
+            const m = ps.length
+              ? stepCols(
+                  rows,
+                  P.step,
+                  subPocs(dS, ps, st0, vf, P.step),
+                )
+              : new Map();
+            m.step = P.step;
             if (dS + (i + 1) * TPO_MS <= Date.now()) {
               if (stFz.size > 3000) stFz.clear();
               stFz.set(key, m);
@@ -3025,7 +3050,8 @@
                   const col =
                     c == null
                       ? ""
-                      : stAt(i).get(Math.floor(c / P.step)) || "";
+                      : stAt(i).get(Math.floor(c / stAt(i).step)) ||
+                        "";
                   return {
                     c,
                     z: col.startsWith("rgba(8,153,129")
@@ -3069,7 +3095,11 @@
               lst.forEach((idx, k) => {
                 g.fillStyle =
                   stCol && shut(idx)
-                    ? stAt(idx).get(r) || SGREY
+                    ? stAt(idx).get(
+                        Math.floor(
+                          ((r + 0.5) * P.step) / stAt(idx).step,
+                        ),
+                      ) || SGREY
                     : tpoColor(idx, 0.72);
                 g.fillRect(
                   cx0 + k * lw,
@@ -3651,10 +3681,9 @@
               let i = Math.floor((t - dS) / TPO_MS);
               if (dS + (i + 1) * TPO_MS > Date.now()) i--;
               if (i < 0) return "";
-              const row = Math.floor(
-                ((r + 0.5) * st) / dayProf(dS).step,
-              );
-              return stFor(dS, i).get(row) || "";
+              const m = stFor(dS, i);
+              const row = Math.floor(((r + 0.5) * st) / m.step);
+              return m.get(row) || "";
             };
             const hs = pfHot(all, st),
               ci = new Map(all.map((c, k) => [c, k])),
