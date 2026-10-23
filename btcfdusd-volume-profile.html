@@ -2908,11 +2908,11 @@
               i ? zp[i - 1].p : null,
             ]),
           );
-          /* Alt+R: prices centred on the latest POC, 5 vol
+          /* Alt+R: prices centred on the latest POC, 6 vol
              steps above and below (once the POCs are in) */
           if (pocHome && zp.length && volAmt > 0) {
             const p = zp[zp.length - 1].p;
-            lock = { hi: p + 5 * volAmt, lo: p - 5 * volAmt };
+            lock = { hi: p + 6 * volAmt, lo: p - 6 * volAmt };
             ysc = 1;
             ypan = 0;
             pocHome = false;
