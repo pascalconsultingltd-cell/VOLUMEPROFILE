@@ -3110,18 +3110,27 @@
             zo = z;
           }
           g.restore();
-          /* golden rays from both ends of the last solid leg,
-             and dashed from the open leg's end, right across
-             DPoc and the chart, price tagged */
+          /* rays from both ends of the last solid leg, and
+             dashed from the open leg's end, right across DPoc
+             and the chart, price tagged; each in its POC's
+             colour (green above the POC before it, black
+             below), the zigzag itself stays golden */
           (zs.length > 1 ? zs.slice(-2).map(({ q }) => [q, 0]) : [])
             .concat(zo ? [[zo, 1]] : [])
             .forEach(([q, dash]) => {
               if (q.y < top || q.y > bot) return;
+              const pv = zPrev.get(q.ds + "|" + q.p),
+                rc =
+                  pv == null
+                    ? "#003366"
+                    : q.p < pv
+                      ? "#000"
+                      : "#089981";
               g.save();
               g.beginPath();
               g.rect(0, top, px0, bot - top);
               g.clip();
-              g.strokeStyle = "rgba(230,159,0,.9)";
+              g.strokeStyle = rc;
               g.lineWidth = 1.5;
               g.setLineDash(dash ? [6, 5] : []);
               g.beginPath();
@@ -3129,7 +3138,7 @@
               g.lineTo(px0, q.y);
               g.stroke();
               g.restore();
-              ptag(q.y, q.p.toFixed(DP), "#e69f00");
+              ptag(q.y, q.p.toFixed(DP), rc);
             });
           /*
            * 15m history needed: three days before the oldest
