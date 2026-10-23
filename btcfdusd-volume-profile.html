@@ -340,29 +340,47 @@
       <div class="ctl">
         <!-- groups: chart, profile and levels, channels,
              orders, view; .box = buttons that go together -->
-        <span class="grp" title="Chart"
+        <span class="grp" title="Profile and levels"
           ><span class="ttl"
-            ><span class="lbl">Main chart</span
-            ><span
-              ><span class="ttl"
-                ><span class="lbl">Type</span
-                ><span class="box"
-                  ><span
-                    id="modeBtns"
-                    title="VC volume, Std standard, LB line break"
-                  ></span></span></span
-              ><span class="ttl"
-                ><span class="lbl">Interval</span
-                ><span id="tfBtns" class="box"></span></span
-              ><span class="ttl"
-                ><span class="lbl">Length</span
-                ><span
-                  id="nBtns"
-                  class="box"
-                  title="Candles shown"
-                ></span></span
+            ><span class="lbl">Vol</span
+            ><span class="box"
+              ><input
+                id="vol"
+                value="255"
+                inputmode="decimal"
+                autocomplete="off"
+                placeholder="vol"
+                title="Step around yesterday's POC: 250 or 0.3%"
+            /></span></span
+          ><span class="ttl"
+            ><span class="lbl">Volume Profile</span
+            ><span class="box"
+              ><span id="tpoBtns"></span>
+              <button
+                id="vaTog"
+                class=""
+                title="Value area on / off; the POC always stays"
+              >
+                VA
+              </button>
+              <button
+                id="pocTog"
+                class=""
+                title="POC bands and tags on / off"
+              >
+                POC
+              </button>
+              <button
+                id="stTog"
+                class=""
+                title="Bricks by steps value around their sub POC"
+              >
+                St
+              </button></span
             ></span
           ></span
+        >
+        <span class="grp" title="Chart"
           ><span class="ttl"
             ><span class="lbl">POC candles</span
             ><span class="box"
@@ -417,47 +435,29 @@
                 Vc
               </button></span
             ></span
-        ></span>
-        <span class="grp" title="Profile and levels"
           ><span class="ttl"
-            ><span class="lbl">Vol</span
-            ><span class="box"
-              ><input
-                id="vol"
-                value="255"
-                inputmode="decimal"
-                autocomplete="off"
-                placeholder="vol"
-                title="Step around yesterday's POC: 250 or 0.3%"
-            /></span></span
-          ><span class="ttl"
-            ><span class="lbl">Volume Profile</span
-            ><span class="box"
-              ><span id="tpoBtns"></span>
-              <button
-                id="vaTog"
-                class=""
-                title="Value area on / off; the POC always stays"
-              >
-                VA
-              </button>
-              <button
-                id="pocTog"
-                class=""
-                title="POC bands and tags on / off"
-              >
-                POC
-              </button>
-              <button
-                id="stTog"
-                class=""
-                title="Bricks by steps value around their sub POC"
-              >
-                St
-              </button></span
+            ><span class="lbl">Main chart</span
+            ><span
+              ><span class="ttl"
+                ><span class="lbl">Type</span
+                ><span class="box"
+                  ><span
+                    id="modeBtns"
+                    title="VC volume, Std standard, LB line break"
+                  ></span></span></span
+              ><span class="ttl"
+                ><span class="lbl">Interval</span
+                ><span id="tfBtns" class="box"></span></span
+              ><span class="ttl"
+                ><span class="lbl">Length</span
+                ><span
+                  id="nBtns"
+                  class="box"
+                  title="Candles shown"
+                ></span></span
             ></span
           ></span
-        >
+        ></span>
         <span class="grp" title="Channels"
           ><span class="ttl"
           ><span class="lbl">Boxes</span
