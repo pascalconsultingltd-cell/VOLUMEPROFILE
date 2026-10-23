@@ -2242,10 +2242,10 @@
           tpoFrac = null,
           /* DPoc candles shown: 7 at start, wheel 3-60 */
           pcN = 7,
-          /* SPoc window: width once dragged, candles shown
-             (0 = as many as fit, 12px each) */
+          /* SPoc window: width once dragged, slots shown
+             (11: 7 candles and 4 empty on the right) */
           spPx = null,
-          spN = 0,
+          spN = 11,
           /* 4 empty slots on the right by default */
           spBack = -4,
           /* VP alert events, from the last draw */
@@ -5656,7 +5656,7 @@
             pocHome = !!cfg.main;
             tpoFrac = null;
             pcN = 7;
-            spN = 0;
+            spN = 11;
             spBack = -4;
             spPx = null;
             pfN = 200;
@@ -6127,6 +6127,11 @@
         (b, i) => (b.onclick = () => setNBox(i + 1)),
       );
       restore();
+      /* a fresh page starts as after Alt+R: settings kept,
+         views back home */
+      miniHome();
+      mainChart.resetView();
+      miniChart.resetView();
       $("ladTog").onclick = () => setHlLad(!hlLad);
       $("gridTog").onclick = () => setShowGrid(!showGrid);
       $("vaTog").onclick = () => setShowVA(!showVA);
