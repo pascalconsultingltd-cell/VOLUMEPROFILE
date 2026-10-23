@@ -348,12 +348,16 @@
             ><span class="lbl">Candles shown</span
             ><span id="nBtns" class="box"></span></span
           ><span class="ttl"
-            ><span class="lbl">Chart type</span
+            ><span class="lbl">Main chart type</span
             ><span class="box"
               ><span
                 id="modeBtns"
                 title="VC volume candles, Std standard, LB line break"
-              ></span
+              ></span></span
+            ></span
+          ><span class="ttl"
+            ><span class="lbl">POC candles</span
+            ><span class="box"
               ><button
                 id="pcTog"
                 class="a"
@@ -367,7 +371,11 @@
                 title="POC candles from sub POCs, vs the previous POC"
               >
                 SPoc
-              </button
+              </button></span
+            ></span
+          ><span class="ttl"
+            ><span class="lbl">P&amp;F</span
+            ><span class="box"
               ><button
                 id="pfTog"
                 class="a"
@@ -5735,17 +5743,14 @@
           mkBtns(
             $("nBtns"),
             [
-              [40, "40"],
-              [80, "80"],
-              [120, "120"],
-              [160, "160"],
+              [36, "36"],
               [288, "288"],
               [576, "576"],
             ],
             /* a button shows that many candles, back at
                the latest one with the usual room */
             () =>
-              [40, 80, 120, 160, 288, 576].find(
+              [36, 288, 576].find(
                 (v) => slotsFor(v) === N,
               ),
             (v) => {
