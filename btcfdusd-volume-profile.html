@@ -2230,7 +2230,8 @@
              (0 = as many as fit, 12px each) */
           spPx = null,
           spN = 0,
-          spBack = 0,
+          /* 4 empty slots on the right by default */
+          spBack = -4,
           /* VP alert events, from the last draw */
           vpEv = null,
           /* DPoc panel P&F: columns shown (wheel) */
@@ -3813,6 +3814,41 @@
                 }
               });
               cds.sort((m, n) => m.t - n.t || m.k - n.k || 0);
+              /* SPoc: today's candle so far (hollow) from the
+                 sub POC before today's latest one to it, when
+                 the rule above has not closed one today */
+              const b = seq[seq.length - 1],
+                a = seq[seq.length - 2],
+                last = cds[cds.length - 1];
+              if (
+                sub &&
+                a &&
+                b.dS === dayOf(Date.now()) &&
+                !(
+                  last &&
+                  last.t === b.dS &&
+                  last.k === seq.length - 1
+                )
+              ) {
+                let h = Math.max(a.p, b.p),
+                  l = Math.min(a.p, b.p);
+                const ta = a.dS + a.f * TPO_MS;
+                k15.forEach((c) => {
+                  if (c.t < ta || !okC(c)) return;
+                  h = Math.max(h, c.h);
+                  l = Math.min(l, c.l);
+                });
+                cds.push({
+                  t: b.dS,
+                  k: seq.length - 1,
+                  o: a.p,
+                  c: b.p,
+                  h,
+                  l,
+                  up: b.p >= a.p,
+                  live: true,
+                });
+              }
               return cds;
             };
             const cds = pcPf ? [] : pocCds(pcSub);
@@ -3874,7 +3910,8 @@
               g.lineWidth = 1;
               const yo = YP(c.o),
                 yc = YP(c.c);
-              g.fillRect(
+              /* live (today so far): hollow */
+              g[c.live ? "strokeRect" : "fillRect"](
                 xm - sl * 0.35,
                 Math.min(yo, yc),
                 sl * 0.7,
@@ -5600,7 +5637,7 @@
             tpoFrac = null;
             pcN = 7;
             spN = 0;
-            spBack = 0;
+            spBack = -4;
             spPx = null;
             pfN = 200;
             pcPx = null;
