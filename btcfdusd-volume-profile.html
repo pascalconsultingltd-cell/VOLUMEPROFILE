@@ -433,6 +433,13 @@
                 title="Bricks by steps value around their sub POC"
               >
                 St
+              </button>
+              <button
+                id="lcTog"
+                class=""
+                title="St: forming period in the last closed colours"
+              >
+                Lc
               </button></span
             ></span
           ></span
@@ -1298,6 +1305,15 @@
       function setStCol(v) {
         stCol = !!v;
         $("stTog").className = stCol ? "a" : "";
+        schedule();
+      }
+      /* Lc button: with St, the forming period's bricks in
+         the colours of the last closed period (off: their
+         time colour) */
+      let stLast = false;
+      function setStLast(v) {
+        stLast = !!v;
+        $("lcTog").className = stLast ? "a" : "";
         schedule();
       }
       /* POC candles panel (DPoc button) */
@@ -2969,6 +2985,11 @@
                 (mid != null ? mid : k15[k15.length - 1].c) / P.step,
               );
             }
+            /* iShut: the day's last closed period (Lc) */
+            let iShut = -1;
+            P.ps.forEach((q) => {
+              if (shut(q.i)) iShut = q.i;
+            });
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
@@ -2976,7 +2997,9 @@
                 g.fillStyle =
                   stCol && shut(idx)
                     ? stAt(idx).get(r) || SGREY
-                    : tpoColor(idx, 0.72);
+                    : stCol && stLast && iShut >= 0
+                      ? stAt(iShut).get(r) || SGREY
+                      : tpoColor(idx, 0.72);
                 g.fillRect(
                   cx0 + k * lw,
                   yT + 0.5,
@@ -5744,6 +5767,7 @@
           showVA,
           showPOC,
           stCol,
+          stLast,
           pcPf,
           pfBr,
           pfSg,
@@ -5807,6 +5831,7 @@
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         if (typeof st.stCol === "boolean") setStCol(st.stCol);
+        if (typeof st.stLast === "boolean") setStLast(st.stLast);
         /* DPoc: default changed in version 7 */
         if (st.dv >= 7 && typeof st.pocC === "boolean")
           setPocC(st.pocC);
@@ -6035,6 +6060,7 @@
       $("pfHlTog").onclick = () => setPfHl(!pfHl);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
+      $("lcTog").onclick = () => setStLast(!stLast);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
