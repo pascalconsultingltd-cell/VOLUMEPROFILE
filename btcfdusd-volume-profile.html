@@ -90,6 +90,14 @@
         font-size: 16px;
         color: var(--mu);
       }
+      /* Clear buttons, next to the title */
+      .clr {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mu);
+      }
       body.noctl .ctl {
         display: none;
       }
@@ -349,6 +357,19 @@
         ><span id="st">connecting</span></span
       >
       <button id="ctlTog" title="Hide / show the toggles">▾</button>
+      <span class="clr"
+        >Clear
+        <button
+          id="alClr"
+          class=""
+          title="Clear all alerts (Alt+A); lit while armed"
+        >
+          Alerts
+        </button>
+        <button id="drawClr" title="Delete all drawings">
+          Drawings
+        </button></span
+      >
       <div class="ctl">
         <!-- groups: chart, profile and levels, channels,
              orders, view; .box = buttons that go together -->
@@ -535,23 +556,6 @@
             ></span
           ></span
         ></span>
-        <span class="grp" title="Clear"
-          ><span class="ttl"
-            ><span class="lbl">Clear</span
-            ><span class="box"
-              ><button
-                id="alClr"
-                class=""
-                title="Clear all alerts (Alt+A); lit while armed"
-              >
-                Alerts
-              </button>
-              <button id="drawClr" title="Delete all drawings">
-                Drawings
-              </button></span
-            ></span
-          ></span
-        >
       </div>
     </header>
     <div id="info"></div>
@@ -2342,6 +2346,7 @@
         function draw() {
           try {
             drawInner();
+            if (cfg.main) alignHdr();
             if (cfg.main) $("info").style.color = "";
           } catch (e) {
             console.error(e);
@@ -2355,6 +2360,51 @@
               el.textContent = "Draw error: " + e.message;
             }
           }
+        }
+        /*
+         * header sections over their windows: profiles, POC
+         * candles, P&F, chart; a section moves right to its
+         * window's left edge when there is room on its line
+         */
+        let hdrKey = "";
+        function alignHdr() {
+          if (!view || document.body.classList.contains("noctl"))
+            return;
+          const v = view,
+            ox = cv.getBoundingClientRect().left,
+            T = [
+              ["Profile and levels", 0],
+              [
+                "Chart",
+                v.spW ? v.sL : !pcPf && v.pcW ? v.pS : null,
+              ],
+              ["P&F", pcPf && v.pcW ? v.pS : null],
+              ["Main chart", v.x0 - 3],
+            ],
+            key = [W, v.sL, v.pS, v.x0, pcPf, v.spW].join();
+          if (key === hdrKey) return;
+          hdrKey = key;
+          let prev = null;
+          T.forEach(([t, x]) => {
+            const el = document.querySelector(
+              '.ctl .grp[title="' + t + '"]',
+            );
+            if (!el) return;
+            el.style.marginLeft = "";
+            const r = el.getBoundingClientRect();
+            if (
+              x != null &&
+              prev &&
+              Math.abs(r.top - prev.top) < 4 &&
+              ox + x > r.left
+            ) {
+              el.style.marginLeft = ox + x - r.left + "px";
+              /* pushed onto the next line: leave it as it was */
+              if (Math.abs(el.getBoundingClientRect().top - r.top) > 4)
+                el.style.marginLeft = "";
+            }
+            prev = el.getBoundingClientRect();
+          });
         }
         function drawInner() {
           g.clearRect(0, 0, W, H);
