@@ -1100,9 +1100,15 @@
               ? -1
               : 0;
         };
-        for (let k = Math.max(1, n - 2); k < n; k++) {
+        /* a switch: green after black or black after green,
+           neutral columns in between ignored */
+        let lastZ = 0;
+        for (let k = 0; k < n; k++) {
           const z = zone(k);
-          if (z && z !== zone(k - 1))
+          if (!z) continue;
+          const sw = z !== lastZ && lastZ !== 0;
+          lastZ = z;
+          if (sw && k >= n - 2)
             out.push({
               id: "z" + all[k].t0 + "|" + z,
               up: z > 0,
@@ -2194,6 +2200,7 @@
              (0 = as many as fit, 12px each) */
           spPx = null,
           spN = 0,
+          spBack = 0,
           /* DPoc panel P&F: columns shown (wheel) */
           pfN = 200,
           /* pcPx: DPoc width once dragged (null = as the
@@ -2867,6 +2874,16 @@
             const vf = volAmt > 0 ? volAmt : P.step * 10;
             const sp = subPocs(P.dS, P.ps, subStart, vf, P.step),
               sc = stCol ? stepCols(P.rows, P.step, sp) : null;
+            let iNow = -1,
+              rNow = null;
+            if (P.dS === dayOf(Date.now()) && k15.length) {
+              P.rows.forEach((l) =>
+                l.forEach((i) => (iNow = Math.max(iNow, i))),
+              );
+              rNow = Math.floor(
+                (mid != null ? mid : k15[k15.length - 1].c) / P.step,
+              );
+            }
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
@@ -2880,6 +2897,18 @@
                   Math.max(1, lw - 1),
                   Math.max(1, rowH - 1),
                 );
+                /* today's latest brick (current period, price
+                   row): black border */
+                if (r === rNow && idx === iNow) {
+                  g.strokeStyle = "#000";
+                  g.lineWidth = 1.5;
+                  g.strokeRect(
+                    cx0 + k * lw,
+                    yT + 0.5,
+                    Math.max(1, lw - 1),
+                    Math.max(1, rowH - 1),
+                  );
+                }
               });
             });
             /* sub POCs: P1 solid, P2 dashed, P3 dotted, each
@@ -3727,7 +3756,15 @@
               const sc = pocCds(true),
                 n = spN || Math.max(3, Math.floor(spW / 12)),
                 ssl = spW / n,
-                sh = sc.slice(-n),
+                /* spBack: candles dragged back */
+                sb = Math.max(
+                  0,
+                  Math.min(sc.length - 1, Math.round(spBack)),
+                ),
+                sh = sc.slice(
+                  Math.max(0, sc.length - sb - n),
+                  sc.length - sb,
+                ),
                 sa = sL + 5;
               g.save();
               g.beginPath();
@@ -3930,6 +3967,7 @@
             pcN: pcShow,
             pcSl,
             tpoSl: colW + gap,
+            spSl: spShow ? spW / spShow : 1,
             sL,
             spW,
             spN: spShow,
@@ -4640,7 +4678,8 @@
                 1 - view.pcN,
                 pan.b0 + dx / view.pcSl,
               );
-            else if (pan.w === "sp");
+            else if (pan.w === "sp")
+              spBack = Math.max(0, pan.b0 + dx / view.spSl);
             else if (pan.w === "tpo")
               tpoBack = Math.max(
                 1 - nTpo,
@@ -5122,7 +5161,8 @@
                 w = view.win(px);
               pan = {
                 w,
-                b0: w === "pc" ? pcBack : tpoBack,
+                b0:
+                  w === "pc" ? pcBack : w === "sp" ? spBack : tpoBack,
                 x: e.clientX,
                 y: e.clientY,
                 off: off + subX,
@@ -5414,6 +5454,7 @@
             tpoFrac = null;
             pcN = 7;
             spN = 0;
+            spBack = 0;
             spPx = null;
             pfN = 200;
             pcPx = null;
