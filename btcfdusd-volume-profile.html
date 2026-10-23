@@ -628,7 +628,9 @@
       }
       const subCache = new Map(),
         /* zigzag points per day (see the profiles) */
-        zCache = new Map();
+        zCache = new Map(),
+        /* St colours of closed periods, frozen (see stAt) */
+        stFz = new Map();
       function subPocs(dS, ps, start, vol, fine) {
         if (!ps.length) return [];
         const z = ps[ps.length - 1],
@@ -1067,7 +1069,13 @@
        * no alert).
        */
       const ALK = "btcfdusd-alerts",
-        alName = { main: "Chart", mini: "15s", pf: "P&F", fb: "FB" };
+        alName = {
+          main: "Chart",
+          mini: "15s",
+          pf: "P&F",
+          fb: "FB",
+          vp: "VP",
+        };
       let alerts = {},
         actx = null,
         wlock = null,
@@ -1120,6 +1128,13 @@
       }
       function alEvents(w) {
         if (w === "pf") return pfEvents();
+        /* VP: worked out while drawing, so draw first (a
+           background tab skips frames) */
+        if (w === "vp") {
+          if (!charts[0]) return null;
+          charts[0].draw();
+          return charts[0].vpEv();
+        }
         const c = charts[w === "mini" ? 1 : 0];
         return !c ? null : w === "fb" ? c.fbEv() : c.alertEv();
       }
@@ -2201,6 +2216,8 @@
           spPx = null,
           spN = 0,
           spBack = 0,
+          /* VP alert events, from the last draw */
+          vpEv = null,
           /* DPoc panel P&F: columns shown (wheel) */
           pfN = 200,
           /* pcPx: DPoc width once dragged (null = as the
@@ -2873,7 +2890,75 @@
             }
             const vf = volAmt > 0 ? volAmt : P.step * 10;
             const sp = subPocs(P.dS, P.ps, subStart, vf, P.step),
-              sc = stCol ? stepCols(P.rows, P.step, sp) : null;
+              /* St, no repaint: a closed period's bricks keep
+                 the colours they had at its close (its rows
+                 and sub POCs up to then, kept in stFz); the
+                 forming period shows its time colour */
+              shut = (i) => P.dS + (i + 1) * TPO_MS <= Date.now(),
+              stAt = (i) => {
+                const key = [P.dS, i, subStart, vf, P.step].join();
+                if (stFz.has(key)) return stFz.get(key);
+                const rows = new Map();
+                P.rows.forEach((l, r) => {
+                  const f = l.filter((x) => x <= i);
+                  if (f.length) rows.set(r, f);
+                });
+                const ps = P.ps.filter((q) => q.i <= i),
+                  m = stepCols(
+                    rows,
+                    P.step,
+                    subPocs(P.dS, ps, subStart, vf, P.step),
+                  );
+                if (shut(i)) {
+                  if (stFz.size > 3000) stFz.clear();
+                  stFz.set(key, m);
+                }
+                return m;
+              };
+            /*
+             * VP alert: the colour of today's latest closed
+             * period at its close price (1 green, -1 red, 0
+             * else) against the period before it
+             */
+            if (P.dS === dayOf(Date.now()) && k15.length) {
+              const cls = (i) => {
+                  const e = P.dS + (i + 1) * TPO_MS;
+                  let c = null;
+                  for (let j = k15.length - 1; j >= 0; j--)
+                    if (k15[j].t < e && okC(k15[j])) {
+                      c = k15[j].c;
+                      break;
+                    }
+                  const col =
+                    c == null
+                      ? ""
+                      : stAt(i).get(Math.floor(c / P.step)) || "";
+                  return {
+                    c,
+                    z: col.startsWith("rgba(8,153,129")
+                      ? 1
+                      : col.startsWith("rgba(229,57,53")
+                        ? -1
+                        : 0,
+                  };
+                },
+                shuts = P.ps.filter((q) => shut(q.i)),
+                L = shuts[shuts.length - 1],
+                Lp = shuts[shuts.length - 2],
+                ev = [];
+              if (L && Lp) {
+                const a = cls(L.i),
+                  b = cls(Lp.i);
+                if (a.z && a.z !== b.z)
+                  ev.push({
+                    id: "v" + P.dS + "|" + L.i,
+                    up: a.z > 0,
+                    txt:
+                      (a.z > 0 ? "green " : "red ") + a.c.toFixed(0),
+                  });
+              }
+              vpEv = { ctx: [subStart, vf, P.step].join(), ev };
+            }
             let iNow = -1,
               rNow = null;
             if (P.dS === dayOf(Date.now()) && k15.length) {
@@ -2888,9 +2973,10 @@
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
               lst.forEach((idx, k) => {
-                g.fillStyle = sc
-                  ? sc.get(r) || SGREY
-                  : tpoColor(idx, 0.72);
+                g.fillStyle =
+                  stCol && shut(idx)
+                    ? stAt(idx).get(r) || SGREY
+                    : tpoColor(idx, 0.72);
                 g.fillRect(
                   cx0 + k * lw,
                   yT + 0.5,
@@ -4354,6 +4440,7 @@
             if (pcW) icon("pc", pL, pL + pcW);
             if (pcW && pcPf) alIcons("pf", pL + pcW);
             if (tpoW) icon("tpo", 1, tR - 1);
+            if (tpoW) alIcons("vp", tR - 1);
             if (!side) {
               icon("main", x0 - 3, px0 - 2);
               alIcons("main", px0 - 2, 0, "HA");
@@ -5442,6 +5529,7 @@
           draw,
           alertEv,
           fbEv,
+          vpEv: () => vpEv,
           newCandle,
           size,
           resetView: () => {
