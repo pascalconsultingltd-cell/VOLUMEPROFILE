@@ -4643,7 +4643,16 @@
             ptag(mouse.y, pv.toFixed(DP), XB, XF);
             let lbl = null;
             if (o) lbl = dlabel(o.c.t);
-            else if (inTpo) {
+            /* over the P&F: the hovered column's start time */
+            else if (
+              pcPf &&
+              pcW &&
+              mouse.x >= pS &&
+              mouse.x < x0 - 5
+            ) {
+              const t = pfTime(mouse.x);
+              if (t != null) lbl = dlabel(t);
+            } else if (inTpo) {
               const P = profs.find(
                 (q) =>
                   q.show &&
