@@ -2233,9 +2233,6 @@
           spBack = 0,
           /* VP alert events, from the last draw */
           vpEv = null,
-          /* today's latest closed St colours (Vc): { m: row ->
-             colour, step } */
-          vpMap = null,
           /* DPoc panel P&F: columns shown (wheel) */
           pfN = 200,
           /* pcPx: DPoc width once dragged (null = as the
@@ -2858,6 +2855,34 @@
               }),
             );
           });
+          /*
+           * St, no repaint: the colours (row -> colour) of day
+           * dS's bricks as at the close of its period i, from
+           * its rows and sub POCs up to then; kept in stFz
+           * once that period has closed
+           */
+          const stFor = (dS, i) => {
+            const P = dayProf(dS),
+              vf = volAmt > 0 ? volAmt : P.step * 10,
+              key = [dS, i, subStart, vf, P.step].join();
+            if (stFz.has(key)) return stFz.get(key);
+            const rows = new Map();
+            P.rows.forEach((l, r) => {
+              const f = l.filter((x) => x <= i);
+              if (f.length) rows.set(r, f);
+            });
+            const ps = P.ps.filter((q) => q.i <= i),
+              m = stepCols(
+                rows,
+                P.step,
+                subPocs(dS, ps, subStart, vf, P.step),
+              );
+            if (dS + (i + 1) * TPO_MS <= Date.now()) {
+              if (stFz.size > 3000) stFz.clear();
+              stFz.set(key, m);
+            }
+            return m;
+          };
           /* each POC's previous one in time (the day before's
              last for a day's first), for its colour */
           const zPrev = new Map(
@@ -2909,30 +2934,10 @@
             const vf = volAmt > 0 ? volAmt : P.step * 10;
             const sp = subPocs(P.dS, P.ps, subStart, vf, P.step),
               /* St, no repaint: a closed period's bricks keep
-                 the colours they had at its close (its rows
-                 and sub POCs up to then, kept in stFz); the
+                 the colours they had at its close (stFor); the
                  forming period shows its time colour */
               shut = (i) => P.dS + (i + 1) * TPO_MS <= Date.now(),
-              stAt = (i) => {
-                const key = [P.dS, i, subStart, vf, P.step].join();
-                if (stFz.has(key)) return stFz.get(key);
-                const rows = new Map();
-                P.rows.forEach((l, r) => {
-                  const f = l.filter((x) => x <= i);
-                  if (f.length) rows.set(r, f);
-                });
-                const ps = P.ps.filter((q) => q.i <= i),
-                  m = stepCols(
-                    rows,
-                    P.step,
-                    subPocs(P.dS, ps, subStart, vf, P.step),
-                  );
-                if (shut(i)) {
-                  if (stFz.size > 3000) stFz.clear();
-                  stFz.set(key, m);
-                }
-                return m;
-              };
+              stAt = (i) => stFor(P.dS, i);
             /*
              * VP alert: the colour of today's latest closed
              * period at its close price (1 green, -1 red, 0
@@ -2987,13 +2992,7 @@
                 (mid != null ? mid : k15[k15.length - 1].c) / P.step,
               );
             }
-            /* iShut: the day's last closed period (Vc) */
-            let iShut = -1;
-            P.ps.forEach((q) => {
-              if (shut(q.i)) iShut = q.i;
-            });
-            if (P.dS === dayOf(Date.now()) && iShut >= 0)
-              vpMap = { m: stAt(iShut), step: P.step };
+
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
@@ -3560,6 +3559,20 @@
            * candles (see pfHot).
            */
           const drawPfCols = (all, shown, jOf, pa, sl, st) => {
+            /* Vc: the volume profile's colour for a brick
+               traded at time t on row r: same day, same
+               period (the last closed one while it forms),
+               same price, as the profile shows it */
+            const vcAt = (t, r) => {
+              const dS = dayOf(t);
+              let i = Math.floor((t - dS) / TPO_MS);
+              if (dS + (i + 1) * TPO_MS > Date.now()) i--;
+              if (i < 0) return "";
+              const row = Math.floor(
+                ((r + 0.5) * st) / dayProf(dS).step,
+              );
+              return stFor(dS, i).get(row) || "";
+            };
             const hs = pfHot(all, st),
               ci = new Map(all.map((c, k) => [c, k])),
               shade = (c, r) => [
@@ -3593,12 +3606,7 @@
                   const k = ci.get(c),
                     gT = hs.gTop[k],
                     bB = hs.bBot[k],
-                    vc =
-                      pfVc && vpMap
-                        ? vpMap.m.get(
-                            Math.floor(((r + 0.5) * st) / vpMap.step),
-                          ) || ""
-                        : null,
+                    vc = pfVc ? vcAt(t, r) : null,
                     vcOn =
                       vc != null &&
                       (vc.startsWith("rgba(8,153,129") ||
