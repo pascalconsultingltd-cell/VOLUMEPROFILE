@@ -360,8 +360,7 @@
             ><span class="box"
               ><button
                 id="pcTog"
-                class="a"
-                title="Daily POC candles, left of the profiles"
+                title="POC candles from the day POCs"
               >
                 DPoc
               </button
@@ -1314,18 +1313,20 @@
         $("stTog").className = stCol ? "a" : "";
         schedule();
       }
-      /* POC candles panel (DPoc button) */
-      let pocC = true;
+      /* POC candles: DPoc = from the day POCs, SPoc = from
+         the sub POCs; one or the other (or none) */
+      let pocC = false;
       function setPocC(v) {
         pocC = !!v;
         $("pcTog").className = pocC ? "a" : "";
+        if (pocC && pcSub) setPcSub(false);
         schedule();
       }
-      /* POC candles from the sub POCs (SPoc button) */
       let pcSub = true;
       function setPcSub(v) {
         pcSub = !!v;
         $("spTog").className = pcSub ? "a" : "";
+        if (pcSub && pocC) setPocC(false);
         schedule();
       }
       /* the DPoc panel as aggression P&F (P&F button) */
@@ -1333,7 +1334,6 @@
       function setPcPf(v) {
         pcPf = !!v;
         $("pfTog").className = pcPf ? "a" : "";
-        if (pcPf && !pocC) setPocC(true);
         schedule();
       }
       /* P&F drawn as bricks coloured like the profiles (Br
@@ -2416,13 +2416,13 @@
             /* SPoc and P&F both on: 4 windows, profiles 20%,
                sub POC candles 10%, P&F 30%, chart 40% */
             four =
-              cfg.main && cfg.tpo && pocC && pcPf && pcSub && !fl,
+              cfg.main && cfg.tpo && pcPf && (pocC || pcSub) && !fl,
             tpoW = !cfg.tpo || fl === "main" || fl === "pc"
               ? 0
               : fl === "tpo"
                 ? x1 - 25
                 : tpoW0,
-            pcW = !(cfg.main && cfg.tpo && pocC) ||
+            pcW = !(cfg.main && cfg.tpo && (pocC || pcSub || pcPf)) ||
               fl === "main" || fl === "tpo"
               ? 0
               : fl === "pc"
@@ -3932,7 +3932,7 @@
             /* the SPoc window (4 windows): the latest sub POC
                candles that fit, 12px each, newest on the right */
             if (spW) {
-              const sc = pocCds(true),
+              const sc = pocCds(pcSub),
                 n = spN || Math.max(3, Math.floor(spW / 12)),
                 ssl = spW / n,
                 /* spBack: candles dragged back; negative = empty
@@ -3961,7 +3961,11 @@
               panel(sL, spOff);
               g.fillStyle = "#6b7684";
               g.textAlign = "center";
-              g.fillText("SPoc", sL + spOff / 2, bot + 10);
+              g.fillText(
+                pcSub ? "SPoc" : "DPoc",
+                sL + spOff / 2,
+                bot + 10,
+              );
               spShow = n;
               if (!sh.length)
                 g.fillText(
@@ -5732,9 +5736,7 @@
             $("tpoBtns"),
             [
               [1, "1d"],
-              [2, "2d"],
               [3, "3d"],
-              [5, "5d"],
               [7, "7d"],
             ],
             () => nTpo,
@@ -5801,7 +5803,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 10;
+      const DEFAULTS_VER = 11;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -5900,7 +5902,8 @@
           setShowPOC(st.showPOC);
         if (typeof st.stCol === "boolean") setStCol(st.stCol);
         /* DPoc: default changed in version 7 */
-        if (st.dv >= 7 && typeof st.pocC === "boolean")
+        /* DPoc: meaning changed in version 11 */
+        if (st.dv >= 11 && typeof st.pocC === "boolean")
           setPocC(st.pocC);
         /* SPoc would switch P&F off: older saves ignored */
         /* SPoc: default changed in version 10 */
