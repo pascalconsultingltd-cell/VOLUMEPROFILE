@@ -426,6 +426,13 @@
                 title="POC bands and tags on / off"
               >
                 POC
+              </button>
+              <button
+                id="stTog"
+                class=""
+                title="Bricks by steps value around their sub POC"
+              >
+                St
               </button></span
             ></span
           ></span
@@ -684,6 +691,55 @@
         if (subCache.size > 300) subCache.clear();
         subCache.set(key.join(), pocs);
         return pocs;
+      }
+      /*
+       * steps colours (simplified/POC): from each sub POC
+       * one row each side per step, up to the lowest row
+       * towards the next POC or the day's end; green = more
+       * bricks above so far, red = more below, stronger =
+       * more lopsided. A POC row takes its P colour, the
+       * low rows in between stay grey. Map row -> colour.
+       */
+      const SPC = ["0,51,102", "47,128,200", "107,118,132"],
+        SGREY = "rgba(107,118,132,.3)";
+      function stepCols(rows, step, sp) {
+        const ks = [...rows.keys()],
+          r0 = Math.min(...ks),
+          c = [],
+          out = new Map();
+        for (let r = r0; r <= Math.max(...ks); r++)
+          c.push((rows.get(r) || []).length);
+        const n = c.length,
+          rs = sp.map((S) => {
+            const r = Math.floor(S.px / step) - r0;
+            return Math.min(n - 1, Math.max(0, r));
+          });
+        /* lowest row between two POC rows */
+        const cut = (x, y) => {
+          let m = x + 1;
+          for (let r = x + 2; r < y; r++) if (c[r] < c[m]) m = r;
+          return m;
+        };
+        rs.forEach((p, k) => {
+          const dn = Math.max(-1, ...rs.filter((r) => r < p)),
+            up = Math.min(n, ...rs.filter((r) => r > p)),
+            a = dn < 0 ? 0 : Math.min(p, cut(dn, p) + 1),
+            b = up >= n ? n - 1 : Math.max(p, cut(p, up) - 1);
+          out.set(p + r0, "rgb(" + SPC[k] + ")");
+          const J = Math.max(b - p, p - a);
+          for (let j = 1, U = 0, L = 0; j <= J; j++) {
+            U += p + j <= b ? c[p + j] : 0;
+            L += p - j >= a ? c[p - j] : 0;
+            const v = (U - L) / (U + L || 1),
+              col = !v
+                ? SGREY
+                : (v > 0 ? "rgba(8,153,129," : "rgba(229,57,53,") +
+                  (0.15 + 0.85 * Math.abs(v)).toFixed(2) + ")";
+            if (p + j <= b) out.set(p + j + r0, col);
+            if (p - j >= a) out.set(p - j + r0, col);
+          }
+        });
+        return out;
       }
       /*
        * swing zigzag over POC points in time order: a point
@@ -1213,6 +1269,14 @@
       function setShowPOC(v) {
         showPOC = !!v;
         $("pocTog").className = showPOC ? "a" : "";
+        schedule();
+      }
+      /* St button: bricks by their steps value, sub POC
+         lines and tags by the earliest session there */
+      let stCol = false;
+      function setStCol(v) {
+        stCol = !!v;
+        $("stTog").className = stCol ? "a" : "";
         schedule();
       }
       /* POC candles panel (DPoc button) */
@@ -2800,11 +2864,16 @@
                 rowH,
               );
             }
+            const vf = volAmt > 0 ? volAmt : P.step * 10;
+            const sp = subPocs(P.dS, P.ps, subStart, vf, P.step),
+              sc = stCol ? stepCols(P.rows, P.step, sp) : null;
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
               lst.forEach((idx, k) => {
-                g.fillStyle = tpoColor(idx, 0.72);
+                g.fillStyle = sc
+                  ? sc.get(r) || SGREY
+                  : tpoColor(idx, 0.72);
                 g.fillRect(
                   cx0 + k * lw,
                   yT + 0.5,
@@ -2816,15 +2885,17 @@
             /* sub POCs: P1 solid, P2 dashed, P3 dotted, each
                tagged with its price and its birth brick; green
                above the POC before it, black below (navy with
-               none before it) */
-            const vf = volAmt > 0 ? volAmt : P.step * 10;
-            const sp = subPocs(P.dS, P.ps, subStart, vf, P.step);
+               none before it); St: the earliest session in
+               its row */
             sp.forEach(
               (S, k) => {
                 const y = Y(S.px),
                   pv = zPrev.get(P.dS + "|" + S.px),
+                  row = P.rows.get(Math.floor(S.px / P.step)),
                   c =
-                    pv == null
+                    stCol && row && row.length
+                      ? tpoColor(Math.min(...row))
+                      : pv == null
                       ? "#003366"
                       : S.px < pv
                         ? "#000"
@@ -5533,6 +5604,7 @@
           showGrid,
           showVA,
           showPOC,
+          stCol,
           pcPf,
           pfBr,
           pfSg,
@@ -5595,6 +5667,7 @@
         if (typeof st.pfHl === "boolean") setPfHl(st.pfHl);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
+        if (typeof st.stCol === "boolean") setStCol(st.stCol);
         /* DPoc: default changed in version 7 */
         if (st.dv >= 7 && typeof st.pocC === "boolean")
           setPocC(st.pocC);
@@ -5822,6 +5895,7 @@
       $("pfSgTog").onclick = () => setPfSg(!pfSg);
       $("pfHlTog").onclick = () => setPfHl(!pfHl);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
+      $("stTog").onclick = () => setStCol(!stCol);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
