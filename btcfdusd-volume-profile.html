@@ -3244,8 +3244,12 @@
               ? prevDay(segs[segs.length - 1].dS)
               : null,
             zR = zDay != null ? dayProf(zDay) : null,
-            zFix =
-              zR && zR.poc != null && zR.full
+            /* 0 = that day's last sub POC in time (where the
+               zigzag and its dashed ray sit), else its POC row */
+            zLast = zp.filter((q) => q.ds === zDay).pop(),
+            zFix = zLast
+              ? zLast.p
+              : zR && zR.poc != null && zR.full
                 ? (zR.poc + 0.5) * zR.step
                 : null,
             zCol = zFix != null ? "rgb(" + pocRgb(zDay) + ")" : null;
