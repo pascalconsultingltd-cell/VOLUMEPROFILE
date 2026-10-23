@@ -394,6 +394,12 @@
                 title="P&amp;F signal bricks and volume dots"
               >
                 Hl
+              </button
+              ><button
+                id="pfVcTog"
+                title="P&amp;F bricks in the profile's St colours"
+              >
+                Vc
               </button></span
             ></span
         ></span>
@@ -433,13 +439,6 @@
                 title="Bricks by steps value around their sub POC"
               >
                 St
-              </button>
-              <button
-                id="lcTog"
-                class=""
-                title="St: forming period in the last closed colours"
-              >
-                Lc
               </button></span
             ></span
           ></span
@@ -1307,15 +1306,6 @@
         $("stTog").className = stCol ? "a" : "";
         schedule();
       }
-      /* Lc button: with St, the forming period's bricks in
-         the colours of the last closed period (off: their
-         time colour) */
-      let stLast = false;
-      function setStLast(v) {
-        stLast = !!v;
-        $("lcTog").className = stLast ? "a" : "";
-        schedule();
-      }
       /* POC candles panel (DPoc button) */
       let pocC = true;
       function setPocC(v) {
@@ -1352,6 +1342,15 @@
       /* Hl button: show the P&F signal bricks and volume
          dots (off: only the Sg colours) */
       let pfHl = false;
+      /* Vc button: P&F bricks in the volume profile's latest
+         known St colour at their price, green or red; others
+         a thin neutral line (wins over Sg) */
+      let pfVc = false;
+      function setPfVc(v) {
+        pfVc = !!v;
+        $("pfVcTog").className = pfVc ? "a" : "";
+        schedule();
+      }
       function setPfHl(v) {
         pfHl = !!v;
         $("pfHlTog").className = pfHl ? "a" : "";
@@ -2234,6 +2233,9 @@
           spBack = 0,
           /* VP alert events, from the last draw */
           vpEv = null,
+          /* today's latest closed St colours (Vc): { m: row ->
+             colour, step } */
+          vpMap = null,
           /* DPoc panel P&F: columns shown (wheel) */
           pfN = 200,
           /* pcPx: DPoc width once dragged (null = as the
@@ -2985,11 +2987,13 @@
                 (mid != null ? mid : k15[k15.length - 1].c) / P.step,
               );
             }
-            /* iShut: the day's last closed period (Lc) */
+            /* iShut: the day's last closed period (Vc) */
             let iShut = -1;
             P.ps.forEach((q) => {
               if (shut(q.i)) iShut = q.i;
             });
+            if (P.dS === dayOf(Date.now()) && iShut >= 0)
+              vpMap = { m: stAt(iShut), step: P.step };
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
@@ -2997,9 +3001,7 @@
                 g.fillStyle =
                   stCol && shut(idx)
                     ? stAt(idx).get(r) || SGREY
-                    : stCol && stLast && iShut >= 0
-                      ? stAt(iShut).get(r) || SGREY
-                      : tpoColor(idx, 0.72);
+                    : tpoColor(idx, 0.72);
                 g.fillRect(
                   cx0 + k * lw,
                   yT + 0.5,
@@ -3591,11 +3593,26 @@
                   const k = ci.get(c),
                     gT = hs.gTop[k],
                     bB = hs.bBot[k],
-                    up = pfSg && gT != null && r * st >= gT,
-                    dn = pfSg && bB != null && (r + 1) * st <= bB,
-                    thin = pfSg && !up && !dn,
+                    vc =
+                      pfVc && vpMap
+                        ? vpMap.m.get(
+                            Math.floor(((r + 0.5) * st) / vpMap.step),
+                          ) || ""
+                        : null,
+                    vcOn =
+                      vc != null &&
+                      (vc.startsWith("rgba(8,153,129") ||
+                        vc.startsWith("rgba(229,57,53")),
+                    sg = pfSg && vc == null,
+                    up = sg && gT != null && r * st >= gT,
+                    dn = sg && bB != null && (r + 1) * st <= bB,
+                    thin =
+                      (sg && !up && !dn) || (vc != null && !vcOn),
                     w = thin ? 1.5 : bw;
-                  g.fillStyle = up
+                  /* Vc: the profile's green / red at this price */
+                  g.fillStyle = vcOn
+                    ? vc
+                    : up
                     ? "#089981"
                     : dn
                       ? "#000"
@@ -5767,11 +5784,11 @@
           showVA,
           showPOC,
           stCol,
-          stLast,
           pcPf,
           pfBr,
           pfSg,
           pfHl,
+          pfVc,
           pocC,
           pcSub,
           showOrders,
@@ -5828,10 +5845,10 @@
         if (typeof st.pfBr === "boolean") setPfBr(st.pfBr);
         if (typeof st.pfSg === "boolean") setPfSg(st.pfSg);
         if (typeof st.pfHl === "boolean") setPfHl(st.pfHl);
+        if (typeof st.pfVc === "boolean") setPfVc(st.pfVc);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         if (typeof st.stCol === "boolean") setStCol(st.stCol);
-        if (typeof st.stLast === "boolean") setStLast(st.stLast);
         /* DPoc: default changed in version 7 */
         if (st.dv >= 7 && typeof st.pocC === "boolean")
           setPocC(st.pocC);
@@ -6058,9 +6075,9 @@
       $("pfBrTog").onclick = () => setPfBr(!pfBr);
       $("pfSgTog").onclick = () => setPfSg(!pfSg);
       $("pfHlTog").onclick = () => setPfHl(!pfHl);
+      $("pfVcTog").onclick = () => setPfVc(!pfVc);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
-      $("lcTog").onclick = () => setStLast(!stLast);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
