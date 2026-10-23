@@ -168,6 +168,18 @@
       .ctl .grp > span:first-child {
         margin-left: 0;
       }
+      /* Main chart: its sub-groups in one frame */
+      .ctl .sub {
+        flex-wrap: wrap;
+        margin-left: 0;
+        padding: 3px 6px 5px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        align-items: flex-end;
+      }
+      .ctl .sub > span:first-child {
+        margin-left: 0;
+      }
       #mini {
         position: fixed;
         left: 0;
@@ -437,7 +449,7 @@
             ></span
           ><span class="ttl"
             ><span class="lbl">Main chart</span
-            ><span
+            ><span class="sub"
               ><span class="ttl"
                 ><span class="lbl">Type</span
                 ><span class="box"
@@ -455,78 +467,70 @@
                   class="box"
                   title="Candles shown"
                 ></span></span
+              ><span class="ttl"
+                ><span class="lbl">Boxes</span
+                ><span class="box"
+                  ><button
+                    id="boxTog"
+                    class="a"
+                    title="Static boxes on the high-volume candles"
+                  >
+                    B
+                  </button>
+                  <button
+                    id="fboxTog"
+                    class="a"
+                    title="Following channels on the big candles"
+                  >
+                    FB
+                  </button>
+                  <span
+                    id="boxN"
+                    title="Latest 1, 2 or 3 big candles"
+                    ><button>1</button><button>2</button
+                    ><button>3</button></span
+                  ></span
+                ></span
+              ><span class="ttl"
+                ><span class="lbl">Orders</span
+                ><span class="box"
+                  ><button
+                    id="ordTog"
+                    class=""
+                    title="Show / hide my orders (from orders.js)"
+                  >
+                    O
+                  </button>
+                  <button
+                    id="ordLineTog"
+                    class=""
+                    title="Order lines; off = executions only"
+                  >
+                    L
+                  </button></span
+                ></span
+              ><span class="ttl"
+                ><span class="lbl">Axis</span
+                ><span class="box"
+                  ><button
+                    id="ladTog"
+                    class=""
+                    title="Steps from the day high / low; off = POC"
+                  >
+                    HL
+                  </button>
+                  <button
+                    id="gridTog"
+                    class=""
+                    title="Lines at 06, 12, 18 UTC; midnight stays"
+                  >
+                    6h
+                  </button></span
+                ></span
+              ></span
             ></span
           ></span
         ></span>
-        <span class="grp" title="Channels"
-          ><span class="ttl"
-          ><span class="lbl">Boxes</span
-          ><span class="box"
-            ><button
-              id="boxTog"
-              class="a"
-              title="Static boxes on the high-volume candles"
-            >
-              B
-            </button>
-            <button
-              id="fboxTog"
-              class="a"
-              title="Following channels on the high-volume candles"
-            >
-              FB
-            </button>
-            <span
-              id="boxN"
-              title="Boxes and channels: latest 1, 2 or 3 big candles"
-              ><button>1</button><button>2</button
-              ><button>3</button></span
-            ></span
-          ></span
-          ></span
-        >
-        <span class="grp" title="My orders"
-          ><span class="ttl"
-          ><span class="lbl">Orders</span
-          ><span class="box"
-            ><button
-              id="ordTog"
-              class=""
-              title="Show / hide my orders (from orders.js)"
-            >
-              O
-            </button>
-            <button
-              id="ordLineTog"
-              class=""
-              title="Order lines; off = executions only"
-            >
-              L
-            </button></span
-          ></span
-          ></span
-        >
-        <span class="grp" title="View"
-          ><span class="ttl"
-            ><span class="lbl">Axis</span
-            ><span class="box"
-              ><button
-                id="ladTog"
-                class=""
-                title="Steps move to the day's high / low; off = POC"
-              >
-                HL
-              </button>
-              <button
-                id="gridTog"
-                class=""
-                title="Lines at 06, 12, 18 UTC; midnight stays"
-              >
-                6h
-              </button></span
-            ></span
-          ></span
-        >
         <span class="grp" title="Alerts"
           ><span class="ttl"
             ><span class="lbl">Alerts</span
