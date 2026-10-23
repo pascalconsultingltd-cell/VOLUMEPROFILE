@@ -3842,21 +3842,28 @@
               const sc = pocCds(true),
                 n = spN || Math.max(3, Math.floor(spW / 12)),
                 ssl = spW / n,
-                /* spBack: candles dragged back */
+                /* spBack: candles dragged back; negative = empty
+                   slots on the right */
                 sb = Math.max(
-                  0,
+                  1 - n,
                   Math.min(sc.length - 1, Math.round(spBack)),
                 ),
+                sbp = Math.max(0, sb),
                 sh = sc.slice(
-                  Math.max(0, sc.length - sb - n),
-                  sc.length - sb,
+                  Math.max(0, sc.length - sbp - n - Math.min(0, sb)),
+                  sc.length - sbp,
                 ),
                 sa = sL + 5;
               g.save();
               g.beginPath();
               g.rect(sa, top, spW, bot - top);
               g.clip();
-              drawCds(sh, sa, ssl, (i) => n - sh.length + i + 0.5);
+              drawCds(
+                sh,
+                sa,
+                ssl,
+                (i) => n - sh.length + i + 0.5 + Math.min(0, sb),
+              );
               g.restore();
               panel(sL, spOff);
               g.fillStyle = "#6b7684";
@@ -4766,7 +4773,10 @@
                 pan.b0 + dx / view.pcSl,
               );
             else if (pan.w === "sp")
-              spBack = Math.max(0, pan.b0 + dx / view.spSl);
+              spBack = Math.max(
+                1 - view.spN,
+                pan.b0 + dx / view.spSl,
+              );
             else if (pan.w === "tpo")
               tpoBack = Math.max(
                 1 - nTpo,
