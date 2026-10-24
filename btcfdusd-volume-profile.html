@@ -3171,15 +3171,31 @@
             );
           }
           /* swing zigzag over the days' POCs; dashed = open */
-          const zs = swings(zp);
-          g.strokeStyle = "rgba(230,159,0,.9)";
+          const zs = swings(zp),
+            /* a leg ending past the swing before it of the same
+               kind (a new high or a new low): green / red, else
+               golden */
+            legCol = (from, to, prev) =>
+              prev && to.p > from.p && to.p > prev.p
+                ? "#089981"
+                : prev && to.p < from.p && to.p < prev.p
+                  ? "#e53935"
+                  : "rgba(230,159,0,.9)";
           g.lineWidth = 3.5;
           g.lineJoin = "round";
-          g.beginPath();
-          zs.forEach(({ q }, i) =>
-            i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y),
-          );
-          g.stroke();
+          g.lineCap = "round";
+          zs.forEach(({ q }, i) => {
+            if (!i) return;
+            g.strokeStyle = legCol(
+              zs[i - 1].q,
+              q,
+              i > 1 && zs[i - 2].q,
+            );
+            g.beginPath();
+            g.moveTo(zs[i - 1].q.x, zs[i - 1].q.y);
+            g.lineTo(q.x, q.y);
+            g.stroke();
+          });
           /* zo = where the open leg ends */
           let zo = null;
           if (zs.length && zp.length - 1 > zs[zs.length - 1].i) {
@@ -3195,6 +3211,11 @@
                 );
             g.setLineDash([6, 5]);
             g.lineWidth = 2;
+            g.strokeStyle = legCol(
+              a,
+              z,
+              zs.length > 1 && zs[zs.length - 2].q,
+            );
             g.beginPath();
             g.moveTo(a.x, a.y);
             g.lineTo(z.x, z.y);
@@ -3207,7 +3228,7 @@
              dashed from the open leg's end, right across DPoc
              and the chart, price tagged; each in its POC's
              colour (green above the POC before it, black
-             below), the zigzag itself stays golden */
+             below) */
           (zs.length > 1 ? zs.slice(-2).map(({ q }) => [q, 0]) : [])
             .concat(zo ? [[zo, 1]] : [])
             .forEach(([q, dash]) => {
