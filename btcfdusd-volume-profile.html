@@ -538,7 +538,7 @@
                   <button
                     id="grTog"
                     class=""
-                    title="Grid bot (grid.js): its orders and levels"
+                    title="Grid bots (grid.js, grid2.js)"
                   >
                     Gr
                   </button></span
@@ -1435,7 +1435,9 @@
          grid.js written by GRID-TRADING/grid.py */
       let showGr = false,
         gOrders = [],
-        gLv = [];
+        /* per file: its level changes */
+        gLv = [],
+        gFiles = [null, null];
       function setShowGr(v) {
         showGr = !!v;
         $("grTog").className = showGr ? "a" : "";
@@ -1497,20 +1499,24 @@
       }
       /* grid.js: window.GRID = { orders: [...as orders.js],
          lv: [[time, anchor, step], ...] }, every 3s */
-      function loadGrid() {
+      /* grid.js (grid1) then grid2.js (grid2), one at a time
+         as both set window.GRID */
+      function loadGrid(k = 0) {
         const s = document.createElement("script");
         window.GRID = undefined;
         s.onload = s.onerror = () => {
           s.remove();
           const a = window.GRID;
-          if (a && Array.isArray(a.orders)) {
-            gOrders = a.orders.map(readOrder);
-            gLv = a.lv || [];
-            schedule();
-          }
+          gFiles[k] = a && Array.isArray(a.orders) ? a : null;
+          if (!k) return loadGrid(1);
+          gOrders = gFiles.flatMap((x) =>
+            x ? x.orders.map(readOrder) : [],
+          );
+          gLv = gFiles.map((x) => (x && x.lv) || []);
+          schedule();
           setTimeout(loadGrid, 3000);
         };
-        s.src = "grid.js?t=" + Date.now();
+        s.src = ["grid.js", "grid2.js"][k] + "?t=" + Date.now();
         document.head.appendChild(s);
       }
       /*
@@ -4643,29 +4649,42 @@
           const ords = (showOrders ? orders : []).concat(
             showGr ? gOrders : [],
           );
-          /* grid bot levels (Gr): anchor + k x step, from
-             each change to the next, between xL and xR */
+          /* grid bot levels (Gr), from each change to the
+             next, between xL and xR: grid1 anchor + k x step
+             (purple), grid2 its POC levels (teal) */
           const gridLv = (xOf, xL, xR) => {
-            if (!showGr || !gLv.length) return;
+            if (!showGr) return;
             g.save();
             g.beginPath();
             g.rect(xL, top, xR - xL, bot - top);
             g.clip();
-            g.beginPath();
-            gLv.forEach(([t, a, s], i) => {
-              const xs = xOf(t),
-                xe = i + 1 < gLv.length ? xOf(gLv[i + 1][0]) : xR;
-              if (xe <= xs) return;
-              let p = a + Math.ceil((lo - a) / s) * s;
-              for (; p <= hi; p += s) {
-                g.moveTo(xs, Y(p));
-                g.lineTo(xe, Y(p));
-              }
-            });
-            g.strokeStyle = "rgba(142,68,173,.45)";
             g.setLineDash([2, 3]);
             g.lineWidth = 1;
-            g.stroke();
+            gLv.forEach((L, f) => {
+              g.beginPath();
+              L.forEach(([t, a, s], i) => {
+                const xs = xOf(t),
+                  xe = i + 1 < L.length ? xOf(L[i + 1][0]) : xR,
+                  ps = Array.isArray(a) ? a : [];
+                if (xe <= xs) return;
+                if (!ps.length)
+                  for (
+                    let p = a + Math.ceil((lo - a) / s) * s;
+                    p <= hi;
+                    p += s
+                  )
+                    ps.push(p);
+                ps.forEach((p) => {
+                  if (p < lo || p > hi) return;
+                  g.moveTo(xs, Y(p));
+                  g.lineTo(xe, Y(p));
+                });
+              });
+              g.strokeStyle = f
+                ? "rgba(0,128,128,.55)"
+                : "rgba(142,68,173,.45)";
+              g.stroke();
+            });
             g.setLineDash([]);
             g.restore();
           };
