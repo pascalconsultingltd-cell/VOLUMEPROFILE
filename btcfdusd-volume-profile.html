@@ -3839,13 +3839,16 @@
                seams); hotB = highlighted boxes,
                drawn last with a brick each side */
             const bw = Math.max(3, sl) + 0.5,
-              hotB = [];
+              hotB = [],
+              /* each shown column's x, for the swing marks */
+              xs = new Map();
             shown.forEach((c, i) => {
               /* bricks wide (at least 7px), line hairline-thin */
               const xm = pa + sl * jOf(i),
                 w = Math.max(7, sl * 0.9),
                 x = xm - w / 2;
               pfX.push([c.t0, xm]);
+              xs.set(c, xm);
               /* Br: every box a brick, coloured by the time the
                  column first traded it, as the profiles; the
                  end bricks cut at the real high / low */
@@ -3966,6 +3969,61 @@
                 h + 1,
               );
             });
+            /*
+             * P&F swings (Colour on): the bricks in the order
+             * they traded, green / black by Sg (blue ignored).
+             * A black run that goes a brick under the lowest
+             * one of the black run before the last green run
+             * is a swing down, the mirror a swing up; a small
+             * triangle on the brick that breaks, once per run
+             */
+            if (pfSg) {
+              const br = [];
+              all.forEach((c, k) => {
+                const gT = hs.gTop[k],
+                  bB = hs.bBot[k];
+                for (let r = c.lo; r <= c.hi; r++) {
+                  const z =
+                    gT != null && r * st >= gT
+                      ? 1
+                      : bB != null && (r + 1) * st <= bB
+                        ? -1
+                        : 0;
+                  const t = c.tm.has(r) ? c.tm.get(r) : c.t0;
+                  if (z) br.push([t, c, r, z]);
+                }
+              });
+              br.sort((a, b) => a[0] - b[0]);
+              const last = new Map();
+              let run = 0,
+                ext = 0,
+                done = false;
+              br.forEach(([, c, r, z]) => {
+                if (z !== run) {
+                  if (run) last.set(run, ext);
+                  [run, ext, done] = [z, r, false];
+                } else
+                  ext = z > 0 ? Math.max(ext, r) : Math.min(ext, r);
+                const L = last.get(z);
+                if (done || L == null || (z > 0 ? r <= L : r >= L))
+                  return;
+                done = true;
+                if (!xs.has(c)) return;
+                const x = xs.get(c),
+                  y = z > 0 ? Y(r * st) + 3 : Y((r + 1) * st) - 3,
+                  e = z > 0 ? 8 : -8;
+                g.beginPath();
+                g.moveTo(x, y);
+                g.lineTo(x - 5, y + e);
+                g.lineTo(x + 5, y + e);
+                g.closePath();
+                g.fillStyle = z > 0 ? "#089981" : "#000";
+                g.fill();
+                g.strokeStyle = "#fff";
+                g.lineWidth = 1;
+                g.stroke();
+              });
+            }
           };
           /* pcGeo: DPoc candles and their x, for the magnet */
           const pcGeo = [],
