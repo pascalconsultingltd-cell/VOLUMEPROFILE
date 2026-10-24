@@ -673,10 +673,14 @@
         zCache = new Map(),
         /* St colours of closed periods, frozen (see stAt) */
         stFz = new Map();
-      function subPocs(dS, ps, start, vol, fine) {
+      /* first brick of the sub POC search: SUB_K x the vol
+         step, whatever the view, so every device agrees */
+      const SUB_K = 5;
+      function subPocs(dS, ps, vol, fine) {
         if (!ps.length) return [];
-        const z = ps[ps.length - 1],
-          key = [dS, ps.length, z.h, z.l, start, vol, fine];
+        const start = SUB_K * vol,
+          z = ps[ps.length - 1],
+          key = [dS, ps.length, z.h, z.l, vol, fine];
         if (subCache.has(key.join())) return subCache.get(key.join());
         let lo = Infinity,
           hi = -Infinity;
@@ -2940,21 +2944,7 @@
             tpoDays = [dayStart - tb * DAY];
           while (tpoDays.length < cnt + ex)
             tpoDays.unshift(prevDay(tpoDays[0]));
-          /* sub POCs start from a third of the widest profile
-             day (counted even when the profiles are hidden, as
-             in DPoc full width); born no lower than the vol
-             step */
-          const zp = [],
-            subStart =
-            Math.max(
-              0,
-              ...Array.from(
-                { length: nTpo },
-                (_, k) => dayStart - (tb + k) * DAY,
-              ).map((s) =>
-                dayR.has(s) ? dayR.get(s).h - dayR.get(s).l : 0,
-              ),
-            ) / 3;
+          const zp = [];
           /* zigzag points from the last 15 days, whatever the
              profiles show, so the swings do not depend on the
              view (30 days loads 4x the 15m history, 2.5x the
@@ -2973,7 +2963,6 @@
             const lk = k15[k15.length - 1],
               key = [
                 dS,
-                subStart,
                 volAmt,
                 k15[0].t,
                 dS < dayOf(Date.now()) ? "" : lk.t + "|" + lk.v,
@@ -2985,7 +2974,7 @@
               zc =
                 Q.poc == null
                   ? []
-                  : subPocs(Q.dS, Q.ps, subStart, vf, Q.step)
+                  : subPocs(Q.dS, Q.ps, vf, Q.step)
                       .map((S) => {
                         const row =
                           Q.rows.get(Math.floor(S.px / Q.step)) ||
@@ -3033,11 +3022,7 @@
               ),
               vf = vC || P.step * 10,
               ps = P.ps.filter((q) => q.i <= i),
-              st0 =
-                (Math.max(...ps.map((q) => q.h)) -
-                  Math.min(...ps.map((q) => q.l))) /
-                3,
-              key = [dS, i, st0, vf, P.step].join();
+              key = [dS, i, vf, P.step].join();
             if (stFz.has(key)) return stFz.get(key);
             const rows = new Map();
             P.rows.forEach((l, r) => {
@@ -3048,7 +3033,7 @@
               ? stepCols(
                   rows,
                   P.step,
-                  subPocs(dS, ps, st0, vf, P.step),
+                  subPocs(dS, ps, vf, P.step),
                 )
               : new Map();
             m.step = P.step;
@@ -3110,7 +3095,7 @@
               );
             }
             const vf = volAmt > 0 ? volAmt : P.step * 10;
-            const sp = subPocs(P.dS, P.ps, subStart, vf, P.step),
+            const sp = subPocs(P.dS, P.ps, vf, P.step),
               /* St, no repaint: a closed period's bricks keep
                  the colours they had at its close (stFor); the
                  forming period shows its time colour */
@@ -3159,7 +3144,7 @@
                       (a.z > 0 ? "green " : "red ") + a.c.toFixed(0),
                   });
               }
-              vpEv = { ctx: [subStart, vf, P.step].join(), ev };
+              vpEv = { ctx: [vf, P.step].join(), ev };
             }
             let iNow = -1,
               rNow = null;
@@ -4020,7 +4005,7 @@
                   const P = dayProf(dS);
                   if (P.poc == null || !P.full) return;
                   const vf = volAmt > 0 ? volAmt : P.step * 10;
-                  subPocs(dS, P.ps, subStart, vf, P.step)
+                  subPocs(dS, P.ps, vf, P.step)
                     .map((S) => {
                       const r = P.rows.get(Math.floor(S.px / P.step));
                       return {
