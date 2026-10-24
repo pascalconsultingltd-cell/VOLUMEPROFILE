@@ -3924,8 +3924,13 @@
                   const a = s[i - 1],
                     b = s[i];
                   if (up ? b.p <= a.p : b.p >= a.p) continue;
+                  /* th / tl: when the high / low traded (a POC:
+                     its day's end) */
+                  const eod = (o) => nextDay(o.dS) - 1;
                   let h = Math.max(a.p, b.p),
-                    l = Math.min(a.p, b.p);
+                    l = Math.min(a.p, b.p),
+                    th = a.p >= b.p ? eod(a) : eod(b),
+                    tl = a.p <= b.p ? eod(a) : eod(b);
                   if (sub) {
                     /* sub POCs: high / low from the opening POC's
                        first brick to the closing POC's, 15m */
@@ -3941,15 +3946,15 @@
                     for (; j < k15.length && k15[j].t < tb; j++) {
                       const c = k15[j];
                       if (!okC(c)) continue;
-                      h = Math.max(h, c.h);
-                      l = Math.min(l, c.l);
+                      if (c.h > h) [h, th] = [c.h, c.t];
+                      if (c.l < l) [l, tl] = [c.l, c.t];
                     }
                   } else
                     for (let d = a.dS; d <= b.dS; d = nextDay(d)) {
                       const r = dayR.get(d);
                       if (r) {
-                        h = Math.max(h, r.h);
-                        l = Math.min(l, r.l);
+                        if (r.h > h) [h, th] = [r.h, d];
+                        if (r.l < l) [l, tl] = [r.l, d];
                       }
                     }
                   cds.push({
@@ -3961,6 +3966,12 @@
                     l,
                     up,
                     te: pocEnd(b.dS, b.p),
+                    /* times of open / close (their days' end),
+                       high, low: what a drawing on them uses */
+                    oe: eod(a),
+                    ce: eod(b),
+                    th,
+                    tl,
                   });
                 }
               });
@@ -3981,13 +3992,16 @@
                   last.k === seq.length - 1
                 )
               ) {
+                const eod = (o) => nextDay(o.dS) - 1;
                 let h = Math.max(a.p, b.p),
-                  l = Math.min(a.p, b.p);
+                  l = Math.min(a.p, b.p),
+                  th = a.p >= b.p ? eod(a) : eod(b),
+                  tl = a.p <= b.p ? eod(a) : eod(b);
                 const ta = a.dS + a.f * TPO_MS;
                 k15.forEach((c) => {
                   if (c.t < ta || !okC(c)) return;
-                  h = Math.max(h, c.h);
-                  l = Math.min(l, c.l);
+                  if (c.h > h) [h, th] = [c.h, c.t];
+                  if (c.l < l) [l, tl] = [c.l, c.t];
                 });
                 cds.push({
                   t: b.dS,
@@ -3999,6 +4013,10 @@
                   up: b.p >= a.p,
                   live: true,
                   te: pocEnd(b.dS, b.p),
+                  oe: eod(a),
+                  ce: eod(b),
+                  th,
+                  tl,
                 });
               }
               return cds;
@@ -5332,13 +5350,27 @@
               return { p, o: { c: { t: pt } }, left: "pf" };
             /* t: the real time the point refers to (other
                charts start there); dd: the day it sits on */
-            if (q && x >= view.tR)
+            if (q && x >= view.tR) {
+              /* snapped to the open / close POC, the high or
+                 the low: the time of that level */
+              const c = q.c,
+                tq =
+                  p === c.o && c.oe
+                    ? c.oe
+                    : p === c.c && c.ce
+                      ? c.ce
+                      : p === c.h && c.th
+                        ? c.th
+                        : p === c.l && c.tl
+                          ? c.tl
+                          : c.te || c.t;
               return {
                 p,
-                o: { c: { t: q.c.te || q.c.t } },
+                o: { c: { t: tq } },
                 left: "pc",
                 anc: { lk: q.c.k, dd: q.c.t },
               };
+            }
             if (P) {
               /* on one of the day's P1 / P2 / P3 (6px): snap
                  to it, the time is that day's end */
