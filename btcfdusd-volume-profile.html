@@ -3252,6 +3252,30 @@
             g.lineTo(q.x, q.y);
             g.stroke();
           });
+          /* nested zigzags: the points from a zigzag's pivot
+             before last (its last one that cannot move) get
+             their own zigzag, showing the swings the bigger
+             one hides; thinner at each level, 3 at most */
+          for (let z0 = zs, zz = zp, lw = 2, n = 0; n < 3; n++) {
+            const b = z0.length > 2 ? z0[z0.length - 2].i : 0;
+            if (!b || zz.length - b < 3) break;
+            zz = zz.slice(b);
+            z0 = swings(zz);
+            g.lineWidth = lw;
+            lw *= 0.7;
+            z0.forEach(({ q }, i) => {
+              if (!i) return;
+              g.strokeStyle = legCol(
+                z0[i - 1].q,
+                q,
+                i > 1 && z0[i - 2].q,
+              );
+              g.beginPath();
+              g.moveTo(z0[i - 1].q.x, z0[i - 1].q.y);
+              g.lineTo(q.x, q.y);
+              g.stroke();
+            });
+          }
           /* zo = where the open leg ends */
           let zo = null;
           if (zs.length && zp.length - 1 > zs[zs.length - 1].i) {
