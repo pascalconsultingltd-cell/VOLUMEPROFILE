@@ -538,7 +538,7 @@
                   <button
                     id="grTog"
                     class=""
-                    title="Grid bots (grid.js, grid2.js)"
+                    title="Grid bots (grid.js, grid2.js, grid3.js)"
                   >
                     Gr
                   </button></span
@@ -1437,7 +1437,7 @@
         gOrders = [],
         /* per file: its level changes */
         gLv = [],
-        gFiles = [null, null];
+        gFiles = [null, null, null];
       function setShowGr(v) {
         showGr = !!v;
         $("grTog").className = showGr ? "a" : "";
@@ -1499,8 +1499,8 @@
       }
       /* grid.js: window.GRID = { orders: [...as orders.js],
          lv: [[time, anchor, step], ...] }, every 3s */
-      /* grid.js (grid1) then grid2.js (grid2), one at a time
-         as both set window.GRID */
+      /* grid.js, grid2.js, grid3.js (grid1-3), one at a time
+         as all set window.GRID */
       function loadGrid(k = 0) {
         const s = document.createElement("script");
         window.GRID = undefined;
@@ -1508,7 +1508,7 @@
           s.remove();
           const a = window.GRID;
           gFiles[k] = a && Array.isArray(a.orders) ? a : null;
-          if (!k) return loadGrid(1);
+          if (k < 2) return loadGrid(k + 1);
           gOrders = gFiles.flatMap((x) =>
             x ? x.orders.map(readOrder) : [],
           );
@@ -1516,7 +1516,8 @@
           schedule();
           setTimeout(loadGrid, 3000);
         };
-        s.src = ["grid.js", "grid2.js"][k] + "?t=" + Date.now();
+        s.src =
+          ["grid.js", "grid2.js", "grid3.js"][k] + "?t=" + Date.now();
         document.head.appendChild(s);
       }
       /*
@@ -4651,7 +4652,8 @@
           );
           /* grid bot levels (Gr), from each change to the
              next, between xL and xR: grid1 anchor + k x step
-             (purple), grid2 its POC levels (teal) */
+             (purple), grid2 / grid3 their levels (teal /
+             orange) */
           const gridLv = (xOf, xL, xR) => {
             if (!showGr) return;
             g.save();
@@ -4680,9 +4682,11 @@
                   g.lineTo(xe, Y(p));
                 });
               });
-              g.strokeStyle = f
-                ? "rgba(0,128,128,.55)"
-                : "rgba(142,68,173,.45)";
+              g.strokeStyle = [
+                "rgba(142,68,173,.45)",
+                "rgba(0,128,128,.55)",
+                "rgba(230,120,0,.6)",
+              ][f];
               g.stroke();
             });
             g.setLineDash([]);
