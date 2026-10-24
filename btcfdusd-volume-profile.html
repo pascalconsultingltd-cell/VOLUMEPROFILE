@@ -552,6 +552,13 @@
                     title="Lines at 06, 12, 18 UTC; midnight stays"
                   >
                     6h
+                  </button>
+                  <button
+                    id="pbTog"
+                    class=""
+                    title="POC bands: yesterday's and today's P1-P3"
+                  >
+                    PocBd
                   </button></span
                 ></span
               ></span
@@ -1384,6 +1391,14 @@
       function setPfSg(v) {
         pfSg = !!v;
         $("pfSgTog").className = pfSg ? "a" : "";
+        schedule();
+      }
+      /* PocBd button: POC bands across the chart, off by
+         default */
+      let pocBand = false;
+      function setPocBand(v) {
+        pocBand = !!v;
+        $("pbTog").className = pocBand ? "a" : "";
         schedule();
       }
       /* vertical 6-hour lines (6h button); the midnight
@@ -3229,7 +3244,7 @@
              tagged; each in its POC's colour (green above the
              POC before it, black below) */
           const today0 = dayOf(Date.now());
-          [
+          (!pocBand ? [] : [
             ...new Set(
               (zs.length > 1 ? zs.slice(-2).map(({ q }) => q) : [])
                 .concat(zo ? [zo] : [])
@@ -3240,7 +3255,7 @@
                   ),
                 ),
             ),
-          ].forEach((q) => {
+          ]).forEach((q) => {
               if (q.y < top || q.y > bot) return;
               const pv = zPrev.get(q.ds + "|" + q.p),
                 rc =
@@ -6205,6 +6220,7 @@
           nBox,
           hlLad,
           showGrid,
+          pocBand,
           showVA,
           showPOC,
           stCol,
@@ -6262,6 +6278,7 @@
           setHlLad(st.hlLad);
         if (cur4 && typeof st.showGrid === "boolean")
           setShowGrid(st.showGrid);
+        if (typeof st.pocBand === "boolean") setPocBand(st.pocBand);
         /* POC: default changed in version 8 */
         /* P&F: default changed in version 9 */
         if (st.dv >= 9 && typeof st.pcPf === "boolean")
@@ -6498,6 +6515,7 @@
       miniChart.resetView();
       $("ladTog").onclick = () => setHlLad(!hlLad);
       $("gridTog").onclick = () => setShowGrid(!showGrid);
+      $("pbTog").onclick = () => setPocBand(!pocBand);
       $("vaTog").onclick = () => setShowVA(!showVA);
       $("pcTog").onclick = () => setPocC(!pocC);
       $("spTog").onclick = () => setPcSub(!pcSub);
