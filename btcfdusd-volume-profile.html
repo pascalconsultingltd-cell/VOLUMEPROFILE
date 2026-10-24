@@ -3223,13 +3223,24 @@
             zo = z;
           }
           g.restore();
-          /* POC bands from both ends of the last solid leg and
-             from the open leg's end, right across DPoc and the
-             chart, price tagged; each in its POC's colour
-             (green above the POC before it, black below) */
-          (zs.length > 1 ? zs.slice(-2).map(({ q }) => q) : [])
-            .concat(zo ? [zo] : [])
-            .forEach((q) => {
+          /* POC bands from both ends of the last solid leg, the
+             open leg's end, and every P1 / P2 / P3 of yesterday
+             and today, right across DPoc and the chart, price
+             tagged; each in its POC's colour (green above the
+             POC before it, black below) */
+          const today0 = dayOf(Date.now());
+          [
+            ...new Set(
+              (zs.length > 1 ? zs.slice(-2).map(({ q }) => q) : [])
+                .concat(zo ? [zo] : [])
+                .concat(
+                  zp.filter(
+                    (z) =>
+                      z.ds === today0 || z.ds === prevDay(today0),
+                  ),
+                ),
+            ),
+          ].forEach((q) => {
               if (q.y < top || q.y > bot) return;
               const pv = zPrev.get(q.ds + "|" + q.p),
                 rc =
@@ -3260,7 +3271,8 @@
                 row = P.rows.get(Math.floor(q.p / bs)) || [],
                 li = row.length ? Math.max(...row) : null,
                 done =
-                  li != null && q.ds + (li + 1) * TPO_MS <= Date.now(),
+                  li != null &&
+                  q.ds + (li + 1) * TPO_MS <= Date.now(),
                 m = stCol && done ? stFor(q.ds, li) : null,
                 mid =
                   li == null
