@@ -4031,13 +4031,20 @@
               g.lineWidth = 1;
               const yo = YP(c.o),
                 yc = YP(c.c);
-              /* live (today so far): hollow */
-              g[c.live ? "strokeRect" : "fillRect"](
+              /* closing on today's POC (not final yet, or the
+                 hollow one so far): yellow body, edged in its
+                 colour */
+              const bx = [
                 xm - sl * 0.35,
                 Math.min(yo, yc),
                 sl * 0.7,
                 Math.max(1, Math.abs(yo - yc)),
-              );
+              ];
+              if (c.live || c.t === dayOf(Date.now())) {
+                g.fillStyle = "#f2c200";
+                g.fillRect(...bx);
+                g.strokeRect(...bx);
+              } else g.fillRect(...bx);
             });
             if (pf) drawPfCols(pfc, cv2, jOf, pa, sl, pst);
             else drawCds(cv2, pa, sl, jOf);
