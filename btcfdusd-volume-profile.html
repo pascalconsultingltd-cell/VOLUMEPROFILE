@@ -2596,15 +2596,17 @@
             g.textBaseline = "middle";
             g.fillText(txt, px0 + 5, y);
           };
-          const ttag = (cx, txt, bg, fg = "#fff") => {
+          /* atTop: at the top of the line instead */
+          const ttag = (cx, txt, bg, fg = "#fff", atTop) => {
             const tw = g.measureText(txt).width + 12,
-              bx = Math.max(4, Math.min(px0 - tw, cx - tw / 2));
+              bx = Math.max(4, Math.min(px0 - tw, cx - tw / 2)),
+              ty = atTop ? top : bot + 2;
             g.fillStyle = bg;
-            g.fillRect(bx, bot + 2, tw, 16);
+            g.fillRect(bx, ty, tw, 16);
             g.fillStyle = fg;
             g.textAlign = "center";
             g.textBaseline = "middle";
-            g.fillText(txt, bx + tw / 2, bot + 10);
+            g.fillText(txt, bx + tw / 2, ty + 8);
           };
           const dlabel = (t) => {
             const d = new Date(t);
@@ -4829,7 +4831,15 @@
                 const ri = Math.floor(pv / P.step),
                   k = Math.floor((mouse.x - P.cx0) / P.lw),
                   lst = P.rows.get(ri),
-                  idx = lst && lst[k];
+                  idx = lst && lst[k],
+                  /* the profile's day, always shown */
+                  day = new Date(P.dS).toLocaleDateString([], {
+                    weekday: "short",
+                    day: "2-digit",
+                    month: "short",
+                    timeZone: "UTC",
+                  });
+                lbl = day;
                 /* TPO periods are UTC half-hours: say so */
                 if (idx != null) {
                   const f = (t) =>
@@ -4839,7 +4849,9 @@
                         timeZone: "UTC",
                       }),
                     t0 = P.dS + idx * TPO_MS;
-                  lbl = f(t0) + "–" + f(t0 + TPO_MS) + " UTC";
+                  lbl =
+                    day + " " + f(t0) + "–" + f(t0 + TPO_MS) +
+                    " UTC";
                   g.strokeStyle = "#1a1f26";
                   g.lineWidth = 1.2;
                   g.strokeRect(
@@ -4853,6 +4865,8 @@
               }
             }
             if (lbl) ttag(cx, lbl, XB, XF);
+            /* over the profiles: the day on top of the line too */
+            if (lbl && mouse.x < tR) ttag(cx, lbl, XB, XF, true);
           }
           /*
            * the P&F gets the crosshair's time too: a line on the
