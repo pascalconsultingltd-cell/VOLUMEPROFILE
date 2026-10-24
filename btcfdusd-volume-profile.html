@@ -4854,9 +4854,14 @@
                 : xh && xh.from !== api && xh.t != null
                   ? xh.t
                   : null;
-            let px = null;
+            let px = null,
+              pt = null;
             if (tx != null && pfX.length && tx >= pfX[0][0])
-              for (const [t0, xm] of pfX) if (t0 <= tx) px = xm;
+              for (const [t0, xm] of pfX)
+                if (t0 <= tx) {
+                  px = xm;
+                  pt = t0;
+                }
             if (px != null) {
               g.save();
               g.beginPath();
@@ -4869,6 +4874,8 @@
               g.lineTo(px, bot);
               g.stroke();
               g.restore();
+              /* and that column's time under the P&F */
+              ttag(px, dlabel(pt), XB, XF);
             }
           }
           /* hovering a P&F column: its time on this chart too */
