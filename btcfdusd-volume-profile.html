@@ -836,6 +836,9 @@
         c15 = [],
         charts = [],
         mid = null,
+        /* the main chart's ladder 0 (for the 15s window's
+           place) */
+        zeroNow = null,
         xh = null,
         activeChart = null,
         lines = [],
@@ -3371,6 +3374,7 @@
               ),
               inK = (k) =>
                 k < 5000 && (z0 + k * v <= hi || z0 - k * v >= lo);
+            if (cfg.main && last) zeroNow = z0;
             g.save();
             g.beginPath();
             g.rect(0, top, px0, bot - top);
@@ -6110,10 +6114,24 @@
         mini.style.width = w + "px";
         mini.style.height = h + "px";
       }
-      /* default: minimum size, bottom-left corner (setMiniBox
-         clamps y to the bottom) */
-      const miniHome = () =>
-        setMiniBox({ x: 0, y: innerHeight, w: 240, h: 160 });
+      /*
+       * default: 320 x 210, left; top-left of the charts when
+       * the last price is below the ladder 0 (price low on
+       * screen), else bottom-left (setMiniBox clamps y). The 0
+       * and the price are unknown until the data is in: try
+       * again then.
+       */
+      const miniHome = (n = 0) => {
+        const up = zeroNow != null && mid != null && mid < zeroNow;
+        setMiniBox({
+          x: 0,
+          y: up ? $("c").getBoundingClientRect().top : innerHeight,
+          w: 320,
+          h: 210,
+        });
+        if ((zeroNow == null || mid == null) && n < 30)
+          setTimeout(() => miniHome(n + 1), 1000);
+      };
       miniHome();
       addEventListener("resize", () => {
         const r = mini.getBoundingClientRect();
