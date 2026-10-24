@@ -4329,6 +4329,7 @@
             pcN: pcShow,
             pcSl,
             tpoSl: colW + gap,
+            colW,
             spSl: spShow ? spW / spShow : 1,
             sL,
             spW,
@@ -5092,6 +5093,8 @@
               drag.t = sn.o.c.t;
               /* over P&F / profiles the start is a screen x */
               drag.l = sn.left;
+              drag.lk = sn.anc && sn.anc.lk;
+              drag.fr = sn.anc && sn.anc.fr;
             } else if (drag.k === "b") {
               if (dragEdge === "move" && moveInfo) {
                 const dp =
@@ -5220,6 +5223,18 @@
            panel's left edge if older than those shown) */
         function xsOf(l) {
           if (l.l === "pf" && cfg.main) return pfXAt(l.t);
+          /* a POC candle (else the window's left edge) */
+          if (l.l === "pc" && cfg.main) {
+            const q = (view.pcGeo || []).find(
+              (g2) => g2.c.t === l.t && g2.c.k === l.lk,
+            );
+            return q ? (q.xa + q.xb) / 2 : view.tR + 2;
+          }
+          /* a profile day's column (else the left edge) */
+          if (l.l === "tp" && cfg.main) {
+            const P = profs.find((q2) => q2.dS === l.t && q2.show);
+            return P ? P.cx0 + (l.fr || 0) * view.colW : 4;
+          }
           if (l.l && cfg.main) return l.l;
           const o = geoAt(l.t);
           return o ? o.x + o.w / 2 : view ? view.x0 : 0;
@@ -5237,6 +5252,7 @@
         function dSide(l) {
           if (!cfg.main || !view) return null;
           if (typeof l.l === "number") return l.l;
+          if (l.l === "pc" || l.l === "tp") return xsOf(l);
           return view.pfX && view.pfX.length ? pfXAt(l.t) : null;
         }
         function geoAt(t) {
@@ -5275,12 +5291,31 @@
             /* over the P&F: the column's own time, so the
                other charts start the line at the candle /
                brick then (or just before) */
-            const pt = pfTime(x);
-            return {
-              p,
-              o: pt != null ? { c: { t: pt } } : o,
-              left: pt != null ? "pf" : Math.max(4, x),
-            };
+            const pt = pfTime(x),
+              P = profs.find(
+                (q2) =>
+                  x >= q2.cx0 - 2 && x <= q2.cx0 + view.colW + 2,
+              );
+            /* anchors that survive a resize: a P&F column
+               time, a POC candle (its day and order), or a
+               profile day and the place in its column */
+            if (pt != null)
+              return { p, o: { c: { t: pt } }, left: "pf" };
+            if (q && x >= view.tR)
+              return {
+                p,
+                o: { c: { t: q.c.t } },
+                left: "pc",
+                anc: { lk: q.c.k },
+              };
+            if (P)
+              return {
+                p,
+                o: { c: { t: P.dS } },
+                left: "tp",
+                anc: { fr: (x - P.cx0) / view.colW },
+              };
+            return { p, o, left: Math.max(4, x) };
           }
           let best = null,
             bd = 14;
@@ -5314,7 +5349,13 @@
             y = e.clientY - r.top;
           if (y < view.top || y > view.bot) return;
           const sn = snap(x, y);
-          lines.push({ k: "d", t: sn.o.c.t, p: sn.p, l: sn.left });
+          lines.push({
+            k: "d",
+            t: sn.o.c.t,
+            p: sn.p,
+            l: sn.left,
+            ...sn.anc,
+          });
           dotTool = 0;
           draw();
         }
@@ -5406,7 +5447,14 @@
             p = sn.p;
           if (boxTool === 1) {
             const o = sn.o;
-            draft = { k: "b", t: o.c.t, lo: p, hi: p, l: sn.left };
+            draft = {
+              k: "b",
+              t: o.c.t,
+              lo: p,
+              hi: p,
+              l: sn.left,
+              ...sn.anc,
+            };
             lines.push(draft);
             boxTool = 2;
           } else {
@@ -5635,7 +5683,13 @@
             dotTool = 1;
             const m = mouseAt();
             if (m) {
-              lines.push({ k: "d", t: m.o.c.t, p: m.p, l: m.left });
+              lines.push({
+                k: "d",
+                t: m.o.c.t,
+                p: m.p,
+                l: m.left,
+                ...m.anc,
+              });
               dotTool = 0;
             }
             draw();
