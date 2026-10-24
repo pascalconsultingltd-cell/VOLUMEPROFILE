@@ -4341,6 +4341,7 @@
             pcSl,
             tpoSl: colW + gap,
             colW,
+            zp,
             spSl: spShow ? spW / spShow : 1,
             sL,
             spW,
@@ -5325,6 +5326,19 @@
                 anc: { lk: q.c.k, dd: q.c.t },
               };
             if (P) {
+              /* on one of the day's P1 / P2 / P3 (6px): snap
+                 to it, the time is that day's end */
+              const sp = (view.zp || []).find(
+                (z) =>
+                  z.ds === P.dS && Math.abs(view.Y(z.p) - y) <= 6,
+              );
+              if (sp)
+                return {
+                  p: sp.p,
+                  o: { c: { t: nextDay(P.dS) - 1 } },
+                  left: "tp",
+                  anc: { fr: (x - P.cx0) / view.colW, dd: P.dS },
+                };
               /* the brick under the point (its 30 min), else
                  the latest brick in that row, else the day */
               const lst = P.rows.get(Math.floor(p / P.step)),
