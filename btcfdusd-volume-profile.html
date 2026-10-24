@@ -3873,6 +3873,15 @@
             )
               days.push(d);
             /* POC candles: day POCs, or sub POCs (sub) */
+            /* te: end of the latest brick in a POC's row (the
+               time a drawing on its candle refers to) */
+            const pocEnd = (dS, p) => {
+              const P = dayProf(dS),
+                l = P.rows.get(Math.floor(p / P.step));
+              return l && l.length
+                ? dS + (Math.max(...l) + 1) * TPO_MS - 1
+                : nextDay(dS) - 1;
+            };
             const pocCds = (sub) => {
               const seq = [];
               if (sub)
@@ -3949,6 +3958,7 @@
                     h,
                     l,
                     up,
+                    te: pocEnd(b.dS, b.p),
                   });
                 }
               });
@@ -3986,6 +3996,7 @@
                   l,
                   up: b.p >= a.p,
                   live: true,
+                  te: pocEnd(b.dS, b.p),
                 });
               }
               return cds;
@@ -5095,6 +5106,7 @@
               drag.l = sn.left;
               drag.lk = sn.anc && sn.anc.lk;
               drag.fr = sn.anc && sn.anc.fr;
+              drag.dd = sn.anc && sn.anc.dd;
             } else if (drag.k === "b") {
               if (dragEdge === "move" && moveInfo) {
                 const dp =
@@ -5225,14 +5237,16 @@
           if (l.l === "pf" && cfg.main) return pfXAt(l.t);
           /* a POC candle (else the window's left edge) */
           if (l.l === "pc" && cfg.main) {
-            const q = (view.pcGeo || []).find(
-              (g2) => g2.c.t === l.t && g2.c.k === l.lk,
-            );
+            const d = l.dd != null ? l.dd : l.t,
+              q = (view.pcGeo || []).find(
+                (g2) => g2.c.t === d && g2.c.k === l.lk,
+              );
             return q ? (q.xa + q.xb) / 2 : view.tR + 2;
           }
           /* a profile day's column (else the left edge) */
           if (l.l === "tp" && cfg.main) {
-            const P = profs.find((q2) => q2.dS === l.t && q2.show);
+            const d = l.dd != null ? l.dd : l.t,
+              P = profs.find((q2) => q2.dS === d && q2.show);
             return P ? P.cx0 + (l.fr || 0) * view.colW : 4;
           }
           if (l.l && cfg.main) return l.l;
@@ -5301,20 +5315,34 @@
                profile day and the place in its column */
             if (pt != null)
               return { p, o: { c: { t: pt } }, left: "pf" };
+            /* t: the real time the point refers to (other
+               charts start there); dd: the day it sits on */
             if (q && x >= view.tR)
               return {
                 p,
-                o: { c: { t: q.c.t } },
+                o: { c: { t: q.c.te || q.c.t } },
                 left: "pc",
-                anc: { lk: q.c.k },
+                anc: { lk: q.c.k, dd: q.c.t },
               };
-            if (P)
+            if (P) {
+              /* the brick under the point (its 30 min), else
+                 the latest brick in that row, else the day */
+              const lst = P.rows.get(Math.floor(p / P.step)),
+                ik = Math.floor((x - P.cx0) / P.lw),
+                idx = !lst
+                  ? null
+                  : lst[ik] != null
+                    ? lst[ik]
+                    : Math.max(...lst);
               return {
                 p,
-                o: { c: { t: P.dS } },
+                o: {
+                  c: { t: idx != null ? P.dS + idx * TPO_MS : P.dS },
+                },
                 left: "tp",
-                anc: { fr: (x - P.cx0) / view.colW },
+                anc: { fr: (x - P.cx0) / view.colW, dd: P.dS },
               };
+            }
             return { p, o, left: Math.max(4, x) };
           }
           let best = null,
