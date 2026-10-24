@@ -2458,7 +2458,9 @@
           /* DPoc / profiles full screen: no room right of the
              chart, they reach the price scale */
           const axW = 62,
-            side = cfg.main && (full === "pc" || full === "tpo"),
+            side =
+              cfg.main &&
+              (full === "pc" || full === "tpo" || full === "sp"),
             x1 =
               W -
               axW -
@@ -2483,7 +2485,9 @@
                sub POC candles 10%, P&F 30%, chart 40% */
             four =
               cfg.main && cfg.tpo && pcPf && (pocC || pcSub) && !fl,
-            tpoW = !cfg.tpo || fl === "main" || fl === "pc"
+            /* "sp" full: the POC candles take the P&F panel */
+            tpoW =
+              !cfg.tpo || fl === "main" || fl === "pc" || fl === "sp"
               ? 0
               : fl === "tpo"
                 ? x1 - 25
@@ -2491,7 +2495,7 @@
             pcW = !(cfg.main && cfg.tpo && (pocC || pcSub || pcPf)) ||
               fl === "main" || fl === "tpo"
               ? 0
-              : fl === "pc"
+              : fl === "pc" || fl === "sp"
                 ? x1 - 35
                 : pcPx ||
                   /* P&F 40%, the chart 60% of what the profiles
@@ -3962,26 +3966,29 @@
               }
               return cds;
             };
-            const cds = pcPf ? [] : pocCds(pcSub);
+            /* pf: the panel shows the P&F (not when the POC
+               candles window is full screen) */
+            const pf = pcPf && full !== "sp";
+            const cds = pf ? [] : pocCds(pcSub);
             /* P&F: columns from yesterday's and today's trades,
                box = the brick */
             const pst = pfStep(),
               d1 = dayOf(Date.now());
-            if (pcPf) {
+            if (pf) {
               loadAggr(d1 - DAY);
               loadAggr(d1);
             }
-            const pfc = pcPf ? pfCols([d1 - DAY, d1], pst) : [];
+            const pfc = pf ? pfCols([d1 - DAY, d1], pst) : [];
             /* one candle per profile-column width, as many as
                fit; fetch older 15m days until they are there */
-            const nFit = pcPf
+            const nFit = pf
                 ? pfN
                 : pcN || Math.max(3, Math.floor(pcW / (colW + gap))),
               sl = pcW / nFit;
             pcShow = nFit;
             pcSl = sl;
             const need = nFit + pcBack;
-            if (!pcPf && cds.length < need && !olderEnd["15m"])
+            if (!pf && cds.length < need && !olderEnd["15m"])
               older("15m");
             g.save();
             g.beginPath();
@@ -3991,9 +3998,9 @@
             /* pb = what is loaded so far; pcBack waits for more;
                negative = empty slots on the right. P&F keeps
                15% of them (home), so new columns push it left */
-            const items = pcPf ? pfc : cds,
+            const items = pf ? pfc : cds,
               room = items.length - nFit,
-              home = pcPf ? -Math.round(nFit * 0.15) : 0,
+              home = pf ? -Math.round(nFit * 0.15) : 0,
               pb = Math.max(1 - nFit, Math.min(pcBack + home, room));
             if (olderEnd["15m"]) pcBack = pb - home;
             /* ib whole candles back; the newest sits in slot
@@ -4029,7 +4036,7 @@
                 Math.max(1, Math.abs(yo - yc)),
               );
             });
-            if (pcPf) drawPfCols(pfc, cv2, jOf, pa, sl, pst);
+            if (pf) drawPfCols(pfc, cv2, jOf, pa, sl, pst);
             else drawCds(cv2, pa, sl, jOf);
             g.restore();
             /* the SPoc window (4 windows): the latest sub POC
@@ -4083,7 +4090,7 @@
             g.textAlign = "center";
             const pm = pa + pcW / 2;
             g.fillText(
-              pcPf
+              pf
                 ? "P&F, box " + pst
                 : pcSub
                   ? "sub POC candles"
@@ -4093,7 +4100,7 @@
             );
             if (!items.length)
               g.fillText(
-                pcPf ? "loading trades" : "no pair yet",
+                pf ? "loading trades" : "no pair yet",
                 pm,
                 (top + bot) / 2,
               );
@@ -4644,8 +4651,9 @@
             g.fillRect(x0 - 2, 0, px0 - x0 + 2, H);
           }
           if (cfg.main) {
-            if (pcW) icon("pc", pL, pL + pcW);
-            if (pcW && pcPf) alIcons("pf", pL + pcW);
+            if (pcW) icon(full === "sp" ? "sp" : "pc", pL, pL + pcW);
+            if (pcW && pcPf && full !== "sp") alIcons("pf", pL + pcW);
+            if (spW) icon("sp", sL, pS);
             if (tpoW) icon("tpo", 1, tR - 1);
             if (tpoW) alIcons("vp", tR - 1);
             if (!side) {
@@ -4728,6 +4736,7 @@
             /* over the P&F: the hovered column's start time */
             else if (
               pcPf &&
+              full !== "sp" &&
               pcW &&
               mouse.x >= pS &&
               mouse.x < x0 - 5
@@ -4908,7 +4917,8 @@
               if (q.w === "sp")
                 spN = cl(3, 60, Math.round(q.n * f));
               else if (q.w === "pc") {
-                if (pcPf) pfN = cl(5, 600, Math.round(q.n * f));
+                if (pcPf && full !== "sp")
+                  pfN = cl(5, 600, Math.round(q.n * f));
                 else pcN = cl(3, 60, Math.round(q.n * f));
                 pcBack = Math.max(
                   1 - view.pcN,
@@ -5600,7 +5610,7 @@
             if (view && view.win(wx) === "pc") {
               const n0 = view.pcN,
                 f2 = sg > 0 ? 1.15 : 1 / 1.15;
-              if (pcPf)
+              if (pcPf && full !== "sp")
                 pfN = Math.max(5, Math.min(600, Math.round(n0 * f2)));
               else
                 pcN = Math.max(
