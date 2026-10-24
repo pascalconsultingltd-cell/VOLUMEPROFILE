@@ -4040,6 +4040,36 @@
               YP = Y,
               jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
             /* POC candles: slot j of width sl from pa */
+            /* simplified zigzag over POC candles: swings of
+               their closes, legs past the swing before them
+               green / red, else golden */
+            const cdZig = (list, pa, sl, jOf) => {
+              const zs = swings(
+                list.map((c, i) => ({
+                  x: pa + sl * jOf(i),
+                  y: YP(c.c),
+                  p: c.c,
+                })),
+              );
+              g.lineWidth = 2;
+              g.lineCap = "round";
+              zs.forEach(({ q }, i) => {
+                if (!i) return;
+                const a = zs[i - 1].q,
+                  pr = i > 1 && zs[i - 2].q;
+                g.strokeStyle =
+                  pr && q.p > a.p && q.p > pr.p
+                    ? "#089981"
+                    : pr && q.p < a.p && q.p < pr.p
+                      ? "#e53935"
+                      : "rgba(230,159,0,.9)";
+                g.beginPath();
+                g.moveTo(a.x, a.y);
+                g.lineTo(q.x, q.y);
+                g.stroke();
+              });
+              g.lineWidth = 1;
+            };
             const drawCds = (list, pa, sl, jOf) =>
             list.forEach((c, i) => {
               const j = jOf(i),
@@ -4072,7 +4102,10 @@
               } else g.fillRect(...bx);
             });
             if (pf) drawPfCols(pfc, cv2, jOf, pa, sl, pst);
-            else drawCds(cv2, pa, sl, jOf);
+            else {
+              drawCds(cv2, pa, sl, jOf);
+              cdZig(cv2, pa, sl, jOf);
+            }
             g.restore();
             /* the SPoc window (4 windows): the latest sub POC
                candles that fit, 12px each, newest on the right */
@@ -4096,12 +4129,10 @@
               g.beginPath();
               g.rect(sa, top, spW, bot - top);
               g.clip();
-              drawCds(
-                sh,
-                sa,
-                ssl,
-                (i) => n - sh.length + i + 0.5 + Math.min(0, sb),
-              );
+              const sj = (i) =>
+                n - sh.length + i + 0.5 + Math.min(0, sb);
+              drawCds(sh, sa, ssl, sj);
+              cdZig(sh, sa, ssl, sj);
               g.restore();
               panel(sL, spOff);
               g.fillStyle = "#6b7684";
