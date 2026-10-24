@@ -828,6 +828,23 @@
         });
         return piv;
       }
+      /*
+       * nested zigzags: a zigzag hides the swings after its
+       * last pivot that break neither extreme, so the points
+       * from that pivot on get their own zigzag, and so on;
+       * n levels at most, each level's pivots as swings()
+       */
+      function nests(zz, n) {
+        const out = [swings(zz)];
+        for (let k = 1; k < n; k++) {
+          const s = out[k - 1],
+            b = s.length > 1 ? s[s.length - 1].i : 0;
+          if (!b || zz.length - b < 3) break;
+          zz = zz.slice(b);
+          out.push(swings(zz));
+        }
+        return out;
+      }
       function kl(h, q) {
         return h + "/api/v3/klines?symbol=" + SYM + "&" + q;
       } /* klines URL */
@@ -3252,17 +3269,9 @@
             g.lineTo(q.x, q.y);
             g.stroke();
           });
-          /* nested zigzags: the points from a zigzag's pivot
-             before last (its last one that cannot move) get
-             their own zigzag, showing the swings the bigger
-             one hides; thinner at each level, 3 at most */
-          for (let z0 = zs, zz = zp, lw = 2, n = 0; n < 3; n++) {
-            const b = z0.length > 2 ? z0[z0.length - 2].i : 0;
-            if (!b || zz.length - b < 3) break;
-            zz = zz.slice(b);
-            z0 = swings(zz);
-            g.lineWidth = lw;
-            lw *= 0.7;
+          /* nested zigzags (see nests), thinner per level */
+          nests(zp, 4).slice(1).forEach((z0, k) => {
+            g.lineWidth = 2 * 0.7 ** k;
             z0.forEach(({ q }, i) => {
               if (!i) return;
               g.strokeStyle = legCol(
@@ -3275,7 +3284,7 @@
               g.lineTo(q.x, q.y);
               g.stroke();
             });
-          }
+          });
           /* zo = where the open leg ends */
           let zo = null;
           if (zs.length && zp.length - 1 > zs[zs.length - 1].i) {
@@ -4190,15 +4199,17 @@
             /* simplified zigzag over POC candles: swings of
                their closes, legs past the swing before them
                green / red, else golden */
-            const cdZig = (list, pa, sl, jOf) => {
-              const zs = swings(
+            const cdZig = (list, pa, sl, jOf) =>
+              nests(
                 list.map((c, i) => ({
                   x: pa + sl * jOf(i),
                   y: YP(c.c),
                   p: c.c,
                 })),
-              );
-              g.lineWidth = 2;
+                4,
+              ).forEach((zs, k) => {
+              /* nested levels (see nests) thinner */
+              g.lineWidth = 2 * 0.7 ** k;
               g.lineCap = "round";
               zs.forEach(({ q }, i) => {
                 if (!i) return;
@@ -4216,7 +4227,7 @@
                 g.stroke();
               });
               g.lineWidth = 1;
-            };
+            });
             const drawCds = (list, pa, sl, jOf) =>
             list.forEach((c, i) => {
               const j = jOf(i),
