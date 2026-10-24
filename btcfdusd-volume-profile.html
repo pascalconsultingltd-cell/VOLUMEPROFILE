@@ -534,6 +534,13 @@
                     title="Order lines; off = executions only"
                   >
                     L
+                  </button>
+                  <button
+                    id="grTog"
+                    class=""
+                    title="Grid bot (grid.js): its orders and levels"
+                  >
+                    Gr
                   </button></span
                 ></span
               ><span class="ttl"
@@ -1424,6 +1431,16 @@
         $("ordLineTog").className = showLines ? "a" : "";
         schedule();
       }
+      /* grid bot (Gr button): its orders and levels, from
+         grid.js written by GRID-TRADING/grid.py */
+      let showGr = false,
+        gOrders = [],
+        gLv = [];
+      function setShowGr(v) {
+        showGr = !!v;
+        $("grTog").className = showGr ? "a" : "";
+        schedule();
+      }
       /*
        * vol step typed in the header: a price amount, or a
        * percent of yesterday's POC when it ends with %
@@ -1476,6 +1493,24 @@
         };
         s.onerror = () => next(false);
         s.src = "orders.js?t=" + Date.now();
+        document.head.appendChild(s);
+      }
+      /* grid.js: window.GRID = { orders: [...as orders.js],
+         lv: [[time, anchor, step], ...] }, every 3s */
+      function loadGrid() {
+        const s = document.createElement("script");
+        window.GRID = undefined;
+        s.onload = s.onerror = () => {
+          s.remove();
+          const a = window.GRID;
+          if (a && Array.isArray(a.orders)) {
+            gOrders = a.orders.map(readOrder);
+            gLv = a.lv || [];
+            schedule();
+          }
+          setTimeout(loadGrid, 3000);
+        };
+        s.src = "grid.js?t=" + Date.now();
         document.head.appendChild(s);
       }
       /*
@@ -4604,18 +4639,66 @@
            * as thick as its quantity; dot = filled,
            * cancelled just stops, open orders run to the edge
            */
-          if (showOrders && orders.length) {
+          /* my orders (O) and the grid bot's (Gr) */
+          const ords = (showOrders ? orders : []).concat(
+            showGr ? gOrders : [],
+          );
+          /* grid bot levels (Gr): anchor + k x step, from
+             each change to the next, between xL and xR */
+          const gridLv = (xOf, xL, xR) => {
+            if (!showGr || !gLv.length) return;
+            g.save();
+            g.beginPath();
+            g.rect(xL, top, xR - xL, bot - top);
+            g.clip();
+            g.beginPath();
+            gLv.forEach(([t, a, s], i) => {
+              const xs = xOf(t),
+                xe = i + 1 < gLv.length ? xOf(gLv[i + 1][0]) : xR;
+              if (xe <= xs) return;
+              let p = a + Math.ceil((lo - a) / s) * s;
+              for (; p <= hi; p += s) {
+                g.moveTo(xs, Y(p));
+                g.lineTo(xe, Y(p));
+              }
+            });
+            g.strokeStyle = "rgba(142,68,173,.45)";
+            g.setLineDash([2, 3]);
+            g.lineWidth = 1;
+            g.stroke();
+            g.setLineDash([]);
+            g.restore();
+          };
+          gridLv(
+            (t) => {
+              const q = geoAt(t);
+              return q ? q.x + q.w / 2 : x0;
+            },
+            x0,
+            px0,
+          );
+          if (pcPf && pfX.length)
+            gridLv(
+              (tt) => {
+                let x = pL;
+                for (const [t0, xm] of pfX) if (t0 <= tt) x = xm;
+                return x;
+              },
+              pL,
+              pL + pcW,
+            );
+          if (ords.length) {
             const n = arr.length;
             const tEnd = off > 0 && n - off < n
               ? arr[n - off].t
               : Infinity;
             const tFirst = geo[0].c.t;
-            const mq = Math.max(...orders.map((o) => o.qty));
+            const mq = Math.max(...ords.map((o) => o.qty));
             g.save();
             g.beginPath();
             g.rect(x0, top, px0 - x0, bot - top);
             g.clip();
-            orders.forEach((o) => {
+            ords.forEach((o) => {
               const y = Y(o.price);
               const gone = o.t1 != null && o.t1 < tFirst;
               if (y < top || y > bot || o.t0 >= tEnd || gone)
@@ -4658,8 +4741,8 @@
            * column started by then; older than the first shown
            * column = its left edge, still open = the right edge
            */
-          if (showOrders && orders.length && pcPf && pfX.length) {
-            const mq = Math.max(...orders.map((o) => o.qty)),
+          if (ords.length && pcPf && pfX.length) {
+            const mq = Math.max(...ords.map((o) => o.qty)),
               xR = pL + pcW,
               xAt = (tt) => {
                 let x = pL;
@@ -4670,7 +4753,7 @@
             g.beginPath();
             g.rect(pL, top, pcW, bot - top);
             g.clip();
-            orders.forEach((o) => {
+            ords.forEach((o) => {
               const y = Y(o.price),
                 ended = o.t1 != null;
               if (y < top || y > bot) return;
@@ -6233,6 +6316,7 @@
           pcSub,
           showOrders,
           showLines,
+          showGr,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -6306,6 +6390,7 @@
           setShowOrders(st.showOrders);
         if (cur6 && typeof st.showLines === "boolean")
           setShowLines(st.showLines);
+        if (typeof st.showGr === "boolean") setShowGr(st.showGr);
         /* a saved vol is dropped when the default has
            changed since it was saved */
         if (
@@ -6530,6 +6615,7 @@
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
+      $("grTog").onclick = () => setShowGr(!showGr);
       $("vol").addEventListener("input", (e) => {
         volTyped = true;
         setVol(e.target.value);
@@ -6544,6 +6630,7 @@
       )
         navigator.serviceWorker.register("sw.js").catch(() => {});
       loadOrders();
+      loadGrid();
       loadVol();
       connect();
       hist(IV, () => seedIv(IV));
