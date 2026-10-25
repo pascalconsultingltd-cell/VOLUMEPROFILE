@@ -3123,6 +3123,7 @@
               if (o.length && ref != null)
                 ud = o[o.length - 1] < ref ? "#000" : "#089981";
             }
+            P.ud = ud;
             for (let r = P.a; r <= P.b; r++) {
               if (!showVA && r !== P.poc) continue;
               g.fillStyle =
@@ -3270,6 +3271,41 @@
                 g.fillText(tx, cx0, y - 9);
               },
             );
+          }
+          /*
+           * UD zigzag: the shown days in runs of one colour; a
+           * green run's highest high and a black run's lowest
+           * low joined in order, on the day that made it
+           */
+          if (showUD) {
+            const piv = [];
+            profs.forEach((P) => {
+              if (!P.ud || !P.ps.length) return;
+              const up = P.ud !== "#000",
+                px = up
+                  ? Math.max(...P.ps.map((q) => q.h))
+                  : Math.min(...P.ps.map((q) => q.l)),
+                x = P.cx0 + colW / 2,
+                z = piv[piv.length - 1];
+              if (z && z.up === up) {
+                if (up ? px > z.px : px < z.px) [z.px, z.x] = [px, x];
+              } else piv.push({ up, px, x });
+            });
+            g.strokeStyle = "#7b1fa2";
+            g.lineWidth = 2.5;
+            g.setLineDash([]);
+            g.beginPath();
+            piv.forEach((q, i) =>
+              i ? g.lineTo(q.x, Y(q.px)) : g.moveTo(q.x, Y(q.px)),
+            );
+            g.stroke();
+            piv.forEach((q) => {
+              g.fillStyle = q.up ? "#089981" : "#000";
+              g.beginPath();
+              g.arc(q.x, Y(q.px), 4, 0, 7);
+              g.fill();
+            });
+            g.lineWidth = 1;
           }
           /* swing zigzag over the days' POCs; dashed = open */
           const zs = swings(zp),
