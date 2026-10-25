@@ -3301,7 +3301,9 @@
               const up = P.ud !== "#000",
                 h = Math.max(...P.ps.map((q) => q.h)),
                 l = Math.min(...P.ps.map((q) => q.l)),
-                x = P.cx0 + colW / 2,
+                /* on the profile's own axis, where its bricks
+                   start */
+                x = P.cx0,
                 z = piv[piv.length - 1];
               if (!z) return piv.push({ up, px: up ? h : l, x });
               if (z.up ? h > z.px : l < z.px)
