@@ -5065,7 +5065,28 @@
             g.setLineDash([]);
             ptag(mouse.y, pv.toFixed(DP), XB, XF);
             let lbl = null;
+            /* over a POC candle (SPoc / DPoc): the day of the
+               POC it closes on */
+            const pq =
+              !o && mouse.x >= tR && mouse.x < x0 - 5
+                ? pcGeo.find(
+                    (q) =>
+                      q.c.te != null &&
+                      mouse.x >= q.xa &&
+                      mouse.x < q.xb,
+                  )
+                : null;
             if (o) lbl = dlabel(o.c.t);
+            else if (pq)
+              lbl =
+                "close " +
+                new Date(pq.c.t).toLocaleDateString([], {
+                  weekday: "short",
+                  day: "2-digit",
+                  month: "short",
+                  timeZone: "UTC",
+                }) +
+                (pq.c.live ? " (so far)" : "");
             /* over the P&F: the hovered column's start time */
             else if (
               pcPf &&
