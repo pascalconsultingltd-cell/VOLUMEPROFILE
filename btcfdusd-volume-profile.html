@@ -406,6 +406,13 @@
                 UD
               </button>
               <button
+                id="zzTog"
+                class=""
+                title="Zigzag: ipocs (off) / UD days (on)"
+              >
+                ZZ
+              </button>
+              <button
                 id="pocTog"
                 class=""
                 title="POC bands and tags on / off"
@@ -930,7 +937,14 @@
       }
       /* up / down days (UD button): a day whose last ipoc (in
          time) is under its first is tinted red, else green */
-      let showUD = false;
+      let showUD = false,
+        /* ZZ button: the UD days' zigzag instead of the ipocs' */
+        udZz = false;
+      function setUdZz(v) {
+        udZz = !!v;
+        $("zzTog").className = udZz ? "a" : "";
+        schedule();
+      }
       function setShowUD(v) {
         showUD = !!v;
         $("udTog").className = showUD ? "a" : "";
@@ -3115,7 +3129,7 @@
                     .map((x) => x[1])
                 : [];
             let ud = null;
-            if (showUD) {
+            if (showUD || udZz) {
               const o = ipocs(P),
                 ref = o.length > 1
                   ? o[0]
@@ -3204,7 +3218,7 @@
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
               lst.forEach((idx, k) => {
-                g.fillStyle = ud
+                g.fillStyle = showUD && ud
                   ? ud
                   : stCol && shut(idx)
                     ? stAt(idx).get(
@@ -3273,23 +3287,26 @@
             );
           }
           /*
-           * UD zigzag: the shown days in runs of one colour; a
-           * green run's highest high and a black run's lowest
-           * low joined in order, on the day that made it
+           * UD zigzag (ZZ on): the shown days' colours set the
+           * way, the prices set the pivots. Seeking a top (green
+           * days) any day's higher high moves it, a black day's
+           * too; the first black day then starts the bottom
+           * from its low, which any lower low moves, a green
+           * day's too; and so on
            */
-          if (showUD) {
+          if (udZz) {
             const piv = [];
             profs.forEach((P) => {
               if (!P.ud || !P.ps.length) return;
               const up = P.ud !== "#000",
-                px = up
-                  ? Math.max(...P.ps.map((q) => q.h))
-                  : Math.min(...P.ps.map((q) => q.l)),
+                h = Math.max(...P.ps.map((q) => q.h)),
+                l = Math.min(...P.ps.map((q) => q.l)),
                 x = P.cx0 + colW / 2,
                 z = piv[piv.length - 1];
-              if (z && z.up === up) {
-                if (up ? px > z.px : px < z.px) [z.px, z.x] = [px, x];
-              } else piv.push({ up, px, x });
+              if (!z) return piv.push({ up, px: up ? h : l, x });
+              if (z.up ? h > z.px : l < z.px)
+                [z.px, z.x] = [z.up ? h : l, x];
+              if (z.up !== up) piv.push({ up, px: up ? h : l, x });
             });
             g.strokeStyle = "#7b1fa2";
             g.lineWidth = 2.5;
@@ -3322,7 +3339,7 @@
           g.lineJoin = "round";
           g.lineCap = "round";
           zs.forEach(({ q }, i) => {
-            if (!i) return;
+            if (!i || udZz) return;
             g.strokeStyle = legCol(
               zs[i - 1].q,
               q,
@@ -3334,7 +3351,7 @@
             g.stroke();
           });
           /* nested zigzags (see nests), thinner per level */
-          nests(zp, 4).slice(1).forEach((z0, k) => {
+          (udZz ? [] : nests(zp, 4).slice(1)).forEach((z0, k) => {
             g.lineWidth = 2 * 0.7 ** k;
             z0.forEach(({ q }, i) => {
               if (!i) return;
@@ -3372,7 +3389,7 @@
             g.beginPath();
             g.moveTo(a.x, a.y);
             g.lineTo(z.x, z.y);
-            g.stroke();
+            if (!udZz) g.stroke();
             g.setLineDash([]);
             zo = z;
           }
@@ -6507,6 +6524,7 @@
           pocBand,
           showVA,
           showUD,
+          udZz,
           showPOC,
           stCol,
           pcPf,
@@ -6587,6 +6605,7 @@
         if (cur5 && typeof st.showVA === "boolean")
           setShowVA(st.showVA);
         if (typeof st.showUD === "boolean") setShowUD(st.showUD);
+        if (typeof st.udZz === "boolean") setUdZz(st.udZz);
         /* O / L: defaults changed in version 6 */
         const cur6 = st.dv >= 6;
         if (cur6 && typeof st.showOrders === "boolean")
@@ -6806,6 +6825,7 @@
       $("pbTog").onclick = () => setPocBand(!pocBand);
       $("vaTog").onclick = () => setShowVA(!showVA);
       $("udTog").onclick = () => setShowUD(!showUD);
+      $("zzTog").onclick = () => setUdZz(!udZz);
       $("pcTog").onclick = () => setPocC(!pocC);
       $("spTog").onclick = () => setPcSub(!pcSub);
       $("pfTog").onclick = () => setPcPf(!pcPf);
