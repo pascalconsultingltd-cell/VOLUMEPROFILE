@@ -401,7 +401,7 @@
               <button
                 id="udTog"
                 class=""
-                title="Up / down days: last ipoc under first = down"
+                title="Up days green, down days black (ipocs)"
               >
                 UD
               </button>
@@ -3096,26 +3096,32 @@
               );
             profs.push(P);
             if (P.poc == null) continue;
+            /* UD: the whole day black when its last ipoc in time
+               is under its first (one ipoc: under the day
+               before's last), else green */
+            const ipocs = (q) =>
+              q.ps.length
+                ? subPocs(
+                    q.dS,
+                    q.ps,
+                    volAmt > 0 ? volAmt : q.step * 10,
+                    q.step,
+                  )
+                    .map((S) => {
+                      const w = q.rows.get(Math.floor(S.px / q.step));
+                      return [w ? Math.min(...w) : 99, S.px];
+                    })
+                    .sort((x, y) => x[0] - y[0])
+                    .map((x) => x[1])
+                : [];
+            let ud = null;
             if (showUD) {
-              /* the day's ipocs in time (their first brick) */
-              const ord = subPocs(
-                P.dS,
-                P.ps,
-                volAmt > 0 ? volAmt : P.step * 10,
-                P.step,
-              )
-                .map((S) => {
-                  const row = P.rows.get(Math.floor(S.px / P.step));
-                  return [row ? Math.min(...row) : 99, S.px];
-                })
-                .sort((x, y) => x[0] - y[0]);
-              if (ord.length > 1) {
-                g.fillStyle =
-                  ord[ord.length - 1][1] < ord[0][1]
-                    ? "rgba(229,57,53,.08)"
-                    : "rgba(8,153,129,.08)";
-                g.fillRect(cx0 - 2, top, colW + 2, bot - top);
-              }
+              const o = ipocs(P),
+                ref = o.length > 1
+                  ? o[0]
+                  : ipocs(dayProf(prevDay(P.dS))).pop();
+              if (o.length && ref != null)
+                ud = o[o.length - 1] < ref ? "#000" : "#089981";
             }
             for (let r = P.a; r <= P.b; r++) {
               if (!showVA && r !== P.poc) continue;
@@ -3197,8 +3203,9 @@
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
               lst.forEach((idx, k) => {
-                g.fillStyle =
-                  stCol && shut(idx)
+                g.fillStyle = ud
+                  ? ud
+                  : stCol && shut(idx)
                     ? stAt(idx).get(
                         Math.floor(
                           ((r + 0.5) * P.step) / stAt(idx).step,
