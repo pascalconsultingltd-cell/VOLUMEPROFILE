@@ -399,6 +399,13 @@
                 VA
               </button>
               <button
+                id="udTog"
+                class=""
+                title="Up / down days: last ipoc under first = down"
+              >
+                UD
+              </button>
+              <button
                 id="pocTog"
                 class=""
                 title="POC bands and tags on / off"
@@ -919,6 +926,14 @@
       function setHlLad(v) {
         hlLad = !!v;
         $("ladTog").className = hlLad ? "a" : "";
+        schedule();
+      }
+      /* up / down days (UD button): a day whose last ipoc (in
+         time) is under its first is tinted red, else green */
+      let showUD = false;
+      function setShowUD(v) {
+        showUD = !!v;
+        $("udTog").className = showUD ? "a" : "";
         schedule();
       }
       /* value area shading and tags (VA button) */
@@ -3081,6 +3096,27 @@
               );
             profs.push(P);
             if (P.poc == null) continue;
+            if (showUD) {
+              /* the day's ipocs in time (their first brick) */
+              const ord = subPocs(
+                P.dS,
+                P.ps,
+                volAmt > 0 ? volAmt : P.step * 10,
+                P.step,
+              )
+                .map((S) => {
+                  const row = P.rows.get(Math.floor(S.px / P.step));
+                  return [row ? Math.min(...row) : 99, S.px];
+                })
+                .sort((x, y) => x[0] - y[0]);
+              if (ord.length > 1) {
+                g.fillStyle =
+                  ord[ord.length - 1][1] < ord[0][1]
+                    ? "rgba(229,57,53,.08)"
+                    : "rgba(8,153,129,.08)";
+                g.fillRect(cx0 - 2, top, colW + 2, bot - top);
+              }
+            }
             for (let r = P.a; r <= P.b; r++) {
               if (!showVA && r !== P.poc) continue;
               g.fillStyle =
@@ -6427,6 +6463,7 @@
           showGrid,
           pocBand,
           showVA,
+          showUD,
           showPOC,
           stCol,
           pcPf,
@@ -6506,6 +6543,7 @@
           setPcSub(st.pcSub);
         if (cur5 && typeof st.showVA === "boolean")
           setShowVA(st.showVA);
+        if (typeof st.showUD === "boolean") setShowUD(st.showUD);
         /* O / L: defaults changed in version 6 */
         const cur6 = st.dv >= 6;
         if (cur6 && typeof st.showOrders === "boolean")
@@ -6724,6 +6762,7 @@
       $("gridTog").onclick = () => setShowGrid(!showGrid);
       $("pbTog").onclick = () => setPocBand(!pocBand);
       $("vaTog").onclick = () => setShowVA(!showVA);
+      $("udTog").onclick = () => setShowUD(!showUD);
       $("pcTog").onclick = () => setPocC(!pocC);
       $("spTog").onclick = () => setPcSub(!pcSub);
       $("pfTog").onclick = () => setPcPf(!pcPf);
