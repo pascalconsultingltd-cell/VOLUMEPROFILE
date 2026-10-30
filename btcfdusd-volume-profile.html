@@ -413,6 +413,13 @@
                 ZZ
               </button>
               <button
+                id="ybTog"
+                class=""
+                title="Yellow bricks' barycentre vs the latest ipoc"
+              >
+                YB
+              </button>
+              <button
                 id="pocTog"
                 class=""
                 title="POC bands and tags on / off"
@@ -948,6 +955,15 @@
       function setShowUD(v) {
         showUD = !!v;
         $("udTog").className = showUD ? "a" : "";
+        schedule();
+      }
+      /* YB button: barycentre of each day's yellow bricks
+         (21:00 UTC on), green above its latest ipoc, black
+         below */
+      let showYB = false;
+      function setShowYB(v) {
+        showYB = !!v;
+        $("ybTog").className = showYB ? "a" : "";
         schedule();
       }
       /* value area shading and tags (VA button) */
@@ -3285,6 +3301,39 @@
                 g.fillText(tx, cx0, y - 9);
               },
             );
+            if (showYB) {
+              const last = ipocs(P).pop();
+              let sum = 0,
+                n = 0;
+              P.rows.forEach((l, r) =>
+                l.forEach((i) => {
+                  if (i < 42) return;
+                  sum += (r + 0.5) * P.step;
+                  n++;
+                }),
+              );
+              if (n && last != null) {
+                const b = sum / n,
+                  y = Y(b),
+                  c = b > last ? "#089981" : "#000",
+                  dv = b - last,
+                  tx = "B " + b.toFixed(DP) + " " +
+                    (dv > 0 ? "+" : "") + dv.toFixed(DP);
+                g.strokeStyle = c;
+                g.lineWidth = 2;
+                g.beginPath();
+                g.moveTo(cx0 - 2, y);
+                g.lineTo(cx0 + colW, y);
+                g.stroke();
+                g.font = "bold 11px ui-monospace,Menlo,monospace";
+                g.textAlign = "left";
+                g.strokeStyle = "#fff";
+                g.lineWidth = 3;
+                g.strokeText(tx, cx0, y + 10);
+                g.fillStyle = c;
+                g.fillText(tx, cx0, y + 10);
+              }
+            }
           }
           /*
            * UD zigzag (ZZ on): the shown days' colours set the
@@ -6528,6 +6577,7 @@
           showVA,
           showUD,
           udZz,
+          showYB,
           showPOC,
           stCol,
           pcPf,
@@ -6609,6 +6659,7 @@
           setShowVA(st.showVA);
         if (typeof st.showUD === "boolean") setShowUD(st.showUD);
         if (typeof st.udZz === "boolean") setUdZz(st.udZz);
+        if (typeof st.showYB === "boolean") setShowYB(st.showYB);
         /* O / L: defaults changed in version 6 */
         const cur6 = st.dv >= 6;
         if (cur6 && typeof st.showOrders === "boolean")
@@ -6829,6 +6880,7 @@
       $("vaTog").onclick = () => setShowVA(!showVA);
       $("udTog").onclick = () => setShowUD(!showUD);
       $("zzTog").onclick = () => setUdZz(!udZz);
+      $("ybTog").onclick = () => setShowYB(!showYB);
       $("pcTog").onclick = () => setPocC(!pocC);
       $("spTog").onclick = () => setPcSub(!pcSub);
       $("pfTog").onclick = () => setPcPf(!pcPf);
