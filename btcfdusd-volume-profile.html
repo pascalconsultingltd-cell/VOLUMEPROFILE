@@ -414,7 +414,7 @@
               </button>
               <button
                 id="ybTog"
-                class=""
+                class="a"
                 title="Yellow bricks' barycentre vs the latest ipoc"
               >
                 YB
@@ -960,7 +960,7 @@
       /* YB button: barycentre of each day's yellow bricks
          (21:00 UTC on), green above its latest ipoc, black
          below */
-      let showYB = false;
+      let showYB = true;
       function setShowYB(v) {
         showYB = !!v;
         $("ybTog").className = showYB ? "a" : "";
@@ -3319,19 +3319,18 @@
                   dv = b - last,
                   tx = "B " + b.toFixed(DP) + " " +
                     (dv > 0 ? "+" : "") + dv.toFixed(DP);
-                g.strokeStyle = c;
-                g.lineWidth = 2;
+                /* a plain circle about 4 bricks across */
+                const rd = Math.max(3, 2 * rowH);
+                g.fillStyle = c;
                 g.beginPath();
-                g.moveTo(cx0 - 2, y);
-                g.lineTo(cx0 + colW, y);
-                g.stroke();
+                g.arc(cx0 + rd, y, rd, 0, 7);
+                g.fill();
                 g.font = "bold 11px ui-monospace,Menlo,monospace";
                 g.textAlign = "left";
                 g.strokeStyle = "#fff";
                 g.lineWidth = 3;
-                g.strokeText(tx, cx0, y + 10);
-                g.fillStyle = c;
-                g.fillText(tx, cx0, y + 10);
+                g.strokeText(tx, cx0, y + rd + 9);
+                g.fillText(tx, cx0, y + rd + 9);
               }
             }
           }
