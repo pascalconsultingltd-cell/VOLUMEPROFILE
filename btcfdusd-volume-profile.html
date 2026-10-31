@@ -421,7 +421,7 @@
               </button>
               <button
                 id="bzTog"
-                class=""
+                class="a"
                 title="Zigzag: high after a green YB, low after black"
               >
                 BZ
@@ -1024,7 +1024,9 @@
         schedule();
       }
       /* BZ button: the zigzag from the barycentres' colours */
-      let showBZ = false;
+      let showBZ = true;
+      /* a finished day's look: colour, yellow and day extremes */
+      const bzDays = new Map();
       function setShowBZ(v) {
         showBZ = !!v;
         $("bzTog").className = showBZ ? "a" : "";
@@ -3378,24 +3380,18 @@
                 g.restore();
               }
             }
-            if (showYB || showBZ) {
+            if (showYB) {
               const last = ipocs(P).pop();
               let sum = 0,
                 n = 0;
-              P.yh = -Infinity;
-              P.yl = Infinity;
               P.rows.forEach((l, r) =>
                 l.forEach((i) => {
                   if (i < 42) return;
                   sum += (r + 0.5) * P.step;
                   n++;
-                  P.yh = Math.max(P.yh, (r + 1) * P.step);
-                  P.yl = Math.min(P.yl, r * P.step);
                 }),
               );
               if (n && last != null) {
-                P.by = sum / n > last ? 1 : -1;
-                if (!showYB) continue;
                 const b = sum / n,
                   y = Y(b),
                   c = b > last ? "#089981" : "#000",
@@ -3460,25 +3456,80 @@
           /* BZ button: a day's barycentre sets what is looked for
              next: green the highest point, black the lowest. From
              its yellow bricks, then any day's high / low moves
-             it, until a barycentre of the other colour */
-          if (showBZ) {
-            const piv = [];
-            profs.forEach((P) => {
-              if (!P.ps.length) return;
-              const h = Math.max(...P.ps.map((q) => q.h)),
-                l = Math.min(...P.ps.map((q) => q.l)),
-                z = piv[piv.length - 1];
-              if (z && (z.up ? h > z.px : l < z.px))
-                [z.px, z.x] = [z.up ? h : l, P.cx0];
-              if (!P.by) return;
-              const up = P.by > 0;
+             it, until a barycentre of the other colour. Over
+             every day loaded, whatever the profiles show */
+          if (showBZ && k15.length) {
+            const piv = [],
+              now = dayOf(Date.now()),
+              look = (dS) => {
+                const key = [dS, volAmt, ageOrd].join(),
+                  old = dS < now && bzDays.get(key);
+                if (old) return old;
+                const Q = dayProf(dS);
+                if (!Q.ps.length || (!Q.full && dS !== now))
+                  return null;
+                const last = subPocs(
+                    dS,
+                    Q.ps,
+                    volAmt > 0 ? volAmt : Q.step * 10,
+                    Q.step,
+                  )
+                    .map((S) => {
+                      const w = Q.rows.get(
+                        Math.floor(S.px / Q.step),
+                      );
+                      return [
+                        !w ? 99 : ageOrd ? rowAge(w) : Math.min(...w),
+                        S.px,
+                      ];
+                    })
+                    .sort((x, y) => x[0] - y[0])
+                    .map((x) => x[1])
+                    .pop();
+                let sum = 0,
+                  n = 0,
+                  yh = -Infinity,
+                  yl = Infinity;
+                Q.rows.forEach((l, r) =>
+                  l.forEach((i) => {
+                    if (i < 42) return;
+                    sum += (r + 0.5) * Q.step;
+                    n++;
+                    yh = Math.max(yh, (r + 1) * Q.step);
+                    yl = Math.min(yl, r * Q.step);
+                  }),
+                );
+                const o = {
+                  by:
+                    n && last != null ? (sum / n > last ? 1 : -1) : 0,
+                  yh,
+                  yl,
+                  h: Math.max(...Q.ps.map((q) => q.h)),
+                  l: Math.min(...Q.ps.map((q) => q.l)),
+                };
+                if (dS < now) bzDays.set(key, o);
+                return o;
+              },
+              /* where a day's column is, on screen or not */
+              xOf = (dS) =>
+                6 +
+                (Math.round((dS - tpoDays[0]) / DAY) - ex + tf) *
+                  (colW + gap);
+            for (let d = dayOf(k15[0].t); d <= now; d += DAY) {
+              const o = look(d);
+              if (!o) continue;
+              const z = piv[piv.length - 1];
+              if (z && (z.up ? o.h > z.px : o.l < z.px))
+                [z.px, z.x] = [z.up ? o.h : o.l, xOf(d)];
+              if (!o.by) continue;
+              const up = o.by > 0;
               if (!z || z.up !== up)
                 piv.push({
                   up,
-                  px: up ? P.yh : P.yl,
-                  x: P.cx0 + (colW * 21) / 24,
+                  px: up ? o.yh : o.yl,
+                  x: xOf(d) + (colW * 21) / 24,
                 });
-            });
+            }
             g.strokeStyle = "#0277bd";
             g.lineWidth = 2.5;
             g.setLineDash([]);
@@ -3647,8 +3698,8 @@
                 Math.min(
                   d0 - 3 * DAY,
                   dayStart - (cnt + 2 + tb) * DAY,
-                  /* the zigzag's 15 days */
-                  dayOf(Date.now()) - 17 * DAY,
+                  /* the zigzag's 15 days; BZ: all of it */
+                  dayOf(Date.now()) - (showBZ ? 70 : 17) * DAY,
                 ) -
                 7200000;
             if (need < k15[0].t) older("15m");
@@ -6507,7 +6558,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 12;
+      const DEFAULTS_VER = 13;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -6621,7 +6672,9 @@
         if (typeof st.showUD === "boolean") setShowUD(st.showUD);
         if (typeof st.udZz === "boolean") setUdZz(st.udZz);
         if (typeof st.showIZ === "boolean") setShowIZ(st.showIZ);
-        if (typeof st.showBZ === "boolean") setShowBZ(st.showBZ);
+        /* BZ: default changed in version 13 */
+        if (st.dv >= 13 && typeof st.showBZ === "boolean")
+          setShowBZ(st.showBZ);
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
         if (typeof st.showDO === "boolean") setShowDO(st.showDO);
