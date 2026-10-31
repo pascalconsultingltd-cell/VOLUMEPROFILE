@@ -2658,7 +2658,7 @@
             tpoW0 = cfg.tpo
               ? tpoFrac != null
                 ? Math.max(80, Math.min(W * 0.75, tpoFrac * W))
-                : Math.max(80, W * 0.2 - 5)
+                : Math.max(80, W * 0.4 - 5)
               : 0,
             /*
              * full = "main" / "tpo" / "pc": that window takes
@@ -2678,9 +2678,8 @@
               : fl === "pc"
                 ? x1 - 35
                 : pcPx ||
-                  /* P&F 40%, the chart 60% of what the profiles
-                     leave */
-                  Math.round(0.4 * (W - tpoW - 20)),
+                  /* profiles 40%, P&F 20%, chart 40% */
+                  Math.round(0.2 * W),
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
             px0 = W - axW;
