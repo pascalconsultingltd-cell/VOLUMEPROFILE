@@ -449,7 +449,7 @@
               </button>
               <button
                 id="agTog"
-                class=""
+                class="a"
                 title="P1 to P3 by average brick age (off: by birth)"
               >
                 AG
@@ -979,7 +979,7 @@
       /* AG button: P1 = earliest ipoc, P3 = latest, by the
          average period of the bricks in its row; off: P1 to P3
          in birth order, latest = the latest first brick */
-      let ageOrd = false;
+      let ageOrd = true;
       const rowAge = (w) =>
         w.reduce((a, b) => a + b, 0) / w.length;
       const byAge = (P, sp) => {
@@ -6436,7 +6436,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 11;
+      const DEFAULTS_VER = 12;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -6552,7 +6552,9 @@
         if (typeof st.showDO === "boolean") setShowDO(st.showDO);
         if (typeof st.showCZ === "boolean") setShowCZ(st.showCZ);
         if (typeof st.showLC === "boolean") setShowLC(st.showLC);
-        if (typeof st.ageOrd === "boolean") setAgeOrd(st.ageOrd);
+        /* AG: default changed in version 12 */
+        if (st.dv >= 12 && typeof st.ageOrd === "boolean")
+          setAgeOrd(st.ageOrd);
         /* O / L: defaults changed in version 6 */
         const cur6 = st.dv >= 6;
         if (cur6 && typeof st.showOrders === "boolean")
