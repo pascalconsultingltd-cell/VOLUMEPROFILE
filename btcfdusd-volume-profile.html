@@ -408,9 +408,23 @@
               <button
                 id="zzTog"
                 class=""
-                title="Zigzag: ipocs (off) / UD days (on)"
+                title="Zigzag over the UD days"
               >
                 ZZ
+              </button>
+              <button
+                id="izTog"
+                class=""
+                title="Zigzag over the ipocs (last 15 days)"
+              >
+                IZ
+              </button>
+              <button
+                id="bzTog"
+                class=""
+                title="Zigzag: high after a green YB, low after black"
+              >
+                BZ
               </button>
               <button
                 id="ybTog"
@@ -1000,6 +1014,20 @@
       function setShowLC(v) {
         showLC = !!v;
         $("lcTog").className = showLC ? "a" : "";
+        schedule();
+      }
+      /* IZ button: the zigzag over the ipocs */
+      let showIZ = false;
+      function setShowIZ(v) {
+        showIZ = !!v;
+        $("izTog").className = showIZ ? "a" : "";
+        schedule();
+      }
+      /* BZ button: the zigzag from the barycentres' colours */
+      let showBZ = false;
+      function setShowBZ(v) {
+        showBZ = !!v;
+        $("bzTog").className = showBZ ? "a" : "";
         schedule();
       }
       /* DO button: DPoc candles over the profiles */
@@ -3351,18 +3379,24 @@
                 g.restore();
               }
             }
-            if (showYB) {
+            if (showYB || showBZ) {
               const last = ipocs(P).pop();
               let sum = 0,
                 n = 0;
+              P.yh = -Infinity;
+              P.yl = Infinity;
               P.rows.forEach((l, r) =>
                 l.forEach((i) => {
                   if (i < 42) return;
                   sum += (r + 0.5) * P.step;
                   n++;
+                  P.yh = Math.max(P.yh, (r + 1) * P.step);
+                  P.yl = Math.min(P.yl, r * P.step);
                 }),
               );
               if (n && last != null) {
+                P.by = sum / n > last ? 1 : -1;
+                if (!showYB) continue;
                 const b = sum / n,
                   y = Y(b),
                   c = b > last ? "#089981" : "#000",
@@ -3424,6 +3458,44 @@
             });
             g.lineWidth = 1;
           }
+          /* BZ button: a day's barycentre sets what is looked for
+             next: green the highest point, black the lowest. From
+             its yellow bricks, then any day's high / low moves
+             it, until a barycentre of the other colour */
+          if (showBZ) {
+            const piv = [];
+            profs.forEach((P) => {
+              if (!P.ps.length) return;
+              const h = Math.max(...P.ps.map((q) => q.h)),
+                l = Math.min(...P.ps.map((q) => q.l)),
+                z = piv[piv.length - 1];
+              if (z && (z.up ? h > z.px : l < z.px))
+                [z.px, z.x] = [z.up ? h : l, P.cx0];
+              if (!P.by) return;
+              const up = P.by > 0;
+              if (!z || z.up !== up)
+                piv.push({
+                  up,
+                  px: up ? P.yh : P.yl,
+                  x: P.cx0 + (colW * 21) / 24,
+                });
+            });
+            g.strokeStyle = "#0277bd";
+            g.lineWidth = 2.5;
+            g.setLineDash([]);
+            g.beginPath();
+            piv.forEach((q, i) =>
+              i ? g.lineTo(q.x, Y(q.px)) : g.moveTo(q.x, Y(q.px)),
+            );
+            g.stroke();
+            piv.forEach((q) => {
+              g.fillStyle = q.up ? "#089981" : "#000";
+              g.beginPath();
+              g.arc(q.x, Y(q.px), 4, 0, 7);
+              g.fill();
+            });
+            g.lineWidth = 1;
+          }
           /* swing zigzag over the days' POCs; dashed = open */
           const zs = swings(zp),
             /* a leg ending past the swing before it of the same
@@ -3439,7 +3511,7 @@
           g.lineJoin = "round";
           g.lineCap = "round";
           zs.forEach(({ q }, i) => {
-            if (!i || udZz) return;
+            if (!i || !showIZ) return;
             g.strokeStyle = legCol(
               zs[i - 1].q,
               q,
@@ -3451,7 +3523,7 @@
             g.stroke();
           });
           /* nested zigzags (see nests), thinner per level */
-          (udZz ? [] : nests(zp, 4).slice(1)).forEach((z0, k) => {
+          (showIZ ? nests(zp, 4).slice(1) : []).forEach((z0, k) => {
             g.lineWidth = 2 * 0.7 ** k;
             z0.forEach(({ q }, i) => {
               if (!i) return;
@@ -3489,7 +3561,7 @@
             g.beginPath();
             g.moveTo(a.x, a.y);
             g.lineTo(z.x, z.y);
-            if (!udZz) g.stroke();
+            if (showIZ) g.stroke();
             g.setLineDash([]);
             zo = z;
           }
@@ -6470,6 +6542,8 @@
           showVA,
           showUD,
           udZz,
+          showIZ,
+          showBZ,
           showYB,
           showSO,
           showDO,
@@ -6547,6 +6621,8 @@
           setShowVA(st.showVA);
         if (typeof st.showUD === "boolean") setShowUD(st.showUD);
         if (typeof st.udZz === "boolean") setUdZz(st.udZz);
+        if (typeof st.showIZ === "boolean") setShowIZ(st.showIZ);
+        if (typeof st.showBZ === "boolean") setShowBZ(st.showBZ);
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
         if (typeof st.showDO === "boolean") setShowDO(st.showDO);
@@ -6775,6 +6851,8 @@
       $("vaTog").onclick = () => setShowVA(!showVA);
       $("udTog").onclick = () => setShowUD(!showUD);
       $("zzTog").onclick = () => setUdZz(!udZz);
+      $("izTog").onclick = () => setShowIZ(!showIZ);
+      $("bzTog").onclick = () => setShowBZ(!showBZ);
       $("ybTog").onclick = () => setShowYB(!showYB);
       $("soTog").onclick = () => setShowSO(!showSO);
       $("doTog").onclick = () => setShowDO(!showDO);
