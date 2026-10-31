@@ -420,6 +420,13 @@
                 YB
               </button>
               <button
+                id="soTog"
+                class=""
+                title="SPoc candles over the volume profiles"
+              >
+                SO
+              </button>
+              <button
                 id="pocTog"
                 class=""
                 title="POC bands and tags on / off"
@@ -960,6 +967,13 @@
       /* YB button: barycentre of each day's yellow bricks
          (21:00 UTC on), green above its latest ipoc, black
          below */
+      /* SO button: SPoc candles over the profiles */
+      let showSO = false;
+      function setShowSO(v) {
+        showSO = !!v;
+        $("soTog").className = showSO ? "a" : "";
+        schedule();
+      }
       let showYB = true;
       function setShowYB(v) {
         showYB = !!v;
@@ -4178,167 +4192,205 @@
           let pcShow = 0,
             pcSl = 0,
             spShow = 0;
-          if (pcW) {
-            const pa = pL,
-              pv = (dS) => {
+          const pv = (dS) => {
+              const P = dayProf(dS);
+              if (P.poc == null || !P.full) return null;
+              return (P.poc + 0.5) * P.step;
+            },
+            days = [];
+          for (
+            let d = dayOf(k15.length ? k15[0].t : dayStart);
+            d <= dayStart;
+            d = nextDay(d)
+          )
+            days.push(d);
+          /* POC candles: day POCs, or sub POCs (sub) */
+          /* te: end of the latest brick in a POC's row (the
+             time a drawing on its candle refers to) */
+          const pocEnd = (dS, p) => {
+            const P = dayProf(dS),
+              l = P.rows.get(Math.floor(p / P.step));
+            return l && l.length
+              ? dS + (Math.max(...l) + 1) * TPO_MS - 1
+              : nextDay(dS) - 1;
+          };
+          const pocCds = (sub) => {
+            const seq = [];
+            if (sub)
+              days.forEach((dS) => {
                 const P = dayProf(dS);
-                if (P.poc == null || !P.full) return null;
-                return (P.poc + 0.5) * P.step;
-              },
-              days = [];
-            for (
-              let d = dayOf(k15.length ? k15[0].t : dayStart);
-              d <= dayStart;
-              d = nextDay(d)
-            )
-              days.push(d);
-            /* POC candles: day POCs, or sub POCs (sub) */
-            /* te: end of the latest brick in a POC's row (the
-               time a drawing on its candle refers to) */
-            const pocEnd = (dS, p) => {
-              const P = dayProf(dS),
-                l = P.rows.get(Math.floor(p / P.step));
-              return l && l.length
-                ? dS + (Math.max(...l) + 1) * TPO_MS - 1
-                : nextDay(dS) - 1;
-            };
-            const pocCds = (sub) => {
-              const seq = [];
-              if (sub)
-                days.forEach((dS) => {
-                  const P = dayProf(dS);
-                  if (P.poc == null || !P.full) return;
-                  const vf = volAmt > 0 ? volAmt : P.step * 10;
-                  subPocs(dS, P.ps, vf, P.step)
-                    .map((S) => {
-                      const r = P.rows.get(Math.floor(S.px / P.step));
-                      return {
-                        dS,
-                        p: S.px,
-                        f: r ? Math.min(...r) : 99,
-                      };
-                    })
-                    .sort((a, b) => a.f - b.f)
-                    .forEach((o) => seq.push(o));
-                });
-              const info = (
-                  sub
-                    ? seq.map((o, k) => ({
-                        ...o,
-                        k,
-                        up: k ? o.p >= seq[k - 1].p : null,
-                      }))
-                    : days.map((dS) => {
-                        const p = pv(dS),
-                          q = pv(prevDay(dS)),
-                          up = p == null || q == null ? null : p >= q;
-                        return { dS, p, up };
-                      })
-                ).filter((o) => o.up != null),
-                cds = [];
-              [true, false].forEach((up) => {
-                const s = info.filter((o) => o.up === up);
-                for (let i = 1; i < s.length; i++) {
-                  const a = s[i - 1],
-                    b = s[i];
-                  if (up ? b.p <= a.p : b.p >= a.p) continue;
-                  /* th / tl: when the high / low traded (a POC:
-                     its day's end) */
-                  const eod = (o) => nextDay(o.dS) - 1;
-                  let h = Math.max(a.p, b.p),
-                    l = Math.min(a.p, b.p),
-                    th = a.p >= b.p ? eod(a) : eod(b),
-                    tl = a.p <= b.p ? eod(a) : eod(b);
-                  if (sub) {
-                    /* sub POCs: high / low from the opening POC's
-                       first brick to the closing POC's, 15m */
-                    const ta = a.dS + a.f * TPO_MS,
-                      tb = b.dS + (b.f + 1) * TPO_MS;
-                    let j = 0,
-                      m = k15.length;
-                    while (j < m) {
-                      const md = (j + m) >> 1;
-                      if (k15[md].t < ta) j = md + 1;
-                      else m = md;
-                    }
-                    for (; j < k15.length && k15[j].t < tb; j++) {
-                      const c = k15[j];
-                      if (!okC(c)) continue;
-                      if (c.h > h) [h, th] = [c.h, c.t];
-                      if (c.l < l) [l, tl] = [c.l, c.t];
-                    }
-                  } else
-                    for (let d = a.dS; d <= b.dS; d = nextDay(d)) {
-                      const r = dayR.get(d);
-                      if (r) {
-                        if (r.h > h) [h, th] = [r.h, d];
-                        if (r.l < l) [l, tl] = [r.l, d];
-                      }
-                    }
-                  cds.push({
-                    t: b.dS,
-                    k: b.k,
-                    o: a.p,
-                    c: b.p,
-                    h,
-                    l,
-                    up,
-                    te: pocEnd(b.dS, b.p),
-                    /* times of open / close (their days' end),
-                       high, low: what a drawing on them uses */
-                    oe: eod(a),
-                    ce: eod(b),
-                    th,
-                    tl,
-                  });
-                }
+                if (P.poc == null || !P.full) return;
+                const vf = volAmt > 0 ? volAmt : P.step * 10;
+                subPocs(dS, P.ps, vf, P.step)
+                  .map((S) => {
+                    const r = P.rows.get(Math.floor(S.px / P.step));
+                    return {
+                      dS,
+                      p: S.px,
+                      f: r ? Math.min(...r) : 99,
+                    };
+                  })
+                  .sort((a, b) => a.f - b.f)
+                  .forEach((o) => seq.push(o));
               });
-              cds.sort((m, n) => m.t - n.t || m.k - n.k || 0);
-              /* SPoc: today's candle so far (hollow) from the
-                 sub POC before today's latest one to it, when
-                 the rule above has not closed one today */
-              const b = seq[seq.length - 1],
-                a = seq[seq.length - 2],
-                last = cds[cds.length - 1];
-              if (
-                sub &&
-                a &&
-                b.dS === dayOf(Date.now()) &&
-                !(
-                  last &&
-                  last.t === b.dS &&
-                  last.k === seq.length - 1
-                )
-              ) {
+            const info = (
+                sub
+                  ? seq.map((o, k) => ({
+                      ...o,
+                      k,
+                      up: k ? o.p >= seq[k - 1].p : null,
+                    }))
+                  : days.map((dS) => {
+                      const p = pv(dS),
+                        q = pv(prevDay(dS)),
+                        up = p == null || q == null ? null : p >= q;
+                      return { dS, p, up };
+                    })
+              ).filter((o) => o.up != null),
+              cds = [];
+            [true, false].forEach((up) => {
+              const s = info.filter((o) => o.up === up);
+              for (let i = 1; i < s.length; i++) {
+                const a = s[i - 1],
+                  b = s[i];
+                if (up ? b.p <= a.p : b.p >= a.p) continue;
+                /* th / tl: when the high / low traded (a POC:
+                   its day's end) */
                 const eod = (o) => nextDay(o.dS) - 1;
                 let h = Math.max(a.p, b.p),
                   l = Math.min(a.p, b.p),
                   th = a.p >= b.p ? eod(a) : eod(b),
                   tl = a.p <= b.p ? eod(a) : eod(b);
-                const ta = a.dS + a.f * TPO_MS;
-                k15.forEach((c) => {
-                  if (c.t < ta || !okC(c)) return;
-                  if (c.h > h) [h, th] = [c.h, c.t];
-                  if (c.l < l) [l, tl] = [c.l, c.t];
-                });
+                if (sub) {
+                  /* sub POCs: high / low from the opening POC's
+                     first brick to the closing POC's, 15m */
+                  const ta = a.dS + a.f * TPO_MS,
+                    tb = b.dS + (b.f + 1) * TPO_MS;
+                  let j = 0,
+                    m = k15.length;
+                  while (j < m) {
+                    const md = (j + m) >> 1;
+                    if (k15[md].t < ta) j = md + 1;
+                    else m = md;
+                  }
+                  for (; j < k15.length && k15[j].t < tb; j++) {
+                    const c = k15[j];
+                    if (!okC(c)) continue;
+                    if (c.h > h) [h, th] = [c.h, c.t];
+                    if (c.l < l) [l, tl] = [c.l, c.t];
+                  }
+                } else
+                  for (let d = a.dS; d <= b.dS; d = nextDay(d)) {
+                    const r = dayR.get(d);
+                    if (r) {
+                      if (r.h > h) [h, th] = [r.h, d];
+                      if (r.l < l) [l, tl] = [r.l, d];
+                    }
+                  }
                 cds.push({
                   t: b.dS,
-                  k: seq.length - 1,
+                  k: b.k,
                   o: a.p,
                   c: b.p,
                   h,
                   l,
-                  up: b.p >= a.p,
-                  live: true,
+                  up,
                   te: pocEnd(b.dS, b.p),
+                  /* times of open / close (their days' end),
+                     high, low: what a drawing on them uses */
                   oe: eod(a),
                   ce: eod(b),
                   th,
                   tl,
                 });
               }
-              return cds;
-            };
+            });
+            cds.sort((m, n) => m.t - n.t || m.k - n.k || 0);
+            /* SPoc: today's candle so far (hollow) from the
+               sub POC before today's latest one to it, when
+               the rule above has not closed one today */
+            const b = seq[seq.length - 1],
+              a = seq[seq.length - 2],
+              last = cds[cds.length - 1];
+            if (
+              sub &&
+              a &&
+              b.dS === dayOf(Date.now()) &&
+              !(
+                last &&
+                last.t === b.dS &&
+                last.k === seq.length - 1
+              )
+            ) {
+              const eod = (o) => nextDay(o.dS) - 1;
+              let h = Math.max(a.p, b.p),
+                l = Math.min(a.p, b.p),
+                th = a.p >= b.p ? eod(a) : eod(b),
+                tl = a.p <= b.p ? eod(a) : eod(b);
+              const ta = a.dS + a.f * TPO_MS;
+              k15.forEach((c) => {
+                if (c.t < ta || !okC(c)) return;
+                if (c.h > h) [h, th] = [c.h, c.t];
+                if (c.l < l) [l, tl] = [c.l, c.t];
+              });
+              cds.push({
+                t: b.dS,
+                k: seq.length - 1,
+                o: a.p,
+                c: b.p,
+                h,
+                l,
+                up: b.p >= a.p,
+                live: true,
+                te: pocEnd(b.dS, b.p),
+                oe: eod(a),
+                ce: eod(b),
+                th,
+                tl,
+              });
+            }
+            return cds;
+          };
+          /* SO button: SPoc candles over the profiles, from
+             the open ipoc's column to the close's, see-through */
+          if (showSO && profs.length) {
+            const xOf = new Map(profs.map((q) => [q.dS, q.cx0])),
+              xs = (dS) =>
+                xOf.has(dS)
+                  ? xOf.get(dS)
+                  : dS < profs[0].dS
+                    ? -1e4
+                    : tR + 1e4;
+            g.save();
+            g.beginPath();
+            g.rect(0, top, tR, bot - top);
+            g.clip();
+            g.setLineDash([]);
+            g.lineWidth = 1;
+            pocCds(true).forEach((c) => {
+              const x0 = xs(dayOf(c.oe)),
+                x1 = xs(dayOf(c.ce)) + colW;
+              if (x1 < 0 || x0 > tR) return;
+              const rgb = c.up ? "8,153,129" : "0,0,0",
+                y0 = Y(Math.max(c.o, c.c)),
+                h = Math.max(1, Y(Math.min(c.o, c.c)) - y0),
+                xm = (x0 + x1) / 2;
+              g.strokeStyle = `rgba(${rgb},.6)`;
+              g.beginPath();
+              g.moveTo(xm, Y(c.h));
+              g.lineTo(xm, Y(c.l));
+              g.stroke();
+              /* today's candle so far: hollow, as in its window */
+              if (!c.live) {
+                g.fillStyle = `rgba(${rgb},.22)`;
+                g.fillRect(x0, y0, x1 - x0, h);
+              }
+              g.strokeRect(x0, y0, x1 - x0, h);
+            });
+            g.restore();
+          }
+          if (pcW) {
+            const pa = pL;
             /* pf: the panel shows the P&F (not when the POC
                candles window is full screen) */
             const pf = pcPf && full !== "sp";
@@ -6577,6 +6629,7 @@
           showUD,
           udZz,
           showYB,
+          showSO,
           showPOC,
           stCol,
           pcPf,
@@ -6659,6 +6712,7 @@
         if (typeof st.showUD === "boolean") setShowUD(st.showUD);
         if (typeof st.udZz === "boolean") setUdZz(st.udZz);
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
+        if (typeof st.showSO === "boolean") setShowSO(st.showSO);
         /* O / L: defaults changed in version 6 */
         const cur6 = st.dv >= 6;
         if (cur6 && typeof st.showOrders === "boolean")
@@ -6880,6 +6934,7 @@
       $("udTog").onclick = () => setShowUD(!showUD);
       $("zzTog").onclick = () => setUdZz(!udZz);
       $("ybTog").onclick = () => setShowYB(!showYB);
+      $("soTog").onclick = () => setShowSO(!showSO);
       $("pcTog").onclick = () => setPocC(!pocC);
       $("spTog").onclick = () => setPcSub(!pcSub);
       $("pfTog").onclick = () => setPcPf(!pcPf);
