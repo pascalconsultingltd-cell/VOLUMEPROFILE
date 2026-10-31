@@ -427,6 +427,13 @@
                 SO
               </button>
               <button
+                id="lcTog"
+                class=""
+                title="Day candles: latest ipoc to latest ipoc"
+              >
+                LC
+              </button>
+              <button
                 id="pocTog"
                 class=""
                 title="POC bands and tags on / off"
@@ -967,6 +974,13 @@
       /* YB button: barycentre of each day's yellow bricks
          (21:00 UTC on), green above its latest ipoc, black
          below */
+      /* LC button: day candles from latest ipoc to latest */
+      let showLC = false;
+      function setShowLC(v) {
+        showLC = !!v;
+        $("lcTog").className = showLC ? "a" : "";
+        schedule();
+      }
       /* SO button: SPoc candles over the profiles */
       let showSO = false;
       function setShowSO(v) {
@@ -3315,6 +3329,33 @@
                 g.fillText(tx, cx0, y - 9);
               },
             );
+            /* LC button: a day's candle, open = yesterday's latest
+               ipoc, close = its own, wick = its range; today's is
+               hollow until the day ends */
+            if (showLC && P.ps.length) {
+              const c = ipocs(P).pop(),
+                o = ipocs(dayProf(prevDay(P.dS))).pop();
+              if (c != null && o != null) {
+                const rgb = c >= o ? "8,153,129" : "0,0,0",
+                  y0 = Y(Math.max(o, c)),
+                  h = Math.max(1, Y(Math.min(o, c)) - y0),
+                  xm = cx0 + colW / 2;
+                g.save();
+                g.setLineDash([]);
+                g.lineWidth = 1;
+                g.strokeStyle = `rgba(${rgb},.6)`;
+                g.beginPath();
+                g.moveTo(xm, Y(Math.max(...P.ps.map((q) => q.h))));
+                g.lineTo(xm, Y(Math.min(...P.ps.map((q) => q.l))));
+                g.stroke();
+                if (P.full) {
+                  g.fillStyle = `rgba(${rgb},.22)`;
+                  g.fillRect(cx0, y0, colW, h);
+                }
+                g.strokeRect(cx0, y0, colW, h);
+                g.restore();
+              }
+            }
             if (showYB) {
               const last = ipocs(P).pop();
               let sum = 0,
@@ -6630,6 +6671,7 @@
           udZz,
           showYB,
           showSO,
+          showLC,
           showPOC,
           stCol,
           pcPf,
@@ -6713,6 +6755,7 @@
         if (typeof st.udZz === "boolean") setUdZz(st.udZz);
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
+        if (typeof st.showLC === "boolean") setShowLC(st.showLC);
         /* O / L: defaults changed in version 6 */
         const cur6 = st.dv >= 6;
         if (cur6 && typeof st.showOrders === "boolean")
@@ -6935,6 +6978,7 @@
       $("zzTog").onclick = () => setUdZz(!udZz);
       $("ybTog").onclick = () => setShowYB(!showYB);
       $("soTog").onclick = () => setShowSO(!showSO);
+      $("lcTog").onclick = () => setShowLC(!showLC);
       $("pcTog").onclick = () => setPocC(!pocC);
       $("spTog").onclick = () => setPcSub(!pcSub);
       $("pfTog").onclick = () => setPcPf(!pcPf);
