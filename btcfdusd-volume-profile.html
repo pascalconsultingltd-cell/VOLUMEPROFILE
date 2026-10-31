@@ -434,6 +434,13 @@
                 LC
               </button>
               <button
+                id="agTog"
+                class=""
+                title="P1 to P3 by average brick age (off: by birth)"
+              >
+                AG
+              </button>
+              <button
                 id="pocTog"
                 class=""
                 title="POC bands and tags on / off"
@@ -974,6 +981,25 @@
       /* YB button: barycentre of each day's yellow bricks
          (21:00 UTC on), green above its latest ipoc, black
          below */
+      /* AG button: P1 = earliest ipoc, P3 = latest, by the
+         average period of the bricks in its row; off: P1 to P3
+         in birth order, latest = the latest first brick */
+      let ageOrd = false;
+      const rowAge = (w) =>
+        w.reduce((a, b) => a + b, 0) / w.length;
+      const byAge = (P, sp) => {
+        if (!ageOrd) return sp;
+        const k = (S) => {
+          const w = P.rows.get(Math.floor(S.px / P.step));
+          return w && w.length ? rowAge(w) : 99;
+        };
+        return [...sp].sort((a, b) => k(a) - k(b));
+      };
+      function setAgeOrd(v) {
+        ageOrd = !!v;
+        $("agTog").className = ageOrd ? "a" : "";
+        schedule();
+      }
       /* LC button: day candles from latest ipoc to latest */
       let showLC = false;
       function setShowLC(v) {
@@ -3167,7 +3193,10 @@
                   )
                     .map((S) => {
                       const w = q.rows.get(Math.floor(S.px / q.step));
-                      return [w ? Math.min(...w) : 99, S.px];
+                      return [
+                        !w ? 99 : ageOrd ? rowAge(w) : Math.min(...w),
+                        S.px,
+                      ];
                     })
                     .sort((x, y) => x[0] - y[0])
                     .map((x) => x[1])
@@ -3196,7 +3225,7 @@
               );
             }
             const vf = volAmt > 0 ? volAmt : P.step * 10;
-            const sp = subPocs(P.dS, P.ps, vf, P.step),
+            const sp = byAge(P, subPocs(P.dS, P.ps, vf, P.step)),
               /* St, no repaint: a closed period's bricks keep
                  the colours they had at its close (stFor); the
                  forming period shows its time colour */
@@ -6672,6 +6701,7 @@
           showYB,
           showSO,
           showLC,
+          ageOrd,
           showPOC,
           stCol,
           pcPf,
@@ -6756,6 +6786,7 @@
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
         if (typeof st.showLC === "boolean") setShowLC(st.showLC);
+        if (typeof st.ageOrd === "boolean") setAgeOrd(st.ageOrd);
         /* O / L: defaults changed in version 6 */
         const cur6 = st.dv >= 6;
         if (cur6 && typeof st.showOrders === "boolean")
@@ -6979,6 +7010,7 @@
       $("ybTog").onclick = () => setShowYB(!showYB);
       $("soTog").onclick = () => setShowSO(!showSO);
       $("lcTog").onclick = () => setShowLC(!showLC);
+      $("agTog").onclick = () => setAgeOrd(!ageOrd);
       $("pcTog").onclick = () => setPocC(!pocC);
       $("spTog").onclick = () => setPcSub(!pcSub);
       $("pfTog").onclick = () => setPcPf(!pcPf);
