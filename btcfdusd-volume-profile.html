@@ -5053,46 +5053,63 @@
             g.lineWidth = 1;
           }
           /*
-           * YB lines: from the midnight that closed each day, to
-           * the right, in its own colour: the latest barycentre,
-           * the earliest of its run of one colour and the latest
-           * of the other colour before that run.
+           * YB lines, for every run of one colour (a BZ leg), each
+           * in its own colour, from the midnight that made it known
+           * to the midnight the next run starts: the latest
+           * barycentre of the run so far, the earliest of the run,
+           * and the latest of the other colour before it. The
+           * current run's lines run to the right, price tagged.
            */
           if (cfg.main && showYB && geo.length && k15.length) {
-            const run = [];
-            let other = null;
-            for (let d = now - DAY; d >= dayOf(k15[0].t); d -= DAY) {
-              if (!volOfDay(d)) break;
-              const o = look(d);
-              if (!o || !o.by) continue;
-              if (run.length && o.by !== run[0].by) {
-                other = { d, b: o.b, by: o.by };
-                break;
-              }
-              run.push({ d, b: o.b, by: o.by });
+            const days = [];
+            for (let d = dayOf(k15[0].t); d < now; d += DAY) {
+              const o = volOfDay(d) ? look(d) : null;
+              if (o && o.by) days.push({ d, b: o.b, by: o.by });
             }
-            const lines = run.length
-              ? [run[0], run[run.length - 1], other]
-              : [];
+            const xAt = (t) => {
+              if (t <= geo[0].c.t) return x0;
+              const o = geo.find((q) => q.c.t >= t);
+              return o ? o.x : px0;
+            };
+            /* i..j = a run; to = the next run's first day */
+            const segs = [];
+            for (let i = 0, j; i < days.length; i = j + 1) {
+              j = i;
+              while (
+                j + 1 < days.length &&
+                days[j + 1].by === days[i].by
+              )
+                j++;
+              const to = days[j + 1],
+                end = to ? to.d + DAY : Infinity,
+                from = days[i].d + DAY;
+              for (let k = i; k <= j; k++)
+                segs.push([
+                  days[k],
+                  days[k].d + DAY,
+                  k < j ? days[k + 1].d + DAY : end,
+                ]);
+              if (j > i) segs.push([days[i], from, end]);
+              if (i) segs.push([days[i - 1], from, end]);
+            }
             g.save();
             g.beginPath();
             g.rect(x0, top, px0 - x0, bot - top);
             g.clip();
             g.lineWidth = 1.5;
             g.setLineDash([]);
-            [...new Set(lines)].forEach((L) => {
-              if (!L) return;
+            segs.forEach(([L, t0, t1]) => {
+              const xa = xAt(t0),
+                xb = t1 === Infinity ? px0 : xAt(t1);
+              if (xb <= xa) return;
               const y = Y(L.b),
-                t = L.d + DAY,
-                o = geo.find((q) => q.c.t >= t),
-                xa = t <= geo[0].c.t ? x0 : o ? o.x : px0,
                 col = L.by > 0 ? "#089981" : "#000";
               g.strokeStyle = col;
               g.beginPath();
               g.moveTo(xa, y);
-              g.lineTo(px0, y);
+              g.lineTo(xb, y);
               g.stroke();
-              if (y >= top && y <= bot)
+              if (t1 === Infinity && y >= top && y <= bot)
                 ptag(y, L.b.toFixed(DP), col);
             });
             g.restore();
