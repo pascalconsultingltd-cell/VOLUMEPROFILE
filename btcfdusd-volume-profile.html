@@ -349,6 +349,7 @@
         ><i class="dot" id="dot"></i
         ><span id="st">connecting</span></span
       >
+      <span id="volTx" title="Today's vol"></span>
       <button id="ctlTog" title="Hide / show the toggles">▾</button>
       <span class="clr"
         >Clear
@@ -2905,6 +2906,8 @@
            * depend on zoom or pan.
            */
           if (!volFile) volN = volOfDay(dayOf(Date.now())) || volN;
+          if ($("volTx").textContent !== "vol " + volN)
+            $("volTx").textContent = "vol " + volN;
           /* the vol known on that day */
           const volFor = (dS) => volOfDay(dS) || volN;
 
