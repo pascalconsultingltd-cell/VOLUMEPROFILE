@@ -547,7 +547,7 @@
                     class="a"
                     title="Zigzag of the following channels' extremes"
                   >
-                    FZ
+                    ZFB
                   </button>
                   <span
                     id="boxN"
@@ -951,7 +951,7 @@
         $("fboxTog").className = followBox ? "a" : "";
         schedule();
       }
-      /* zigzag of those channels' extremes (FZ button) */
+      /* zigzag of those channels' extremes (ZFB button) */
       let showFZ = true;
       function setShowFZ(v) {
         showFZ = !!v;
@@ -5050,51 +5050,56 @@
             g.lineWidth = 1;
           }
           /*
-           * FZ: from every big candle on, whatever nBox shows, each
-           * channel's extreme is a pivot, where it was made; a leg
-           * takes its channel's colour: yellow down, blue up. Each
-           * big candle starts from its far side; two pivots of one
-           * kind in a row keep the further. Dashed = still open.
+           * ZFB: over all the loaded candles, whatever nBox shows,
+           * one following channel. Until the first big candle it is
+           * as tall as the day's vol. A big candle the same way only
+           * resizes it, so the leg goes on; one the other way, or a
+           * close out of it on the far side, turns it. Each channel's
+           * extreme is a pivot, where it was made; a leg takes its
+           * channel's colour: yellow down, blue up. Dashed = open.
            */
           if (cfg.main && showFZ && geo.length) {
             const piv = [],
-              where = new Map(geo.map((o) => [o.c, o])),
-              add = (low, p, c) => {
-                const z = piv[piv.length - 1];
-                if (!z || z.low !== low)
-                  return piv.push({ low, p, c });
-                if (low ? p < z.p : p > z.p) [z.p, z.c] = [p, c];
-              },
-              bigs = [];
-            for (let k = BIG_WIN - 1; k < arr.length; k++) {
-              const c = arr[k];
-              if (okC(c) && c.c !== c.o && isBig(arr, k))
-                bigs.push(k);
-            }
-            bigs.forEach((k, i) => {
-              const A = arr[k],
-                ht = A.h - A.l,
-                end =
-                  i < bigs.length - 1 ? bigs[i + 1] : arr.length - 1;
-              let dn = A.c < A.o,
-                ext = dn ? A.l : A.h,
-                at = A;
-              add(!dn, dn ? A.h : A.l, A);
-              for (let j = k + 1; j <= end; j++) {
-                const q = arr[j];
-                if (!okC(q)) continue;
-                if (dn ? q.l < ext : q.h > ext) {
+              where = new Map(geo.map((o) => [o.c, o]));
+            let dn = null,
+              ht = 0,
+              seen = false,
+              ext = 0,
+              at = null;
+            for (let k = 0; k < arr.length; k++) {
+              const q = arr[k];
+              if (!okC(q)) continue;
+              const big =
+                  k >= BIG_WIN - 1 && q.c !== q.o && isBig(arr, k),
+                way = q.c < q.o;
+              if (dn === null) {
+                dn = way;
+                ext = dn ? q.l : q.h;
+                at = q;
+                piv.push({ low: !dn, p: dn ? q.h : q.l, c: q });
+              }
+              if (big) {
+                seen = true;
+                ht = q.h - q.l;
+                if (way !== dn) {
+                  piv.push({ low: dn, p: ext, c: at });
+                  dn = way;
                   ext = dn ? q.l : q.h;
                   at = q;
                 }
-                if (!(dn ? q.c > ext + ht : q.c < ext - ht)) continue;
-                add(dn, ext, at);
+              } else if (!seen) ht = volFor(dayOf(q.t));
+              if (dn ? q.l < ext : q.h > ext) {
+                ext = dn ? q.l : q.h;
+                at = q;
+              }
+              if (!big && (dn ? q.c > ext + ht : q.c < ext - ht)) {
+                piv.push({ low: dn, p: ext, c: at });
                 dn = !dn;
                 ext = dn ? q.l : q.h;
                 at = q;
               }
-              add(dn, ext, at);
-            });
+            }
+            if (dn !== null) piv.push({ low: dn, p: ext, c: at });
             /* pivots off screen: just past the chart's edge */
             const xOf = (z) => {
               const o = where.get(z.c);
