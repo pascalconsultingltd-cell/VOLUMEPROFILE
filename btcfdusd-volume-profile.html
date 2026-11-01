@@ -3124,7 +3124,8 @@
              view (30 days loads 4x the 15m history, 2.5x the
              draw time): each day's POCs in order of their
              earliest brick, x = where their row ends (off
-             screen if not shown) */
+             screen if not shown), zx = where the day's widest
+             row ends, so IZ never runs back within a day */
           const lastD = tpoDays[tpoDays.length - 1],
             zd = [];
           const zn = cnt && k15.length ? 15 : 0;
@@ -3169,6 +3170,8 @@
             zc.forEach((z) =>
               zp.push({
                 x: cx0 + (z.n - 0.5) * Math.min(11, (colW - 2) / z.m),
+                zx:
+                  cx0 + (z.m - 0.5) * Math.min(11, (colW - 2) / z.m),
                 y: Y(z.p),
                 p: z.p,
                 f: z.f,
@@ -3648,8 +3651,8 @@
               i > 1 && zs[i - 2].q,
             );
             g.beginPath();
-            g.moveTo(zs[i - 1].q.x, zs[i - 1].q.y);
-            g.lineTo(q.x, q.y);
+            g.moveTo(zs[i - 1].q.zx, zs[i - 1].q.y);
+            g.lineTo(q.zx, q.y);
             g.stroke();
           });
           /* nested zigzags (see nests), thinner per level */
@@ -3663,8 +3666,8 @@
                 i > 1 && z0[i - 2].q,
               );
               g.beginPath();
-              g.moveTo(z0[i - 1].q.x, z0[i - 1].q.y);
-              g.lineTo(q.x, q.y);
+              g.moveTo(z0[i - 1].q.zx, z0[i - 1].q.y);
+              g.lineTo(q.zx, q.y);
               g.stroke();
             });
           });
@@ -3689,8 +3692,8 @@
               zs.length > 1 && zs[zs.length - 2].q,
             );
             g.beginPath();
-            g.moveTo(a.x, a.y);
-            g.lineTo(z.x, z.y);
+            g.moveTo(a.zx, a.y);
+            g.lineTo(z.zx, z.y);
             if (showIZ) g.stroke();
             g.setLineDash([]);
             zo = z;
