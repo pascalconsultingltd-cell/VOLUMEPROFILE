@@ -542,6 +542,13 @@
                   >
                     FB
                   </button>
+                  <button
+                    id="fzTog"
+                    class="a"
+                    title="Zigzag of the following channels' extremes"
+                  >
+                    FZ
+                  </button>
                   <span
                     id="boxN"
                     title="Latest 1, 2 or 3 big candles"
@@ -942,6 +949,13 @@
       function setFollowBox(v) {
         followBox = !!v;
         $("fboxTog").className = followBox ? "a" : "";
+        schedule();
+      }
+      /* zigzag of those channels' extremes (FZ button) */
+      let showFZ = true;
+      function setShowFZ(v) {
+        showFZ = !!v;
+        $("fzTog").className = showFZ ? "a" : "";
         schedule();
       }
       /* vol ladder from the day's high and low (HL button);
@@ -5036,6 +5050,83 @@
             g.lineWidth = 1;
           }
           /*
+           * FZ: from every big candle on, whatever nBox shows, each
+           * channel's extreme is a pivot, where it was made; a leg
+           * takes its channel's colour: yellow down, blue up. Each
+           * big candle starts from its far side; two pivots of one
+           * kind in a row keep the further. Dashed = still open.
+           */
+          if (cfg.main && showFZ && geo.length) {
+            const piv = [],
+              where = new Map(geo.map((o) => [o.c, o])),
+              add = (low, p, c) => {
+                const z = piv[piv.length - 1];
+                if (!z || z.low !== low)
+                  return piv.push({ low, p, c });
+                if (low ? p < z.p : p > z.p) [z.p, z.c] = [p, c];
+              },
+              bigs = [];
+            for (let k = BIG_WIN - 1; k < arr.length; k++) {
+              const c = arr[k];
+              if (okC(c) && c.c !== c.o && isBig(arr, k))
+                bigs.push(k);
+            }
+            bigs.forEach((k, i) => {
+              const A = arr[k],
+                ht = A.h - A.l,
+                end =
+                  i < bigs.length - 1 ? bigs[i + 1] : arr.length - 1;
+              let dn = A.c < A.o,
+                ext = dn ? A.l : A.h,
+                at = A;
+              add(!dn, dn ? A.h : A.l, A);
+              for (let j = k + 1; j <= end; j++) {
+                const q = arr[j];
+                if (!okC(q)) continue;
+                if (dn ? q.l < ext : q.h > ext) {
+                  ext = dn ? q.l : q.h;
+                  at = q;
+                }
+                if (!(dn ? q.c > ext + ht : q.c < ext - ht)) continue;
+                add(dn, ext, at);
+                dn = !dn;
+                ext = dn ? q.l : q.h;
+                at = q;
+              }
+              add(dn, ext, at);
+            });
+            /* pivots off screen: just past the chart's edge */
+            const xOf = (z) => {
+              const o = where.get(z.c);
+              return o
+                ? o.x + o.w / 2
+                : z.c.t < geo[0].c.t
+                  ? x0 - 40
+                  : px0 + 40;
+            };
+            g.save();
+            g.beginPath();
+            g.rect(x0, top, px0 - x0, bot - top);
+            g.clip();
+            g.lineWidth = 2;
+            piv.forEach((z, i) => {
+              if (!i) return;
+              const a = piv[i - 1],
+                xa = xOf(a),
+                xb = xOf(z);
+              if (xb < x0 || xa > px0 || xa === xb) return;
+              g.strokeStyle = z.low
+                ? "rgb(230,159,0)"
+                : "rgb(41,98,255)";
+              g.setLineDash(i === piv.length - 1 ? [6, 4] : []);
+              g.beginPath();
+              g.moveTo(xa, Y(a.p));
+              g.lineTo(xb, Y(z.p));
+              g.stroke();
+            });
+            g.restore();
+          }
+          /*
            * own orders (from orders.js): a segment at the
            * order price for as long as the order was alive,
            * as thick as its quantity; dot = filled,
@@ -6678,6 +6769,7 @@
           dv: DEFAULTS_VER,
           autoBox,
           followBox,
+          showFZ,
           nBox,
           hlLad,
           showGrid,
@@ -6741,6 +6833,7 @@
         if (cur && [1, 2, 3].includes(st.nBox)) setNBox(st.nBox);
         if (typeof st.followBox === "boolean")
           setFollowBox(st.followBox);
+        if (typeof st.showFZ === "boolean") setShowFZ(st.showFZ);
         /* 6h: default changed in version 4, HL / VA in 5 */
         const cur4 = st.dv >= 4,
           cur5 = st.dv >= 5;
@@ -7000,6 +7093,7 @@
       $("stTog").onclick = () => setStCol(!stCol);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
+      $("fzTog").onclick = () => setShowFZ(!showFZ);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
       $("grTog").onclick = () => setShowGr(!showGr);
