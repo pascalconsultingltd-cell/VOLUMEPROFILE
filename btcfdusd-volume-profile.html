@@ -4691,7 +4691,9 @@
               room = items.length - nFit,
               home = -Math.round(nFit * 0.15),
               pb = Math.max(1 - nFit, Math.min(pcBack + home, room));
-            if (olderEnd["15m"]) pcBack = pb - home;
+            /* kept only once the columns fill it: trades still
+               loading must not fix a position off screen */
+            if (olderEnd["15m"] && room > 0) pcBack = pb - home;
             /* ib whole candles back; the newest sits in slot
                nFit - 1 + pb */
             const ib = Math.floor(pb),
