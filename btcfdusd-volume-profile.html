@@ -1254,6 +1254,125 @@
         });
         return (pfHotC = { key, hot, dot, gTop, bBot });
       }
+      /*
+       * A day's vol, as vol() in imports.py / 2: the height of
+       * the last 5 clean slow regimes of the 20 finished days
+       * before it, from its 30m bars { h, l }; NaN when none.
+       * Past candles do not change, so it is kept per day.
+       */
+      function volFromBars(b) {
+        const ROW = 50,
+          sz = b.map((q) => q.h - q.l),
+          so = [...sz].sort((x, y) => x - y),
+          m = so.length >> 1,
+          med = so.length % 2 ? so[m] : (so[m - 1] + so[m]) / 2,
+          fast = sz.map((_, i) => {
+            const w = sz.slice(Math.max(0, i - 1), i + 2);
+            return (
+              w.reduce((x, y) => x + y, 0) / w.length > 2 * med
+            );
+          }),
+          hs = [];
+        const regime = (g) => {
+          const lo = Math.min(
+              ...g.map((q) => Math.floor(q.l / ROW)),
+            ),
+            hi = Math.max(
+              ...g.map((q) => Math.floor(q.h / ROW)),
+            ),
+            n = hi - lo + 1,
+            c = new Array(n).fill(0);
+          g.forEach((q) => {
+            const a = Math.floor(q.l / ROW) - lo,
+              z = Math.floor(q.h / ROW) - lo;
+            for (let r = a; r <= z; r++) c[r]++;
+          });
+          const sum = c.reduce((x, y) => x + y, 0);
+          if (sum < 80) return;
+          /* band: the fewest rows holding 80% of the squares */
+          const tot = [0];
+          c.forEach((v) => tot.push(tot[tot.length - 1] + v));
+          let rows = n + 1;
+          for (let i = 0; i < n; i++) {
+            const want = tot[i] + 0.8 * sum - 1e-9;
+            let j = 0;
+            while (j <= n && tot[j] < want) j++;
+            if (j <= n) rows = Math.min(rows, j - i);
+          }
+          /* fit: the squares where a normal curve puts them */
+          const sh = c.map((v) => v / sum),
+            mean = sh.reduce((x, v, r) => x + v * r, 0),
+            vr = sh.reduce(
+              (x, v, r) => x + v * (r - mean) ** 2,
+              0,
+            ),
+            nm = c.map((_, r) =>
+              Math.exp(-((r - mean) ** 2) / (2 * vr)),
+            ),
+            nt = nm.reduce((x, y) => x + y, 0),
+            fit = sh.reduce(
+              (x, v, r) => x + Math.min(v, nm[r] / nt),
+              0,
+            );
+          /* dip: the deepest valley, as a share of the peak */
+          const full = new Array(n + 2).fill(0);
+          c.forEach((v, r) => {
+            for (let k = 0; k < 3; k++) full[r + k] += v / 3;
+          });
+          const m3 = Math.max(n, 3),
+            st0 = (n + 2 - m3) >> 1,
+            sm = full.slice(st0, st0 + m3),
+            lf = [],
+            rt = [];
+          sm.forEach((v, i) => {
+            lf[i] = Math.max(v, i ? lf[i - 1] : v);
+          });
+          for (let i = m3 - 1; i >= 0; i--)
+            rt[i] = Math.max(sm[i], i < m3 - 1 ? rt[i + 1] : sm[i]);
+          const dip =
+            Math.max(
+              ...sm.map((v, i) => Math.min(lf[i], rt[i]) - v),
+            ) / Math.max(...sm);
+          if (fit >= 0.88 && dip <= 0.2) hs.push(rows * ROW);
+        };
+        let g = [];
+        b.forEach((q, i) => {
+          if (!fast[i]) g.push(q);
+          else {
+            if (g.length) regime(g);
+            g = [];
+          }
+        });
+        if (g.length) regime(g);
+        const l = hs.slice(-5);
+        return l.length
+          ? l.reduce((x, y) => x + y, 0) / l.length / 2
+          : NaN;
+      }
+      const volDays = new Map();
+      /* 0 until the 20 days before it are loaded, or if none */
+      function volOfDay(dS) {
+        if (volDays.has(dS)) return volDays.get(dS);
+        const a = dS - 20 * 86400000;
+        if (!k15.length || k15[0].t > a) return 0;
+        const per = new Map();
+        k15.forEach((c) => {
+          if (c.t < a || c.t >= dS) return;
+          const i = Math.floor((c.t - a) / 1800000),
+            q = per.get(i);
+          if (!q) per.set(i, { i, h: c.h, l: c.l });
+          else {
+            q.h = Math.max(q.h, c.h);
+            q.l = Math.min(q.l, c.l);
+          }
+        });
+        const v = volFromBars(
+          [...per.values()].sort((x, y) => x.i - y.i),
+        );
+        const r = Number.isFinite(v) ? Math.round(v) : 0;
+        volDays.set(dS, r);
+        return r;
+      }
       /* P&F box: a tenth of the vol step, else 25 */
       function pfStep() {
         const ref = k15.length ? k15[k15.length - 1].c : 0,
@@ -1664,9 +1783,10 @@
         document.head.appendChild(s);
       }
       /*
-       * vol.js, written when "v" is typed in Telegram:
-       * window.VOL = 255; the chart takes it as its vol step
-       * unless the box was typed in since the page opened.
+       * vol.js, written by watch_simp at 00:00 UTC and when "v"
+       * is typed in Telegram: window.VOL = 255, today's vol: the
+       * box and the P&F unless the box was typed in since the
+       * page opened. Past days use their own (volOfDay).
        * Checked every 30s; absent (office, phone) = default.
        */
       let volTyped = false,
@@ -2827,7 +2947,11 @@
            * is taken of the latest 15m close
            */
           const volRef = k15.length ? k15[k15.length - 1].c : 0,
-            volAmt = volPct ? (volRef * volN) / 100 : volN;
+            volAmt = volPct ? (volRef * volN) / 100 : volN,
+            /* the vol known on that day, unless one was typed
+               in the box (else the box) */
+            volFor = (dS) =>
+              (!volTyped && !volPct && volOfDay(dS)) || volAmt;
 
           /* dayR = high/low of every loaded day */
           const gap = 10,
@@ -2915,10 +3039,11 @@
              * range when no earlier day is loaded.
              */
             const rng = prevR(dS) || dh - dl,
+              vd = volFor(dS),
               step = stp
                 ? stp
-                : volAmt > 0
-                  ? Math.max(1, Math.ceil(volAmt / 10))
+                : vd > 0
+                  ? Math.max(1, Math.ceil(vd / 10))
                   : rng > 0
                     ? Math.max(1, nice(rng / 40))
                     : 1;
@@ -3057,14 +3182,14 @@
             const lk = k15[k15.length - 1],
               key = [
                 dS,
-                volAmt,
+                volFor(dS),
                 k15[0].t,
                 dS < dayOf(Date.now()) ? "" : lk.t + "|" + lk.v,
               ].join();
             let zc = zCache.get(key);
             if (!zc) {
               const Q = dayProf(dS),
-                vf = volAmt > 0 ? volAmt : Q.step * 10;
+                vf = volFor(dS) > 0 ? volFor(dS) : Q.step * 10;
               zc =
                 Q.poc == null
                   ? []
@@ -3109,7 +3234,10 @@
            * size, look colours up by price
            */
           const stFor = (dS, i) => {
-            const vC = volFile || (volAmt > 0 ? volAmt : 0),
+            const vC =
+                (!volPct && volOfDay(dS)) ||
+                volFile ||
+                (volAmt > 0 ? volAmt : 0),
               P = dayProf(
                 dS,
                 vC ? Math.max(1, Math.ceil(vC / 10)) : undefined,
@@ -3183,7 +3311,7 @@
                 ? subPocs(
                     q.dS,
                     q.ps,
-                    volAmt > 0 ? volAmt : q.step * 10,
+                    volFor(q.dS) > 0 ? volFor(q.dS) : q.step * 10,
                     q.step,
                   )
                     .map((S) => {
@@ -3219,7 +3347,7 @@
                 rowH,
               );
             }
-            const vf = volAmt > 0 ? volAmt : P.step * 10;
+            const vf = volFor(P.dS) > 0 ? volFor(P.dS) : P.step * 10;
             const sp = byAge(P, subPocs(P.dS, P.ps, vf, P.step)),
               /* St, no repaint: a closed period's bricks keep
                  the colours they had at its close (stFor); the
@@ -3462,7 +3590,7 @@
             const piv = [],
               now = dayOf(Date.now()),
               look = (dS) => {
-                const key = [dS, volAmt, ageOrd].join(),
+                const key = [dS, volFor(dS), ageOrd].join(),
                   old = dS < now && bzDays.get(key);
                 if (old) return old;
                 const Q = dayProf(dS);
@@ -3471,7 +3599,7 @@
                 const last = subPocs(
                     dS,
                     Q.ps,
-                    volAmt > 0 ? volAmt : Q.step * 10,
+                    volFor(dS) > 0 ? volFor(dS) : Q.step * 10,
                     Q.step,
                   )
                     .map((S) => {
@@ -3516,6 +3644,7 @@
                 (Math.round((dS - tpoDays[0]) / DAY) - ex + tf) *
                   (colW + gap);
             for (let d = dayOf(k15[0].t); d <= now; d += DAY) {
+              if (!volTyped && !volPct && !volOfDay(d)) continue;
               const o = look(d);
               if (!o) continue;
               const z = piv[piv.length - 1];
@@ -3697,9 +3826,10 @@
               need =
                 Math.min(
                   d0 - 3 * DAY,
-                  dayStart - (cnt + 2 + tb) * DAY,
+                  /* + the 20 days each day's vol needs */
+                  dayStart - (cnt + 22 + tb) * DAY,
                   /* the zigzag's 15 days; BZ: all of it */
-                  dayOf(Date.now()) - (showBZ ? 70 : 17) * DAY,
+                  dayOf(Date.now()) - (showBZ ? 70 : 37) * DAY,
                 ) -
                 7200000;
             if (need < k15[0].t) older("15m");
@@ -4368,7 +4498,7 @@
               days.forEach((dS) => {
                 const P = dayProf(dS);
                 if (P.poc == null || !P.full) return;
-                const vf = volAmt > 0 ? volAmt : P.step * 10;
+                const vf = volFor(dS) > 0 ? volFor(dS) : P.step * 10;
                 subPocs(dS, P.ps, vf, P.step)
                   .map((S) => {
                     const r = P.rows.get(Math.floor(S.px / P.step));
