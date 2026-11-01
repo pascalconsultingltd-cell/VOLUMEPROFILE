@@ -530,7 +530,7 @@
                 ><span class="box"
                   ><button
                     id="boxTog"
-                    class="a"
+                    class=""
                     title="Static boxes on the high-volume candles"
                   >
                     B
@@ -929,7 +929,7 @@
        * automatic box on the latest high-volume candle (B
        * button)
        */
-      let autoBox = true;
+      let autoBox = false;
       /* channels shown: the latest 1, 2 or 3 big candles */
       let nBox = 1;
       function setNBox(v) {
@@ -3560,10 +3560,8 @@
              its yellow bricks, then any day's high / low moves
              it, until a barycentre of the other colour. Over
              every day loaded, whatever the profiles show */
-          if (showBZ && k15.length) {
-            const piv = [],
-              now = dayOf(Date.now()),
-              look = (dS) => {
+          const now = dayOf(Date.now()),
+            look = (dS) => {
                 const key = [dS, volFor(dS), ageOrd].join(),
                   old = dS < now && bzDays.get(key);
                 if (old) return old;
@@ -3602,6 +3600,7 @@
                   }),
                 );
                 const o = {
+                  b: n ? sum / n : null,
                   by:
                     n && last != null ? (sum / n > last ? 1 : -1) : 0,
                   yh,
@@ -3611,7 +3610,9 @@
                 };
                 if (dS < now) bzDays.set(key, o);
                 return o;
-              },
+              };
+          if (showBZ && k15.length) {
+            const piv = [],
               /* where a day's column is, on screen or not */
               xOf = (dS) =>
                 6 +
@@ -5050,6 +5051,51 @@
               });
             });
             g.lineWidth = 1;
+          }
+          /*
+           * YB lines: from the midnight that closed each day, to
+           * the right, in its own colour: the latest barycentre,
+           * the earliest of its run of one colour and the latest
+           * of the other colour before that run.
+           */
+          if (cfg.main && showYB && geo.length && k15.length) {
+            const run = [];
+            let other = null;
+            for (let d = now - DAY; d >= dayOf(k15[0].t); d -= DAY) {
+              if (!volOfDay(d)) break;
+              const o = look(d);
+              if (!o || !o.by) continue;
+              if (run.length && o.by !== run[0].by) {
+                other = { d, b: o.b, by: o.by };
+                break;
+              }
+              run.push({ d, b: o.b, by: o.by });
+            }
+            const lines = run.length
+              ? [run[0], run[run.length - 1], other]
+              : [];
+            g.save();
+            g.beginPath();
+            g.rect(x0, top, px0 - x0, bot - top);
+            g.clip();
+            g.lineWidth = 1.5;
+            g.setLineDash([]);
+            [...new Set(lines)].forEach((L) => {
+              if (!L) return;
+              const y = Y(L.b),
+                t = L.d + DAY,
+                o = geo.find((q) => q.c.t >= t),
+                xa = t <= geo[0].c.t ? x0 : o ? o.x : px0,
+                col = L.by > 0 ? "#089981" : "#000";
+              g.strokeStyle = col;
+              g.beginPath();
+              g.moveTo(xa, y);
+              g.lineTo(px0, y);
+              g.stroke();
+              if (y >= top && y <= bot)
+                ptag(y, L.b.toFixed(DP), col);
+            });
+            g.restore();
           }
           /*
            * ZFB: over all the loaded candles, whatever nBox shows,
@@ -6751,7 +6797,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 13;
+      const DEFAULTS_VER = 14;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -6835,7 +6881,8 @@
         /* vol / B / O / L saved before version 2 of the
            defaults are ignored */
         const cur = st.dv >= 2;
-        if (cur && typeof st.autoBox === "boolean")
+        /* B, PocBd: defaults changed in version 14 */
+        if (st.dv >= 14 && typeof st.autoBox === "boolean")
           setAutoBox(st.autoBox);
         if (cur && [1, 2, 3].includes(st.nBox)) setNBox(st.nBox);
         if (typeof st.followBox === "boolean")
@@ -6848,7 +6895,8 @@
           setHlLad(st.hlLad);
         if (cur4 && typeof st.showGrid === "boolean")
           setShowGrid(st.showGrid);
-        if (typeof st.pocBand === "boolean") setPocBand(st.pocBand);
+        if (st.dv >= 14 && typeof st.pocBand === "boolean")
+          setPocBand(st.pocBand);
         /* POC: default changed in version 8 */
         /* P&F: default changed in version 9 */
         if (st.dv >= 9 && typeof st.pcPf === "boolean")
