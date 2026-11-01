@@ -3157,6 +3157,7 @@
                         return {
                           p: S.px,
                           f: row.length ? Math.min(...row) : 99,
+                          a: row.length ? rowAge(row) : 99,
                           n: Math.max(1, row.length),
                           m: Q.maxC,
                         };
@@ -3175,6 +3176,7 @@
                 y: Y(z.p),
                 p: z.p,
                 f: z.f,
+                a: z.a,
                 ds: dS,
               }),
             );
@@ -3219,13 +3221,15 @@
             }
             return m;
           };
-          /* each POC's previous one in time (the day before's
-             last for a day's first), for its colour */
-          const zPrev = new Map(
-            zp.map((q, i) => [
-              q.ds + "|" + q.p,
-              i ? zp[i - 1].p : null,
-            ]),
+          /* each POC's previous one (the day before's last for
+             a day's first), in the order AG sets, for its colour */
+          const zPrev = new Map(),
+            zOrd = [...zp].sort(
+              (a, b) =>
+                a.ds - b.ds || (ageOrd ? a.a - b.a : a.f - b.f),
+            );
+          zOrd.forEach((q, i) =>
+            zPrev.set(q.ds + "|" + q.p, i ? zOrd[i - 1].p : null),
           );
           /* Alt+R: prices centred on the previous day's last
              sub POC (the ladder's 0; else the latest POC), 6
