@@ -3122,8 +3122,8 @@
           /* zigzag points from the last 15 days, whatever the
              profiles show, so the swings do not depend on the
              view (30 days loads 4x the 15m history, 2.5x the
-             draw time): each day's POCs in order of their
-             earliest brick, x = where their row ends (off
+             draw time): each day's POCs in the order AG sets,
+             x = where their row ends (off
              screen if not shown), zx = where the day's widest
              row ends, so IZ never runs back within a day */
           const lastD = tpoDays[tpoDays.length - 1],
@@ -3141,6 +3141,7 @@
                 volFor(dS),
                 k15[0].t,
                 dS < dayOf(Date.now()) ? "" : lk.t + "|" + lk.v,
+                ageOrd,
               ].join();
             let zc = zCache.get(key);
             if (!zc) {
@@ -3156,13 +3157,16 @@
                           [];
                         return {
                           p: S.px,
-                          f: row.length ? Math.min(...row) : 99,
-                          a: row.length ? rowAge(row) : 99,
+                          o: !row.length
+                            ? 99
+                            : ageOrd
+                              ? rowAge(row)
+                              : Math.min(...row),
                           n: Math.max(1, row.length),
                           m: Q.maxC,
                         };
                       })
-                      .sort((a, b) => a.f - b.f);
+                      .sort((a, b) => a.o - b.o);
               if (zCache.size > 500) zCache.clear();
               zCache.set(key, zc);
             }
@@ -3175,8 +3179,6 @@
                   cx0 + (z.m - 0.5) * Math.min(11, (colW - 2) / z.m),
                 y: Y(z.p),
                 p: z.p,
-                f: z.f,
-                a: z.a,
                 ds: dS,
               }),
             );
@@ -3222,14 +3224,12 @@
             return m;
           };
           /* each POC's previous one (the day before's last for
-             a day's first), in the order AG sets, for its colour */
-          const zPrev = new Map(),
-            zOrd = [...zp].sort(
-              (a, b) =>
-                a.ds - b.ds || (ageOrd ? a.a - b.a : a.f - b.f),
-            );
-          zOrd.forEach((q, i) =>
-            zPrev.set(q.ds + "|" + q.p, i ? zOrd[i - 1].p : null),
+             a day's first), for its colour */
+          const zPrev = new Map(
+            zp.map((q, i) => [
+              q.ds + "|" + q.p,
+              i ? zp[i - 1].p : null,
+            ]),
           );
           /* Alt+R: prices centred on the previous day's last
              sub POC (the ladder's 0; else the latest POC), 6
@@ -4464,9 +4464,14 @@
                       dS,
                       p: S.px,
                       f: r ? Math.min(...r) : 99,
+                      o: !r
+                        ? 99
+                        : ageOrd
+                          ? rowAge(r)
+                          : Math.min(...r),
                     };
                   })
-                  .sort((a, b) => a.f - b.f)
+                  .sort((a, b) => a.o - b.o)
                   .forEach((o) => seq.push(o));
               });
             const info = (
