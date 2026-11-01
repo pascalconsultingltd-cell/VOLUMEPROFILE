@@ -549,6 +549,13 @@
                   >
                     ZFB
                   </button>
+                  <button
+                    id="vwTog"
+                    class="a"
+                    title="VWAP of the UTC day, on the main chart"
+                  >
+                    VWAP
+                  </button>
                   <span
                     id="boxN"
                     title="Latest 1, 2 or 3 big candles"
@@ -956,6 +963,13 @@
       function setShowFZ(v) {
         showFZ = !!v;
         $("fzTog").className = showFZ ? "a" : "";
+        schedule();
+      }
+      /* the UTC day's VWAP on the main chart (VWAP button) */
+      let showVW = true;
+      function setShowVW(v) {
+        showVW = !!v;
+        $("vwTog").className = showVW ? "a" : "";
         schedule();
       }
       /* vol ladder from the day's high and low (HL button);
@@ -5114,6 +5128,45 @@
             });
             g.restore();
           }
+          /* VWAP: from each UTC midnight, on (H + L + C) / 3 */
+          if (cfg.main && showVW && geo.length) {
+            const where = new Map(geo.map((o) => [o.c, o]));
+            let day = null,
+              pv = 0,
+              vs = 0,
+              on = false,
+              last = null;
+            g.save();
+            g.beginPath();
+            g.rect(x0, top, px0 - x0, bot - top);
+            g.clip();
+            g.strokeStyle = "#7b1fa2";
+            g.lineWidth = 1.5;
+            g.setLineDash([]);
+            g.beginPath();
+            arr.forEach((q) => {
+              if (!okC(q)) return;
+              if (dayOf(q.t) !== day) {
+                day = dayOf(q.t);
+                pv = vs = 0;
+                on = false;
+              }
+              pv += ((q.h + q.l + q.c) / 3) * q.v;
+              vs += q.v;
+              const o = where.get(q);
+              if (!o || !vs) return;
+              last = pv / vs;
+              const x = o.x + o.w / 2,
+                y = Y(last);
+              if (on) g.lineTo(x, y);
+              else g.moveTo(x, y);
+              on = true;
+            });
+            g.stroke();
+            g.restore();
+            if (last != null && Y(last) >= top && Y(last) <= bot)
+              ptag(Y(last), last.toFixed(DP), "#7b1fa2");
+          }
           /*
            * ZFB: over all the loaded candles, whatever nBox shows,
            * one following channel. Until the first big candle it is
@@ -6840,6 +6893,7 @@
           autoBox,
           followBox,
           showFZ,
+          showVW,
           nBox,
           hlLad,
           showGrid,
@@ -6905,6 +6959,7 @@
         if (typeof st.followBox === "boolean")
           setFollowBox(st.followBox);
         if (typeof st.showFZ === "boolean") setShowFZ(st.showFZ);
+        if (typeof st.showVW === "boolean") setShowVW(st.showVW);
         /* 6h: default changed in version 4, HL / VA in 5 */
         const cur4 = st.dv >= 4,
           cur5 = st.dv >= 5;
@@ -7166,6 +7221,7 @@
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("fzTog").onclick = () => setShowFZ(!showFZ);
+      $("vwTog").onclick = () => setShowVW(!showVW);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
       $("grTog").onclick = () => setShowGr(!showGr);
