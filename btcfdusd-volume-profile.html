@@ -129,15 +129,6 @@
       button:focus-visible {
         outline: 2px solid var(--va);
       }
-      #vol {
-        width: 44px;
-        background: #fff;
-        color: var(--tx);
-        border: 1px solid var(--line);
-        border-radius: 5px;
-        padding: 5px 7px;
-        font: inherit;
-      }
       .ctl span {
         display: inline-flex;
         gap: 4px;
@@ -376,17 +367,6 @@
         <!-- groups: chart, profile and levels, channels,
              orders, view; .box = buttons that go together -->
         <span class="grp" title="Profile and levels"
-          ><span class="ttl"
-            ><span class="lbl">Vol</span
-            ><span class="box"
-              ><input
-                id="vol"
-                value="255"
-                inputmode="decimal"
-                autocomplete="off"
-                placeholder="vol"
-                title="Step around yesterday's POC: 250 or 0.3%"
-            /></span></span
           ><span class="ttl"
             ><span class="lbl">Volume Profile</span
             ><span class="box"
@@ -1375,9 +1355,7 @@
       }
       /* P&F box: a tenth of the vol step, else 25 */
       function pfStep() {
-        const ref = k15.length ? k15[k15.length - 1].c : 0,
-          a = volPct ? (ref * volN) / 100 : volN;
-        return a > 0 ? Math.max(1, Math.ceil(a / 10)) : 25;
+        return volN > 0 ? Math.max(1, Math.ceil(volN / 10)) : 25;
       }
       /*
        * Alerts: on each window, the up / down triangles arm
@@ -1706,10 +1684,6 @@
         schedule();
       }
       /*
-       * vol step typed in the header: a price amount, or a
-       * percent of yesterday's POC when it ends with %
-       */
-      /*
        * Own orders. A Python job may keep a file orders.js
        * next to this page, of the form
        *   window.ORDERS = [ ...Binance order objects... ];
@@ -1785,43 +1759,29 @@
       /*
        * vol.js, written by watch_simp at 00:00 UTC and when "v"
        * is typed in Telegram: window.VOL = 255, today's vol: the
-       * box and the P&F unless the box was typed in since the
-       * page opened. Past days use their own (volOfDay).
-       * Checked every 30s; absent (office, phone) = default.
+       * P&F and the steps. Past days use their own (volOfDay).
+       * Checked every 30s; absent (office, phone) = today's
+       * volOfDay, once its 20 days are loaded, else 255.
        */
-      let volTyped = false,
-        /* vol.js value, for the PocStpCol colours (frozen:
-           typing in the vol box does not change them) */
-        volFile = null;
+      let volN = 255,
+        volFile = false;
       function loadVol() {
         const s = document.createElement("script");
         window.VOL = undefined;
         s.onload = s.onerror = () => {
           s.remove();
           const v = window.VOL;
-          if (Number.isFinite(v) && v > 0) volFile = v;
-          if (Number.isFinite(v) && v > 0 && !volTyped) {
-            const sv = String(Math.round(v));
-            if ($("vol").value !== sv) {
-              $("vol").value = sv;
-              setVol(sv);
+          if (Number.isFinite(v) && v > 0) {
+            volFile = true;
+            if (volN !== Math.round(v)) {
+              volN = Math.round(v);
+              schedule();
             }
           }
           setTimeout(loadVol, 30000);
         };
         s.src = "vol.js?t=" + Date.now();
         document.head.appendChild(s);
-      }
-      let volN = 0,
-        volPct = false;
-      function setVol(s) {
-        s = String(s || "")
-          .trim()
-          .replace(",", ".");
-        const n = parseFloat(s);
-        volN = Number.isFinite(n) && n > 0 ? n : 0;
-        volPct = s.endsWith("%");
-        schedule();
       }
 
       const $ = (id) => document.getElementById(id);
@@ -2943,15 +2903,10 @@
            * dayProf); without one, from the average range of
            * the two days before it. Either way it does not
            * depend on zoom or pan.
-           * volAmt = the vol step as a price amount; a percent
-           * is taken of the latest 15m close
            */
-          const volRef = k15.length ? k15[k15.length - 1].c : 0,
-            volAmt = volPct ? (volRef * volN) / 100 : volN,
-            /* the vol known on that day, unless one was typed
-               in the box (else the box) */
-            volFor = (dS) =>
-              (!volTyped && !volPct && volOfDay(dS)) || volAmt;
+          if (!volFile) volN = volOfDay(dayOf(Date.now())) || volN;
+          /* the vol known on that day */
+          const volFor = (dS) => volOfDay(dS) || volN;
 
           /* dayR = high/low of every loaded day */
           const gap = 10,
@@ -3228,16 +3183,12 @@
            * once that period has closed
            */
           /*
-           * frozen on the vol.js value (else the vol box) and on
-           * the day's own range so far, so neither the vol box
-           * nor the days shown change them; m.step = their row
-           * size, look colours up by price
+           * frozen on the day's vol and on its own range so far,
+           * so the days shown do not change them; m.step = their
+           * row size, look colours up by price
            */
           const stFor = (dS, i) => {
-            const vC =
-                (!volPct && volOfDay(dS)) ||
-                volFile ||
-                (volAmt > 0 ? volAmt : 0),
+            const vC = volFor(dS),
               P = dayProf(
                 dS,
                 vC ? Math.max(1, Math.ceil(vC / 10)) : undefined,
@@ -3276,16 +3227,16 @@
           /* Alt+R: prices centred on the previous day's last
              sub POC (the ladder's 0; else the latest POC), 6
              vol steps above and below, once the POCs are in */
-          if (pocHome && zp.length && volAmt > 0) {
+          if (pocHome && zp.length && volN > 0) {
             const yd = prevDay(dayOf(Date.now())),
               q = zp.filter((z) => z.ds === yd).pop(),
               p = (q || zp[zp.length - 1]).p;
-            lock = { hi: p + 6 * volAmt, lo: p - 6 * volAmt };
+            lock = { hi: p + 6 * volN, lo: p - 6 * volN };
             ysc = 1;
             ypan = 0;
             pocHome = false;
             sched();
-          } else if (!cnt || !(volAmt > 0)) pocHome = false;
+          } else if (!cnt || !(volN > 0)) pocHome = false;
           g.save();
           g.beginPath();
           g.rect(0, top, tR, bot - top);
@@ -3644,7 +3595,7 @@
                 (Math.round((dS - tpoDays[0]) / DAY) - ex + tf) *
                   (colW + gap);
             for (let d = dayOf(k15[0].t); d <= now; d += DAY) {
-              if (!volTyped && !volPct && !volOfDay(d)) continue;
+              if (!volOfDay(d)) continue;
               const o = look(d);
               if (!o) continue;
               const z = piv[piv.length - 1];
@@ -3948,7 +3899,7 @@
               val = R.a * R.step,
               fx = !hlLad && zFix != null,
               z0 = fx ? zFix : pc,
-              v = volPct ? (z0 * volN) / 100 : volN,
+              v = volN,
               /* kS thins the ladder below 16px spacing */
               kS = Math.max(
                 1,
@@ -6300,7 +6251,7 @@
         });
         addEventListener("keydown", (e) => {
           /*
-           * typing in the vol box must not trigger chart
+           * typing in a box must not trigger chart
            * shortcuts
            */
           if (
@@ -6711,8 +6662,6 @@
         return {
           v: 2,
           dv: DEFAULTS_VER,
-          vol: $("vol").value,
-          volDef: VOL_DEFAULT,
           autoBox,
           followBox,
           nBox,
@@ -6820,16 +6769,6 @@
         if (cur6 && typeof st.showLines === "boolean")
           setShowLines(st.showLines);
         if (typeof st.showGr === "boolean") setShowGr(st.showGr);
-        /* a saved vol is dropped when the default has
-           changed since it was saved */
-        if (
-          cur &&
-          typeof st.vol === "string" &&
-          st.volDef === VOL_DEFAULT
-        ) {
-          $("vol").value = st.vol;
-          setVol(st.vol);
-        }
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -7014,9 +6953,6 @@
       };
       $("sym").textContent = SYM + " " + TF;
       document.title = SYM;
-      /* default vol step, overridden by a saved layout */
-      const VOL_DEFAULT = $("vol").value;
-      setVol($("vol").value);
       setNBox(1);
       [...$("boxN").children].forEach(
         (b, i) => (b.onclick = () => setNBox(i + 1)),
@@ -7053,13 +6989,6 @@
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
       $("grTog").onclick = () => setShowGr(!showGr);
-      $("vol").addEventListener("input", (e) => {
-        volTyped = true;
-        setVol(e.target.value);
-      });
-      $("vol").addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === "Escape") e.target.blur();
-      });
       /* installable app: only when served over https */
       if (
         "serviceWorker" in navigator &&
