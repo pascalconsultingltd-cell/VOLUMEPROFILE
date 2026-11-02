@@ -4290,8 +4290,9 @@
             const hs = pfHot(all),
               ci = new Map(all.map((c, k) => [c, k])),
               hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
-              /* LH: hot green bricks above the latest hot black
-                 one, hot black bricks below the latest green */
+              /* LH: the first hot green brick above the latest
+                 hot black one, the first hot black brick below
+                 the latest green */
               past = new Set();
             let gB = null,
               bT = null;
@@ -4301,10 +4302,16 @@
                   lo = r * c.st;
                 if (!hs.hot.has(key)) return;
                 if (v >= 0) {
-                  if (bT != null && lo >= bT) past.add(key);
+                  if (bT != null && lo >= bT) {
+                    past.add(key);
+                    bT = null;
+                  }
                   gB = lo;
                 } else {
-                  if (gB != null && lo + c.st <= gB) past.add(key);
+                  if (gB != null && lo + c.st <= gB) {
+                    past.add(key);
+                    gB = null;
+                  }
                   bT = lo + c.st;
                 }
               }),
@@ -4313,7 +4320,7 @@
                the columns back until it spans vol/3 (10 boxes =
                vol): green low half #00e676, high half blue;
                black high half #000, low half orange; blue /
-               orange too past the other side's latest */
+               orange too for the first past the other side */
             const hotCol = (c, r) => {
               const sell = (c.d.get(r) || 0) < 0;
               if (!pfLh) return sell ? "#000" : "#00e676";
