@@ -483,6 +483,13 @@
                 Colour
               </button
               ><button
+                id="pfSwTog"
+                class="a"
+                title="Swing triangles (with Colour)"
+              >
+                Sw
+              </button
+              ><button
                 id="pfHlTog"
                 title="P&amp;F signal bricks and volume dots"
               >
@@ -1645,6 +1652,13 @@
       function setPfHl(v) {
         pfHl = !!v;
         $("pfHlTog").className = pfHl ? "a" : "";
+        schedule();
+      }
+      /* Sw button: the swing triangles (they need Colour) */
+      let pfSw = true;
+      function setPfSw(v) {
+        pfSw = !!v;
+        $("pfSwTog").className = pfSw ? "a" : "";
         schedule();
       }
       let pfSg = true;
@@ -4405,7 +4419,7 @@
              * is a swing down, the mirror a swing up; a small
              * triangle on the brick that breaks, once per run
              */
-            if (pfSg) {
+            if (pfSg && pfSw) {
               const br = [];
               all.forEach((c, k) => {
                 const gT = hs.gTop[k],
@@ -6940,6 +6954,7 @@
           pfBr,
           pfSg,
           pfHl,
+          pfSw,
           pfVc,
           showOrders,
           showLines,
@@ -7001,6 +7016,7 @@
         if (typeof st.pfBr === "boolean") setPfBr(st.pfBr);
         if (typeof st.pfSg === "boolean") setPfSg(st.pfSg);
         if (typeof st.pfHl === "boolean") setPfHl(st.pfHl);
+        if (typeof st.pfSw === "boolean") setPfSw(st.pfSw);
         if (typeof st.pfVc === "boolean") setPfVc(st.pfVc);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
@@ -7239,6 +7255,7 @@
       $("pfBrTog").onclick = () => setPfBr(!pfBr);
       $("pfSgTog").onclick = () => setPfSg(!pfSg);
       $("pfHlTog").onclick = () => setPfHl(!pfHl);
+      $("pfSwTog").onclick = () => setPfSw(!pfSw);
       $("pfVcTog").onclick = () => setPfVc(!pfVc);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
