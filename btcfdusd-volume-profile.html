@@ -4274,10 +4274,24 @@
             };
             const hs = pfHot(all),
               ci = new Map(all.map((c, k) => [c, k])),
-              shade = (c, r) => [
-                (c.d.get(r) || 0) < 0 ? "#000" : "#089981",
-                hs.hot.has(ci.get(c) + "|" + r),
-              ];
+              hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
+              /* a hot brick by where it sits in the range of its
+                 last 20 columns: green low half #00e676, high
+                 half blue; black high half #000, low half orange */
+              hotCol = (c, r) => {
+                const k = ci.get(c),
+                  w = all.slice(Math.max(0, k - 19), k + 1),
+                  hi = Math.max(...w.map((q) => q.ph)),
+                  lo = Math.min(...w.map((q) => q.pl)),
+                  low = (r + 0.5) * c.st < (hi + lo) / 2;
+                return (c.d.get(r) || 0) < 0
+                  ? low
+                    ? "#ff6d00"
+                    : "#000"
+                  : low
+                    ? "#00e676"
+                    : "#2962ff";
+              };
             /* Br: bw = brick width, bricks touch (+.5 hides
                seams); hotB = highlighted boxes,
                drawn last with a brick each side */
@@ -4302,7 +4316,7 @@
                   const t = c.tm.has(r) ? c.tm.get(r) : c.t0;
                   const yT = Y(Math.min((r + 1) * st, c.ph)),
                     yB = Y(Math.max(r * st, c.pl)),
-                    [col, solid] = shade(c, r);
+                    solid = hot(c, r);
                   /* Sg: green above the latest green signal,
                      black below the latest black one, a thin
                      neutral blue line in between */
@@ -4338,7 +4352,8 @@
                     w,
                     Math.max(1, yB - yT) + 0.5,
                   );
-                  if (solid && pfHl) hotB.push([xm, r, col, st]);
+                  if (solid && pfHl)
+                    hotB.push([xm, r, hotCol(c, r), st]);
                 }
               /* the column as one line, buyers green / sellers
                  black, then a real brick on the strongest boxes */
@@ -4351,13 +4366,13 @@
                 g.stroke();
                 g.lineWidth = 1;
                 for (let r = c.lo; r <= c.hi; r++) {
-                  const [col, solid] = shade(c, r);
+                  const solid = hot(c, r);
                   if (!solid || !pfHl) continue;
                   /* at least 6px tall, centred on its box */
                   const yT = Y((r + 1) * st),
                     yB = Y(r * st),
                     h = Math.max(6, yB - yT - 1);
-                  g.fillStyle = col;
+                  g.fillStyle = hotCol(c, r);
                   g.fillRect(x, (yT + yB) / 2 - h / 2, w, h);
                 }
               }
@@ -4387,14 +4402,13 @@
               g.lineWidth = 1;
               g.stroke();
             });
-            /* highlighted box, green buys / black sells, with
-               one more brick each side so it stands out */
+            /* highlighted box, coloured by hotCol, with one
+               more brick each side so it stands out */
             hotB.forEach(([xm, r, col, st]) => {
               const yT = Y((r + 1) * st),
                 yB = Y(r * st),
                 h = Math.max(6, yB - yT - 1);
-              /* a vivid green, to stand out from the bricks */
-              g.fillStyle = col === "#000" ? col : "#00e676";
+              g.fillStyle = col;
               [-1, 0, 1].forEach((k) =>
                 g.fillRect(
                   xm + k * sl - bw / 2,
