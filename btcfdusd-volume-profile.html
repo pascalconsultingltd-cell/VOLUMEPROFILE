@@ -5555,7 +5555,10 @@
               th = cfg.main ? 24 : 18;
             g.textAlign = "left";
             g.textBaseline = "middle";
-            [px0 - lw, 4].forEach((tx) => {
+            /* and one on the profiles' right edge */
+            [px0 - lw, 4]
+              .concat(cfg.tpo && tpoW ? [pL - 2 - lw] : [])
+              .forEach((tx) => {
               g.fillStyle = LP;
               g.fillRect(tx, ly - th / 2, lw, th);
               g.fillStyle = "#ffffff";
