@@ -490,6 +490,14 @@
                 Sw
               </button
               ><button
+                id="pfLhTog"
+                class="a"
+                title="Hot bricks: blue / orange when on the other
+                  half of the last vol/3 range"
+              >
+                LH
+              </button
+              ><button
                 id="pfHlTog"
                 title="P&amp;F signal bricks and volume dots"
               >
@@ -1667,6 +1675,13 @@
         schedule();
       }
       /* Sw button: the swing triangles (they need Colour) */
+      /* LH button: hot bricks coloured by place in the range */
+      let pfLh = true;
+      function setPfLh(v) {
+        pfLh = !!v;
+        $("pfLhTog").className = pfLh ? "a" : "";
+        schedule();
+      }
       let pfSw = true;
       function setPfSw(v) {
         pfSw = !!v;
@@ -4275,16 +4290,23 @@
             const hs = pfHot(all),
               ci = new Map(all.map((c, k) => [c, k])),
               hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
-              /* a hot brick by where it sits in the range of its
-                 last 20 columns: green low half #00e676, high
-                 half blue; black high half #000, low half orange */
+              /* LH: a hot brick by where it sits in the range of
+                 the columns back until it spans vol/3 (10 boxes
+                 = vol): green low half #00e676, high half blue;
+                 black high half #000, low half orange */
               hotCol = (c, r) => {
-                const k = ci.get(c),
-                  w = all.slice(Math.max(0, k - 19), k + 1),
-                  hi = Math.max(...w.map((q) => q.ph)),
-                  lo = Math.min(...w.map((q) => q.pl)),
-                  low = (r + 0.5) * c.st < (hi + lo) / 2;
-                return (c.d.get(r) || 0) < 0
+                const sell = (c.d.get(r) || 0) < 0;
+                if (!pfLh) return sell ? "#000" : "#00e676";
+                let k = ci.get(c),
+                  hi = c.ph,
+                  lo = c.pl;
+                while (k > 0 && hi - lo < (c.st * 10) / 3) {
+                  k--;
+                  hi = Math.max(hi, all[k].ph);
+                  lo = Math.min(lo, all[k].pl);
+                }
+                const low = (r + 0.5) * c.st < (hi + lo) / 2;
+                return sell
                   ? low
                     ? "#ff6d00"
                     : "#000"
@@ -6981,6 +7003,7 @@
           pfSg,
           pfHl,
           pfSw,
+          pfLh,
           pfVc,
           showOrders,
           showLines,
@@ -7043,6 +7066,7 @@
         if (typeof st.pfSg === "boolean") setPfSg(st.pfSg);
         if (typeof st.pfHl === "boolean") setPfHl(st.pfHl);
         if (typeof st.pfSw === "boolean") setPfSw(st.pfSw);
+        if (typeof st.pfLh === "boolean") setPfLh(st.pfLh);
         if (typeof st.pfVc === "boolean") setPfVc(st.pfVc);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
@@ -7282,6 +7306,7 @@
       $("pfSgTog").onclick = () => setPfSg(!pfSg);
       $("pfHlTog").onclick = () => setPfHl(!pfHl);
       $("pfSwTog").onclick = () => setPfSw(!pfSw);
+      $("pfLhTog").onclick = () => setPfLh(!pfLh);
       $("pfVcTog").onclick = () => setPfVc(!pfVc);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
