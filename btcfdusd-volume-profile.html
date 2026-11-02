@@ -1279,6 +1279,80 @@
         return (pfHotC = { key, hot, dot, gTop, bBot });
       }
       /*
+       * LH: a column trading under the latest green dot's low
+       * makes orange pending, over the latest black dot's high
+       * blue; once per dot. Pending orange turns what follows
+       * orange on a swing low: a buyer column (pull back), then
+       * a low a brick under the one before; blue the mirror.
+       * Trading back a brick past the pull-back's high (low)
+       * switches back. [time, colour, price] of each switch.
+       */
+      function pfLhSw(all, hs) {
+        const lhM = [];
+        let gD = null,
+          bD = null,
+          pd = null,
+          ex = null;
+        all.forEach((c, k) => {
+          const at = (ok) => {
+            let t = null;
+            c.tm.forEach((tt, r) => {
+              if (ok(r) && (t == null || tt < t)) t = tt;
+            });
+            return t == null ? c.t0 : t;
+          };
+          /* ex: { dn, X = the last switch's pull-back
+             extreme } */
+          const X = ex && (ex.dn ? ex.X + c.st : ex.X - c.st);
+          if (ex && (ex.dn ? c.ph > X : c.pl < X)) {
+            const dn = ex.dn,
+              t = at((r) =>
+                dn ? (r + 1) * c.st > X : r * c.st < X,
+              );
+            lhM.push([t, dn ? "#2962ff" : "#ff6d00", X]);
+            ex = null;
+          }
+          /* pd: { dn, L = extreme since the break, pb =
+             pulled back, X = pull-back extreme } */
+          if (pd) {
+            const { dn, L } = pd,
+              x = dn ? c.pl : c.ph,
+              e = dn ? L - c.st : L + c.st;
+            if (pd.pb && (dn ? x < e : x > e)) {
+              const t = at((r) =>
+                dn ? r * c.st < e : (r + 1) * c.st > e,
+              );
+              lhM.push([t, dn ? "#ff6d00" : "#2962ff", e]);
+              ex = { dn, X: pd.X };
+              pd = null;
+            } else {
+              pd.L = dn ? Math.min(L, x) : Math.max(L, x);
+              if (c.up === dn) pd.pb = true;
+              if (pd.pb)
+                pd.X = dn
+                  ? Math.max(pd.X, c.ph)
+                  : Math.min(pd.X, c.pl);
+            }
+          }
+          if (gD != null && c.pl < gD) {
+            pd = { dn: true, L: c.pl, pb: false, X: -1e9 };
+            gD = null;
+          }
+          if (bD != null && c.ph > bD) {
+            pd = { dn: false, L: c.ph, pb: false, X: 1e9 };
+            bD = null;
+          }
+          if (hs.dot.has(k)) {
+            if (c.up) gD = c.pl;
+            else bD = c.ph;
+          }
+        });
+        /* only real changes of colour */
+        return lhM
+          .sort((a, b) => a[0] - b[0])
+          .filter((m, i, a) => !i || m[1] !== a[i - 1][1]);
+      }
+      /*
        * A day's vol, as vol() in imports.py / 2: the height of
        * the last 5 clean slow regimes of the 20 finished days
        * before it, from its 30m bars { h, l }; NaN when none.
@@ -1428,48 +1502,27 @@
       try {
         alerts = JSON.parse(localStorage.getItem(ALK)) || {};
       } catch (e) {}
-      /* P&F: the last two columns turning green or black
-         (Sg colours) */
+      /* P&F: the LH colour switches in the last two
+         columns, up = to blue, down = to orange */
       function pfEvents() {
         const d1 = dayOf(Date.now()),
-          d0 = d1 - 86400000,
-          out = [];
+          d0 = d1 - 86400000;
         loadAggr(d0);
         loadAggr(d1);
         if (!aggrT.get(d0) || !aggrT.get(d1)) return null;
         const all = pfCols([d0, d1]),
-          hs = pfHot(all),
-          n = all.length;
-        /* a column's Sg colour at its last trade: 1 green,
-           -1 black, 0 neutral (as the bricks are drawn) */
-        const zone = (k) => {
-          const st = all[k].st,
-            r = Math.floor(all[k].lp / st),
-            gT = hs.gTop[k],
-            bB = hs.bBot[k];
-          return gT != null && r * st >= gT
-            ? 1
-            : bB != null && (r + 1) * st <= bB
-              ? -1
-              : 0;
-        };
-        /* a switch: green after black or black after green,
-           neutral columns in between ignored */
-        let lastZ = 0;
-        for (let k = 0; k < n; k++) {
-          const z = zone(k);
-          if (!z) continue;
-          const sw = z !== lastZ && lastZ !== 0;
-          lastZ = z;
-          if (sw && k >= n - 2)
-            out.push({
-              id: "z" + all[k].t0 + "|" + z,
-              up: z > 0,
+          n = all.length,
+          from = n > 1 ? all[n - 2].t0 : 0,
+          ev = pfLhSw(all, pfHot(all))
+            .filter(([t]) => t >= from)
+            .map(([t, col, p]) => ({
+              id: "lh" + t + "|" + col,
+              up: col === "#2962ff",
               txt:
-                (z > 0 ? "green " : "black ") + all[k].lp.toFixed(0),
-            });
-        }
-        return { ctx: pfStep(d0) + "|" + pfStep(d1), ev: out };
+                (col === "#2962ff" ? "blue " : "orange ") +
+                p.toFixed(0),
+            }));
+        return { ctx: pfStep(d0) + "|" + pfStep(d1), ev };
       }
       function alEvents(w) {
         if (w === "pf") return pfEvents();
@@ -4291,77 +4344,7 @@
               hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
               hotCol = (c, r) =>
                 (c.d.get(r) || 0) < 0 ? "#000" : "#00e676",
-              /* LH: a column trading under the latest green dot's
-                 low makes orange pending, over the latest black
-                 dot's high blue; once per dot. Pending orange
-                 turns what follows orange on a swing low: a
-                 buyer column (pull back), then a low a brick
-                 under the one before; blue the mirror. Trading
-                 back a brick past the pull-back's high (low)
-                 switches back. lhM = [time, colour] of each
-                 switch */
-              lhM = [];
-            if (pfLh) {
-              let gD = null,
-                bD = null,
-                pd = null,
-                ex = null;
-              all.forEach((c, k) => {
-                const at = (ok) => {
-                  let t = null;
-                  c.tm.forEach((tt, r) => {
-                    if (ok(r) && (t == null || tt < t)) t = tt;
-                  });
-                  return t == null ? c.t0 : t;
-                };
-                /* ex: { dn, X = the last switch's pull-back
-                   extreme } */
-                const X = ex && (ex.dn ? ex.X + c.st : ex.X - c.st);
-                if (ex && (ex.dn ? c.ph > X : c.pl < X)) {
-                  const dn = ex.dn,
-                    t = at((r) =>
-                      dn ? (r + 1) * c.st > X : r * c.st < X,
-                    );
-                  lhM.push([t, dn ? "#2962ff" : "#ff6d00"]);
-                  ex = null;
-                }
-                /* pd: { dn, L = extreme since the break, pb =
-                   pulled back, X = pull-back extreme } */
-                if (pd) {
-                  const { dn, L } = pd,
-                    x = dn ? c.pl : c.ph,
-                    e = dn ? L - c.st : L + c.st;
-                  if (pd.pb && (dn ? x < e : x > e)) {
-                    const t = at((r) =>
-                      dn ? r * c.st < e : (r + 1) * c.st > e,
-                    );
-                    lhM.push([t, dn ? "#ff6d00" : "#2962ff"]);
-                    ex = { dn, X: pd.X };
-                    pd = null;
-                  } else {
-                    pd.L = dn ? Math.min(L, x) : Math.max(L, x);
-                    if (c.up === dn) pd.pb = true;
-                    if (pd.pb)
-                      pd.X = dn
-                        ? Math.max(pd.X, c.ph)
-                        : Math.min(pd.X, c.pl);
-                  }
-                }
-                if (gD != null && c.pl < gD) {
-                  pd = { dn: true, L: c.pl, pb: false, X: -1e9 };
-                  gD = null;
-                }
-                if (bD != null && c.ph > bD) {
-                  pd = { dn: false, L: c.ph, pb: false, X: 1e9 };
-                  bD = null;
-                }
-                if (hs.dot.has(k)) {
-                  if (c.up) gD = c.pl;
-                  else bD = c.ph;
-                }
-              });
-              lhM.sort((a, b) => a[0] - b[0]);
-            }
+              lhM = pfLh ? pfLhSw(all, hs) : [];
             /* LH: what trades after a switch takes its colour,
                till the next */
             const lhAt = (t) => {
