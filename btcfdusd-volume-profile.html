@@ -1262,9 +1262,6 @@
         const r = Math.ceil(BIG_PERC * BIG_WIN) - 1,
           top = (xs, k) =>
             xs.slice(k - BIG_WIN + 1, k + 1).sort((p, q) => p - q)[r],
-          low = (xs, k) =>
-            xs.slice(k - BIG_WIN + 1, k + 1).sort((p, q) => p - q)[
-              BIG_WIN - 1 - r],
           seq = [],
           ad = [],
           hot = new Set(),
@@ -1284,12 +1281,6 @@
           if (ad[k] > top(ad, k)) hot.add(seq[k]);
         for (let k = BIG_WIN - 1; k < cv.length; k++)
           if (cv[k] > top(cv, k)) dot.add(k);
-        /* fast: a column whose flip to the next one came quicker
-           than 95% of the BIG_WIN before it (first b to first s) */
-        const dt = all.slice(1).map((c, k) => c.t0 - all[k].t0),
-          fast = new Set();
-        for (let k = BIG_WIN - 1; k < dt.length; k++)
-          if (dt[k] < low(dt, k)) fast.add(k);
         /* exc: excitement, each flip adds 1 and it halves every
            30s; kept as its rank (0..1) in the BIG_WIN before it */
         let e = 0;
@@ -1321,7 +1312,7 @@
           gTop[k] = gt;
           bBot[k] = bb;
         });
-        return (pfHotC = { key, hot, dot, fast, exc, gTop, bBot });
+        return (pfHotC = { key, hot, dot, exc, gTop, bBot });
       }
       /*
        * LH: a column trading under the latest green dot's low
@@ -4516,16 +4507,7 @@
                   c: c.ph,
                 },
               });
-              if (!pfHl) return;
-              const k = ci.get(c);
-              /* red: a flip faster than 95% of the last 150 */
-              if (hs.fast.has(k)) {
-                g.beginPath();
-                g.arc(xm, c.up ? Y(c.ph) - 8 : Y(c.pl) + 8, 3, 0, 7);
-                g.fillStyle = "#f23645";
-                g.fill();
-              }
-              if (!hs.dot.has(k)) return;
+              if (!pfHl || !hs.dot.has(ci.get(c))) return;
               /* as the main chart's big-candle circles */
               const y = c.up ? Y(c.pl) + 12 : Y(c.ph) - 12;
               g.beginPath();
