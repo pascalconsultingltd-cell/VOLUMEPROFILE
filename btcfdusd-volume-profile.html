@@ -4290,30 +4290,51 @@
             const hs = pfHot(all),
               ci = new Map(all.map((c, k) => [c, k])),
               hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
-              /* LH: a hot brick by where it sits in the range of
-                 the columns back until it spans vol/3 (10 boxes
-                 = vol): green low half #00e676, high half blue;
-                 black high half #000, low half orange */
-              hotCol = (c, r) => {
-                const sell = (c.d.get(r) || 0) < 0;
-                if (!pfLh) return sell ? "#000" : "#00e676";
-                let k = ci.get(c),
-                  hi = c.ph,
-                  lo = c.pl;
-                while (k > 0 && hi - lo < (c.st * 10) / 3) {
-                  k--;
-                  hi = Math.max(hi, all[k].ph);
-                  lo = Math.min(lo, all[k].pl);
+              /* LH: hot green bricks above the latest hot black
+                 one, hot black bricks below the latest green */
+              past = new Set();
+            let gB = null,
+              bT = null;
+            all.forEach((c, k) =>
+              c.d.forEach((v, r) => {
+                const key = k + "|" + r,
+                  lo = r * c.st;
+                if (!hs.hot.has(key)) return;
+                if (v >= 0) {
+                  if (bT != null && lo >= bT) past.add(key);
+                  gB = lo;
+                } else {
+                  if (gB != null && lo + c.st <= gB) past.add(key);
+                  bT = lo + c.st;
                 }
-                const low = (r + 0.5) * c.st < (hi + lo) / 2;
-                return sell
-                  ? low
-                    ? "#ff6d00"
-                    : "#000"
-                  : low
-                    ? "#00e676"
-                    : "#2962ff";
-              };
+              }),
+            );
+            /* LH: a hot brick by where it sits in the range of
+               the columns back until it spans vol/3 (10 boxes =
+               vol): green low half #00e676, high half blue;
+               black high half #000, low half orange; blue /
+               orange too past the other side's latest */
+            const hotCol = (c, r) => {
+              const sell = (c.d.get(r) || 0) < 0;
+              if (!pfLh) return sell ? "#000" : "#00e676";
+              let k = ci.get(c),
+                hi = c.ph,
+                lo = c.pl;
+              while (k > 0 && hi - lo < (c.st * 10) / 3) {
+                k--;
+                hi = Math.max(hi, all[k].ph);
+                lo = Math.min(lo, all[k].pl);
+              }
+              const low = (r + 0.5) * c.st < (hi + lo) / 2,
+                p = past.has(ci.get(c) + "|" + r);
+              return sell
+                ? low || p
+                  ? "#ff6d00"
+                  : "#000"
+                : low && !p
+                  ? "#00e676"
+                  : "#2962ff";
+            };
             /* Br: bw = brick width, bricks touch (+.5 hides
                seams); hotB = highlighted boxes,
                drawn last with a brick each side */
