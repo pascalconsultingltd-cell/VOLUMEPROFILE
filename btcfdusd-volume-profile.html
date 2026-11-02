@@ -4902,20 +4902,22 @@
             g.beginPath();
             g.rect(x0, top, px0 - x0, bot - top);
             g.clip();
+            /* main chart: 80% opaque, the wick not through the
+               body so it does not show darker there */
+            if (cfg.main) g.globalAlpha = 0.8;
             g.strokeStyle = col;
             g.fillStyle = col;
+            const yo = Y(c.o),
+              yc = Y(c.c),
+              yT = Math.min(yo, yc),
+              hB = Math.max(1, Math.abs(yo - yc));
             g.beginPath();
             g.moveTo(xm, Y(c.h));
+            g.lineTo(xm, yT);
+            g.moveTo(xm, yT + hB);
             g.lineTo(xm, Y(c.l));
             g.stroke();
-            const yo = Y(c.o),
-              yc = Y(c.c);
-            g.fillRect(
-              x + 1,
-              Math.min(yo, yc),
-              Math.max(1, w - 2),
-              Math.max(1, Math.abs(yo - yc)),
-            );
+            g.fillRect(x + 1, yT, Math.max(1, w - 2), hB);
             g.restore();
           });
           /*
