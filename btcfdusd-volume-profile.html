@@ -2598,26 +2598,15 @@
         /* full screen: one window fills the screen under the
            header (its toggles still unfold); info bar and 15s
            window hide */
+        /* inside the page only: no browser full screen, so no
+           "press Esc" notice; Esc or the icon leaves it */
         function setFull(k) {
-          const was = full,
-            de = document.documentElement;
           full = k;
           document.body.classList.toggle("fs", !!k);
-          try {
-            if (k && !document.fullscreenElement)
-              de.requestFullscreen().catch(() => {});
-            if (!k && was && document.fullscreenElement)
-              document.exitFullscreen().catch(() => {});
-          } catch (e) {}
           requestAnimationFrame(() =>
             charts.forEach((h) => h.size()),
           );
         }
-        /* Esc or the phone's back gesture leaves full screen */
-        if (cfg.main)
-          document.addEventListener("fullscreenchange", () => {
-            if (!document.fullscreenElement && full) setFull(null);
-          });
         function size() {
           const r = cv.getBoundingClientRect(),
             d = devicePixelRatio || 1;
@@ -6517,6 +6506,8 @@
           }
         });
         addEventListener("keydown", (e) => {
+          /* Esc leaves a maximised window, wherever the mouse */
+          if (e.key === "Escape" && full) return setFull(null);
           /*
            * typing in a box must not trigger chart
            * shortcuts
