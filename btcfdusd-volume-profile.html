@@ -3424,12 +3424,12 @@
                   curB = [cx0 + k * lw + lw / 2, yT + rowH / 2];
               });
             });
-            /* around it, an empty square in the last price
-               blue, 5px clear of the brick on its long side */
+            /* around it, an empty 15px square in the last price
+               blue, never tighter than the brick */
             if (curB) {
-              const s = Math.max(lw, rowH) + 10;
+              const s = Math.max(15, Math.max(lw, rowH) + 4);
               g.strokeStyle = "#2962ff";
-              g.lineWidth = 2;
+              g.lineWidth = 3;
               g.strokeRect(curB[0] - s / 2, curB[1] - s / 2, s, s);
             }
             /* sub POCs: P1 solid, P2 dashed, P3 dotted, each
