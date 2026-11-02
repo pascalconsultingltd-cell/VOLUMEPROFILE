@@ -4296,13 +4296,16 @@
                  dot's high blue; once per dot. Pending orange
                  turns what follows orange on a swing low: a
                  buyer column (pull back), then a low a brick
-                 under the one before; blue
-                 the mirror. lhM = [time, colour] of each switch */
+                 under the one before; blue the mirror. Trading
+                 back a brick past the pull-back's high (low)
+                 switches back. lhM = [time, colour] of each
+                 switch */
               lhM = [];
             if (pfLh) {
               let gD = null,
                 bD = null,
-                pd = null;
+                pd = null,
+                ex = null;
               all.forEach((c, k) => {
                 const at = (ok) => {
                   let t = null;
@@ -4311,8 +4314,19 @@
                   });
                   return t == null ? c.t0 : t;
                 };
+                /* ex: { dn, X = the last switch's pull-back
+                   extreme } */
+                const X = ex && (ex.dn ? ex.X + c.st : ex.X - c.st);
+                if (ex && (ex.dn ? c.ph > X : c.pl < X)) {
+                  const dn = ex.dn,
+                    t = at((r) =>
+                      dn ? (r + 1) * c.st > X : r * c.st < X,
+                    );
+                  lhM.push([t, dn ? "#2962ff" : "#ff6d00"]);
+                  ex = null;
+                }
                 /* pd: { dn, L = extreme since the break, pb =
-                   pulled back } */
+                   pulled back, X = pull-back extreme } */
                 if (pd) {
                   const { dn, L } = pd,
                     x = dn ? c.pl : c.ph,
@@ -4322,18 +4336,23 @@
                       dn ? r * c.st < e : (r + 1) * c.st > e,
                     );
                     lhM.push([t, dn ? "#ff6d00" : "#2962ff"]);
+                    ex = { dn, X: pd.X };
                     pd = null;
                   } else {
                     pd.L = dn ? Math.min(L, x) : Math.max(L, x);
                     if (c.up === dn) pd.pb = true;
+                    if (pd.pb)
+                      pd.X = dn
+                        ? Math.max(pd.X, c.ph)
+                        : Math.min(pd.X, c.pl);
                   }
                 }
                 if (gD != null && c.pl < gD) {
-                  pd = { dn: true, L: c.pl, pb: false };
+                  pd = { dn: true, L: c.pl, pb: false, X: -1e9 };
                   gD = null;
                 }
                 if (bD != null && c.ph > bD) {
-                  pd = { dn: false, L: c.ph, pb: false };
+                  pd = { dn: false, L: c.ph, pb: false, X: 1e9 };
                   bD = null;
                 }
                 if (hs.dot.has(k)) {
@@ -4341,6 +4360,7 @@
                   else bD = c.ph;
                 }
               });
+              lhM.sort((a, b) => a[0] - b[0]);
             }
             /* LH: what trades after a switch takes its colour,
                till the next */
