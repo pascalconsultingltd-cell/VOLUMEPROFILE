@@ -320,7 +320,6 @@
         min-height: 28px;
         border-bottom: 1px solid var(--line);
       }
-      body.fs header,
       body.fs #info,
       body.fs #mini {
         display: none !important;
@@ -2589,8 +2588,9 @@
           const [a, b] = [...pts.values()];
           return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         };
-        /* full screen: one window fills the screen, header,
-           info bar and 15s window hide */
+        /* full screen: one window fills the screen under the
+           header (its toggles still unfold); info bar and 15s
+           window hide */
         function setFull(k) {
           const was = full,
             de = document.documentElement;
