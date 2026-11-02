@@ -1519,8 +1519,9 @@
       /*
        * Alerts: on each window, the up / down triangles arm
        * an alert on each new up / down highlight until
-       * unticked (main and 15s: big-candle dots; P&F: dots
-       * and bricks), once per bar (P&F: per dot or brick).
+       * unticked (main and 15s: big-candle dots; ZZ: the
+       * main zigzag breaking the other way; P&F: LH colour
+       * changes), once per bar (P&F: per change).
        * Saved per device. alerts["w|dir"] = { ctx, ids }:
        * the bars already rung or there when armed, ctx =
        * what they were computed on (a new ctx resets them,
@@ -1531,7 +1532,7 @@
           main: "Chart",
           mini: "15s",
           pf: "P&F",
-          fb: "FB",
+          zz: "ZZ",
           vp: "VP",
         };
       let alerts = {},
@@ -1541,6 +1542,10 @@
       try {
         alerts = JSON.parse(localStorage.getItem(ALK)) || {};
       } catch (e) {}
+      /* drop alerts of windows gone (FB) */
+      Object.keys(alerts).forEach(
+        (k) => alName[k.split("|")[0]] || delete alerts[k],
+      );
       /* P&F: the LH colour switches in the last two
          columns, up = to blue, down = to orange; calm = a
          column starting a calm run (grey box) */
@@ -1582,7 +1587,7 @@
           return charts[0].vpEv();
         }
         const c = charts[w === "mini" ? 1 : 0];
-        return !c ? null : w === "fb" ? c.fbEv() : c.alertEv();
+        return !c ? null : w === "zz" ? c.zzEv() : c.alertEv();
       }
       function alSave() {
         try {
@@ -5370,47 +5375,8 @@
            * channel's colour: yellow down, blue up. Dashed = open.
            */
           if (cfg.main && showFZ && geo.length) {
-            const piv = [],
+            const piv = zfbPiv(arr),
               where = new Map(geo.map((o) => [o.c, o]));
-            let dn = null,
-              ht = 0,
-              seen = false,
-              ext = 0,
-              at = null;
-            for (let k = 0; k < arr.length; k++) {
-              const q = arr[k];
-              if (!okC(q)) continue;
-              const big =
-                  k >= BIG_WIN - 1 && q.c !== q.o && isBig(arr, k),
-                way = q.c < q.o;
-              if (dn === null) {
-                dn = way;
-                ext = dn ? q.l : q.h;
-                at = q;
-                piv.push({ low: !dn, p: dn ? q.h : q.l, c: q });
-              }
-              if (big) {
-                seen = true;
-                ht = q.h - q.l;
-                if (way !== dn) {
-                  piv.push({ low: dn, p: ext, c: at });
-                  dn = way;
-                  ext = dn ? q.l : q.h;
-                  at = q;
-                }
-              } else if (!seen) ht = volFor(dayOf(q.t));
-              if (dn ? q.l < ext : q.h > ext) {
-                ext = dn ? q.l : q.h;
-                at = q;
-              }
-              if (!big && (dn ? q.c > ext + ht : q.c < ext - ht)) {
-                piv.push({ low: dn, p: ext, c: at });
-                dn = !dn;
-                ext = dn ? q.l : q.h;
-                at = q;
-              }
-            }
-            if (dn !== null) piv.push({ low: dn, p: ext, c: at });
             /* pivots off screen: just past the chart's edge */
             const xOf = (z) => {
               const o = where.get(z.c);
@@ -5745,7 +5711,7 @@
             if (!side) {
               icon("main", x0 - 3, px0 - 2);
               alIcons("main", px0 - 2, 0, "HA");
-              alIcons("fb", px0 - 2, 1, "FB");
+              alIcons("zz", px0 - 2, 1, "ZZ");
             }
           } else alIcons("mini", px0 - 2);
           /* last price */
@@ -6892,40 +6858,82 @@
           }
           return { ctx: (cfg.main ? TF : "") + mode, ev: out };
         }
-        /* alerts: the following box (FB) turning, on the
-           newest big candle's channels, as drawn; a turn
-           up = it now follows the highs */
-        function fbEv() {
+        /* ZFB pivots { low, p, c } (see the ZFB drawing); the
+           last one is the open leg's extreme */
+        function zfbPiv(arr) {
+          const piv = [];
+          let dn = null,
+            ht = 0,
+            seen = false,
+            ext = 0,
+            at = null;
+          for (let k = 0; k < arr.length; k++) {
+            const q = arr[k];
+            if (!okC(q)) continue;
+            const big =
+                k >= BIG_WIN - 1 && q.c !== q.o && isBig(arr, k),
+              way = q.c < q.o;
+            if (dn === null) {
+              dn = way;
+              ext = dn ? q.l : q.h;
+              at = q;
+              piv.push({ low: !dn, p: dn ? q.h : q.l, c: q });
+            }
+            if (big) {
+              seen = true;
+              ht = q.h - q.l;
+              if (way !== dn) {
+                piv.push({ low: dn, p: ext, c: at });
+                dn = way;
+                ext = dn ? q.l : q.h;
+                at = q;
+              }
+            } else if (!seen) ht = volOfDay(dayOf(q.t)) || volN;
+            if (dn ? q.l < ext : q.h > ext) {
+              ext = dn ? q.l : q.h;
+              at = q;
+            }
+            if (!big && (dn ? q.c > ext + ht : q.c < ext - ht)) {
+              piv.push({ low: dn, p: ext, c: at });
+              dn = !dn;
+              ext = dn ? q.l : q.h;
+              at = q;
+            }
+          }
+          if (dn !== null) piv.push({ low: dn, p: ext, c: at });
+          return piv;
+        }
+        /*
+         * alerts: the ZFB zigzag breaking the other way from its
+         * last break. A break up = a high past the high before
+         * it, down the mirror; it rings when the first candle
+         * trading past that level is one of the last two.
+         */
+        function zzEv() {
           const arr = mode === "lb" ? lbBars(src()) : src(),
             n = arr.length,
+            piv = zfbPiv(arr),
+            ix = new Map(arr.map((q, k) => [q, k])),
             out = [];
-          let k = n - 1;
-          while (
-            k >= BIG_WIN - 1 &&
-            !(okC(arr[k]) && arr[k].c !== arr[k].o && isBig(arr, k))
-          )
-            k--;
-          if (k < BIG_WIN - 1) return null;
-          const A = arr[k],
-            ht = A.h - A.l;
-          let dn = A.c < A.o,
-            ext = dn ? A.l : A.h;
-          for (let j = k + 1; j < n; j++) {
-            const q = arr[j];
-            if (!okC(q)) continue;
-            ext = dn ? Math.min(ext, q.l) : Math.max(ext, q.h);
-            if (!(dn ? q.c > ext + ht : q.c < ext - ht)) continue;
-            dn = !dn;
-            ext = dn ? q.l : q.h;
-            if (j >= n - 2)
-              out.push({
-                id: q.t,
-                up: !dn,
-                txt:
-                  "box turns " +
-                  (dn ? "down " : "up ") +
-                  q.c.toFixed(0),
-              });
+          if (n < BIG_WIN) return null;
+          let last = null;
+          for (let i = 2; i < piv.length; i++) {
+            const z = piv[i],
+              lv = piv[i - 2].p,
+              up = !z.low;
+            if (up ? z.p <= lv : z.p >= lv) continue;
+            if (up !== last && last !== null) {
+              let j = ix.get(piv[i - 1].c);
+              while (j < n && !(up ? arr[j].h > lv : arr[j].l < lv))
+                j++;
+              if (j >= n - 2)
+                out.push({
+                  id: "zz" + piv[i - 2].c.t,
+                  up,
+                  txt: (up ? "breaks up " : "breaks down ") + (lv | 0),
+                });
+            }
+            last = up;
           }
           return { ctx: (cfg.main ? TF : "") + mode, ev: out };
         }
@@ -6943,7 +6951,7 @@
           sched,
           draw,
           alertEv,
-          fbEv,
+          zzEv,
           vpEv: () => vpEv,
           newCandle,
           size,
