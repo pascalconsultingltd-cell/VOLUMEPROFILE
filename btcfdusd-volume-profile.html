@@ -309,6 +309,27 @@
         pointer-events: none;
         z-index: 20;
       }
+      /* alerts stay here until closed */
+      #alBox {
+        position: fixed;
+        left: 50%;
+        top: 90px;
+        transform: translateX(-50%);
+        background: #fff;
+        border: 3px solid #f23645;
+        border-radius: 8px;
+        padding: 10px 36px 10px 14px;
+        font-size: 15px;
+        font-weight: bold;
+        white-space: nowrap;
+        box-shadow: 0 4px 16px #0006;
+        z-index: 30;
+      }
+      #alBox button {
+        position: absolute;
+        right: 6px;
+        top: 6px;
+      }
       #info {
         padding: 6px 12px;
         color: var(--mu);
@@ -628,6 +649,10 @@
     <div id="info"></div>
     <main><canvas id="c"></canvas></main>
     <div id="toast"></div>
+    <div id="alBox" hidden>
+      <button onclick="alBox.hidden = true">✕</button>
+      <div></div>
+    </div>
     <div id="mini">
       <div id="mhead">
         <b>15s</b><span id="mst"></span
@@ -1621,6 +1646,15 @@
          the beep: A (880 Hz) up, the E below (659 Hz) down */
       function notify(t, up = true) {
         toast(t);
+        /* a line per alert, newest on top, until closed */
+        const b = $("alBox"),
+          ln = document.createElement("div");
+        if (b.hidden) b.lastElementChild.textContent = "";
+        ln.textContent =
+          new Date().toTimeString().slice(0, 5) + "  " + t;
+        ln.style.color = up ? "#089981" : "#000";
+        b.lastElementChild.prepend(ln);
+        b.hidden = false;
         try {
           navigator.vibrate([200, 100, 200]);
         } catch (e) {}
@@ -1636,7 +1670,12 @@
         try {
           if (Notification.permission !== "granted") return;
           const sw = navigator.serviceWorker,
-            opt = { body: t, tag: t, icon: "icon-192.png" };
+            opt = {
+              body: t,
+              tag: t,
+              icon: "icon-192.png",
+              requireInteraction: true,
+            };
           (sw ? sw.getRegistration() : Promise.resolve(null))
             .then((r) =>
               r
