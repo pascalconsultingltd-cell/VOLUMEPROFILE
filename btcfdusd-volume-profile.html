@@ -4523,22 +4523,28 @@
               g.arc(xm, Y((r + 0.5) * st), 2, 0, 7);
               g.fill();
             });
-            /* excitement clusters: a red box round each run of
-               columns whose smoothed rank is 0.8+, over its range */
-            let run = [];
-            shown.concat(null).forEach((c) => {
-              if (c && hs.exc[ci.get(c)] >= 0.8)
-                return void run.push(c);
-              if (!run.length) return;
-              const xa = xs.get(run[0]) - sl / 2,
-                xb = xs.get(run[run.length - 1]) + sl / 2,
-                yT = Y(Math.max(...run.map((q) => q.ph))) - 2,
-                yB = Y(Math.min(...run.map((q) => q.pl))) + 2;
-              g.strokeStyle = "#f23645";
-              g.lineWidth = 1.5;
-              g.setLineDash([]);
-              g.strokeRect(xa, yT, xb - xa, yB - yT);
-              run = [];
+            /* excitement clusters: a box round each run of columns
+               whose smoothed rank is 0.8+ (red) or 0.25- (golden,
+               quiet), over its range */
+            [
+              ["#f23645", (q) => q >= 0.8],
+              ["#b8860b", (q) => q <= 0.25],
+            ].forEach(([col, ok]) => {
+              let run = [];
+              shown.concat(null).forEach((c) => {
+                if (c && ok(hs.exc[ci.get(c)]))
+                  return void run.push(c);
+                if (!run.length) return;
+                const xa = xs.get(run[0]) - sl / 2,
+                  xb = xs.get(run[run.length - 1]) + sl / 2,
+                  yT = Y(Math.max(...run.map((q) => q.ph))) - 2,
+                  yB = Y(Math.min(...run.map((q) => q.pl))) + 2;
+                g.strokeStyle = col;
+                g.lineWidth = 1.5;
+                g.setLineDash([]);
+                g.strokeRect(xa, yT, xb - xa, yB - yT);
+                run = [];
+              });
             });
             /*
              * P&F swings (Colour on): the bricks in the order
