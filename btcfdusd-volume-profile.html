@@ -1542,7 +1542,8 @@
         alerts = JSON.parse(localStorage.getItem(ALK)) || {};
       } catch (e) {}
       /* P&F: the LH colour switches in the last two
-         columns, up = to blue, down = to orange */
+         columns, up = to blue, down = to orange; calm = a
+         column starting a calm run (cyan box) */
       function pfEvents() {
         const d1 = dayOf(Date.now()),
           d0 = d1 - 86400000;
@@ -1552,7 +1553,8 @@
         const all = pfCols([d0, d1]),
           n = all.length,
           from = n > 1 ? all[n - 2].t0 : 0,
-          ev = pfLhSw(all, pfHot(all))
+          hs = pfHot(all),
+          ev = pfLhSw(all, hs)
             .filter(([t]) => t >= from)
             .map(([t, col, p]) => ({
               id: "lh" + t + "|" + col,
@@ -1561,6 +1563,13 @@
                 (col === "#2962ff" ? "blue " : "orange ") +
                 p.toFixed(0),
             }));
+        for (let k = Math.max(1, n - 2); k < n; k++)
+          if (hs.exc[k] <= 0.25 && hs.exc[k - 1] > 0.25)
+            ev.push({
+              id: "calm" + all[k].t0,
+              dir: "calm",
+              txt: "calm " + all[k].lp.toFixed(0),
+            });
         return { ctx: pfStep(d0) + "|" + pfStep(d1), ev };
       }
       function alEvents(w) {
@@ -1715,15 +1724,19 @@
             alSave();
             return;
           }
+          /* q.dir: other than up / down (P&F calm) */
           const e = r.ev.find(
-            (q) => q.up === (dir === "up") && !a.ids.includes(q.id),
+            (q) =>
+              (q.dir || (q.up ? "up" : "dn")) === dir &&
+              !a.ids.includes(q.id),
           );
           if (!e) return;
           /* stays armed; this bar is done */
           a.ids = a.ids.concat(e.id).slice(-50);
           alSave();
           notify(
-            alName[w] + (e.up ? " ▲ " : " ▼ ") + e.txt,
+            alName[w] + (e.dir ? " ● " : e.up ? " ▲ " : " ▼ ") +
+              e.txt,
             e.up,
           );
         });
@@ -4327,6 +4340,23 @@
               else g.stroke();
               g.restore();
             });
+            /* P&F: a cyan circle arms the calm alert */
+            if (w !== "pf") return;
+            const x = xr - 72,
+              y = top + 3,
+              on = alerts["pf|calm"];
+            icons.push({ k: "a|pf|calm", x: x - 3, y: y - 3, w: 18,
+              h: 19 });
+            g.save();
+            g.setLineDash([]);
+            g.beginPath();
+            g.arc(x + 6, y + 6.5, 4.5, 0, 7);
+            g.lineWidth = 1.2;
+            g.strokeStyle = on ? "#00b8d4" : "#b4bdc8";
+            g.fillStyle = "#00b8d4";
+            if (on) g.fill();
+            else g.stroke();
+            g.restore();
           };
           const icon = (k, xl, xr) => {
             const x = xr - 16,
