@@ -1132,9 +1132,10 @@
        * column starts a new column: green = buyers pushing,
        * black = sellers. A column spans the bricks it visited.
        */
-      function pfCols(days, st) {
+      function pfCols(days) {
         const cols = [];
-        let cur = null,
+        let st = 0,
+          cur = null,
           b = null,
           vt = 0,
           buy = 0,
@@ -1156,6 +1157,7 @@
             cols.push(
               (cur = {
                 up,
+                st,
                 t0: vt,
                 lo: Math.min(b, Math.floor(f / st)),
                 hi: Math.max(b, Math.floor(f / st)),
@@ -1182,6 +1184,13 @@
         days.forEach((dS) => {
           const d = aggrT.get(dS);
           if (!d) return;
+          /* each day its own box, as its profile: a new box
+             size starts a new column */
+          const s2 = pfStep(dS);
+          if (s2 !== st) {
+            fin();
+            [b, cur, st] = [null, null, s2];
+          }
           d.tr.forEach(([tt, p, q, s]) => {
             const bb = Math.floor(p / st);
             if (bb !== b) {
@@ -1212,10 +1221,11 @@
        * trade changes the columns.
        */
       let pfHotC = null;
-      function pfHot(all, st) {
+      function pfHot(all) {
         const z = all[all.length - 1],
           zv = z ? [...z.v.values()].reduce((a, b) => a + b, 0) : 0,
-          key = [st, all.length, z && z.d.size, z && z.lo, zv].join();
+          key = [all[0] && all[0].st, z && z.st, all.length,
+            z && z.d.size, z && z.lo, zv].join();
         if (pfHotC && pfHotC.key === key) return pfHotC;
         const r = Math.ceil(BIG_PERC * BIG_WIN) - 1,
           top = (xs, k) =>
@@ -1251,8 +1261,8 @@
             dn = 1e9;
           c.d.forEach((v, r) => {
             if (!hot.has(k + "|" + r)) return;
-            if (v >= 0) up = Math.max(up, (r + 1) * st);
-            else dn = Math.min(dn, r * st);
+            if (v >= 0) up = Math.max(up, (r + 1) * c.st);
+            else dn = Math.min(dn, r * c.st);
           });
           if (up > -1e9) gt = up;
           if (dn < 1e9) bb = dn;
@@ -1380,9 +1390,11 @@
         volDays.set(dS, r);
         return r;
       }
-      /* P&F box: a tenth of the vol step, else 25 */
-      function pfStep() {
-        return volN > 0 ? Math.max(1, Math.ceil(volN / 10)) : 25;
+      /* P&F box of a day: a tenth of its vol, as its profile
+         rows, else 25 */
+      function pfStep(dS) {
+        const v = volOfDay(dS) || volN;
+        return v > 0 ? Math.max(1, Math.ceil(v / 10)) : 25;
       }
       /*
        * Alerts: on each window, the up / down triangles arm
@@ -1414,18 +1426,18 @@
       function pfEvents() {
         const d1 = dayOf(Date.now()),
           d0 = d1 - 86400000,
-          st = pfStep(),
           out = [];
         loadAggr(d0);
         loadAggr(d1);
         if (!aggrT.get(d0) || !aggrT.get(d1)) return null;
-        const all = pfCols([d0, d1], st),
-          hs = pfHot(all, st),
+        const all = pfCols([d0, d1]),
+          hs = pfHot(all),
           n = all.length;
         /* a column's Sg colour at its last trade: 1 green,
            -1 black, 0 neutral (as the bricks are drawn) */
         const zone = (k) => {
-          const r = Math.floor(all[k].lp / st),
+          const st = all[k].st,
+            r = Math.floor(all[k].lp / st),
             gT = hs.gTop[k],
             bB = hs.bBot[k];
           return gT != null && r * st >= gT
@@ -1450,7 +1462,7 @@
                 (z > 0 ? "green " : "black ") + all[k].lp.toFixed(0),
             });
         }
-        return { ctx: st, ev: out };
+        return { ctx: pfStep(d0) + "|" + pfStep(d1), ev: out };
       }
       function alEvents(w) {
         if (w === "pf") return pfEvents();
@@ -4246,12 +4258,12 @@
            * black above a seller one. Rolling, as on the
            * candles (see pfHot).
            */
-          const drawPfCols = (all, shown, jOf, pa, sl, st) => {
+          const drawPfCols = (all, shown, jOf, pa, sl) => {
             /* Vc: the volume profile's colour for a brick
                traded at time t on row r: same day, same
                period (the last closed one while it forms),
                same price, as the profile shows it */
-            const vcAt = (t, r) => {
+            const vcAt = (t, r, st) => {
               const dS = dayOf(t);
               let i = Math.floor((t - dS) / TPO_MS);
               if (dS + (i + 1) * TPO_MS > Date.now()) i--;
@@ -4260,7 +4272,7 @@
               const row = Math.floor(((r + 0.5) * st) / m.step);
               return m.get(row) || "";
             };
-            const hs = pfHot(all, st),
+            const hs = pfHot(all),
               ci = new Map(all.map((c, k) => [c, k])),
               shade = (c, r) => [
                 (c.d.get(r) || 0) < 0 ? "#000" : "#089981",
@@ -4277,7 +4289,8 @@
               /* bricks wide (at least 7px), line hairline-thin */
               const xm = pa + sl * jOf(i),
                 w = Math.max(7, sl * 0.9),
-                x = xm - w / 2;
+                x = xm - w / 2,
+                st = c.st;
               pfX.push([c.t0, xm]);
               xs.set(c, xm);
               /* Br: every box a brick, coloured by the time the
@@ -4296,7 +4309,7 @@
                   const k = ci.get(c),
                     gT = hs.gTop[k],
                     bB = hs.bBot[k],
-                    vc = pfVc ? vcAt(t, r) : null,
+                    vc = pfVc ? vcAt(t, r, st) : null,
                     vcOn =
                       vc != null &&
                       (vc.startsWith("rgba(8,153,129") ||
@@ -4325,7 +4338,7 @@
                     w,
                     Math.max(1, yB - yT) + 0.5,
                   );
-                  if (solid && pfHl) hotB.push([xm, r, col]);
+                  if (solid && pfHl) hotB.push([xm, r, col, st]);
                 }
               /* the column as one line, buyers green / sellers
                  black, then a real brick on the strongest boxes */
@@ -4376,7 +4389,7 @@
             });
             /* highlighted box, green buys / black sells, with
                one more brick each side so it stands out */
-            hotB.forEach(([xm, r, col]) => {
+            hotB.forEach(([xm, r, col, st]) => {
               const yT = Y((r + 1) * st),
                 yB = Y(r * st),
                 h = Math.max(6, yB - yT - 1);
@@ -4413,6 +4426,7 @@
               all.forEach((c, k) => {
                 const gT = hs.gTop[k],
                   bB = hs.bBot[k];
+                const st = c.st;
                 for (let r = c.lo; r <= c.hi; r++) {
                   const z =
                     gT != null && r * st >= gT
@@ -4421,7 +4435,8 @@
                         ? -1
                         : 0;
                   const t = c.tm.has(r) ? c.tm.get(r) : c.t0;
-                  if (z) br.push([t, c, r, z]);
+                  /* by the brick's bottom: rows differ by day */
+                  if (z) br.push([t, c, r * st, z]);
                 }
               });
               br.sort((a, b) => a[0] - b[0]);
@@ -4429,19 +4444,19 @@
               let run = 0,
                 ext = 0,
                 done = false;
-              br.forEach(([, c, r, z]) => {
+              br.forEach(([, c, p, z]) => {
                 if (z !== run) {
                   if (run) last.set(run, ext);
-                  [run, ext, done] = [z, r, false];
+                  [run, ext, done] = [z, p, false];
                 } else
-                  ext = z > 0 ? Math.max(ext, r) : Math.min(ext, r);
+                  ext = z > 0 ? Math.max(ext, p) : Math.min(ext, p);
                 const L = last.get(z);
-                if (done || L == null || (z > 0 ? r <= L : r >= L))
+                if (done || L == null || (z > 0 ? p <= L : p >= L))
                   return;
                 done = true;
                 if (!xs.has(c)) return;
                 const x = xs.get(c),
-                  y = z > 0 ? Y(r * st) + 3 : Y((r + 1) * st) - 3,
+                  y = z > 0 ? Y(p) + 3 : Y(p + c.st) - 3,
                   e = z > 0 ? 8 : -8;
                 g.beginPath();
                 g.moveTo(x, y);
@@ -4679,11 +4694,12 @@
             const pa = pL;
             /* P&F: columns from yesterday's and today's trades,
                box = the brick */
-            const pst = pfStep(),
-              d1 = dayOf(Date.now());
+            const d1 = dayOf(Date.now()),
+              s0 = pfStep(d1 - DAY),
+              s1 = pfStep(d1);
             loadAggr(d1 - DAY);
             loadAggr(d1);
-            const pfc = pfCols([d1 - DAY, d1], pst);
+            const pfc = pfCols([d1 - DAY, d1]);
             const nFit = pfN,
               sl = pcW / nFit;
             pcShow = nFit;
@@ -4710,14 +4726,19 @@
               k1 = Math.min(items.length, items.length - ib),
               cv2 = items.slice(k0, k1),
               jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
-            drawPfCols(pfc, cv2, jOf, pa, sl, pst);
+            drawPfCols(pfc, cv2, jOf, pa, sl);
             g.restore();
             /* framed, named, and says so when it is empty */
             panel(pa, pcW);
             g.fillStyle = "#6b7684";
             g.textAlign = "center";
             const pm = pa + pcW / 2;
-            g.fillText("P&F, box " + pst, pm, bot + 10);
+            /* box: yesterday's / today's */
+            g.fillText(
+              "P&F, box " + (s0 === s1 ? s1 : s0 + " / " + s1),
+              pm,
+              bot + 10,
+            );
             if (!items.length)
               g.fillText("loading trades", pm, (top + bot) / 2);
 
