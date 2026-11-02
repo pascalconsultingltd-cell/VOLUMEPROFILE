@@ -490,8 +490,8 @@
               ><button
                 id="pfLhTog"
                 class="a"
-                title="Blue / orange from the first hot brick past
-                  the other side's, or a volume dot broken"
+                title="Columns blue / orange once one trades past
+                  the latest black / green volume dot"
               >
                 LH
               </button
@@ -4289,23 +4289,14 @@
             const hs = pfHot(all),
               ci = new Map(all.map((c, k) => [c, k])),
               hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
-              BL = "#2962ff",
-              OR = "#ff6d00",
-              /* LH: hot bricks in trade order; lhM = the blue /
-                 orange ones, [time, colour] */
-              hc = new Map(),
+              hotCol = (c, r) =>
+                (c.d.get(r) || 0) < 0 ? "#000" : "#00e676",
+              /* LH: a column trading under the latest green dot's
+                 low turns what follows orange, over the latest
+                 black dot's high blue; once per dot. lhM =
+                 [time, colour] of each switch */
               lhM = [];
             if (pfLh) {
-              const hb = [];
-              all.forEach((c, k) =>
-                c.d.forEach((v, r) => {
-                  if (hs.hot.has(k + "|" + r))
-                    hb.push([c.tm.get(r), k, r, v]);
-                }),
-              );
-              /* a column trading under the latest green dot's
-                 low turns orange from then, over the latest
-                 black dot's high blue; once per dot */
               let gD = null,
                 bD = null;
               all.forEach((c, k) => {
@@ -4317,12 +4308,12 @@
                   return t == null ? c.t0 : t;
                 };
                 if (gD != null && c.pl < gD) {
-                  hb.push([at((r) => r * c.st < gD), k, null, OR]);
+                  lhM.push([at((r) => r * c.st < gD), "#ff6d00"]);
                   gD = null;
                 }
                 if (bD != null && c.ph > bD) {
                   const t = at((r) => (r + 1) * c.st > bD);
-                  hb.push([t, k, null, BL]);
+                  lhM.push([t, "#2962ff"]);
                   bD = null;
                 }
                 if (hs.dot.has(k)) {
@@ -4330,35 +4321,9 @@
                   else bD = c.ph;
                 }
               });
-              hb.sort((a, b) => a[0] - b[0]);
-              /* only the brick that switches is coloured: blue
-                 for the first green above the latest black,
-                 orange the mirror */
-              let gB = null,
-                bT = null;
-              hb.forEach(([t, k, r, v]) => {
-                if (r == null) return lhM.push([t, v]);
-                const c = all[k],
-                  lo = r * c.st;
-                let col = null;
-                if (v >= 0) {
-                  if (bT != null && lo >= bT) [col, bT] = [BL, null];
-                  gB = lo;
-                } else {
-                  if (gB != null && lo + c.st <= gB)
-                    [col, gB] = [OR, null];
-                  bT = lo + c.st;
-                }
-                if (!col) return;
-                lhM.push([t, col]);
-                hc.set(k + "|" + r, col);
-              });
             }
-            const hotCol = (c, r) =>
-              hc.get(ci.get(c) + "|" + r) ||
-              ((c.d.get(r) || 0) < 0 ? "#000" : "#00e676");
-            /* LH: what trades after a blue / orange hot brick
-               takes its colour, till the next */
+            /* LH: what trades after a switch takes its colour,
+               till the next */
             const lhAt = (t) => {
               let a = 0,
                 z = lhM.length;
