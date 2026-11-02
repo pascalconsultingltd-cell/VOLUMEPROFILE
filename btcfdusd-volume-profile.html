@@ -469,13 +469,6 @@
             ><span class="lbl">P&amp;F</span
             ><span class="box"
               ><button
-                id="pfTog"
-                class="a"
-                title="Aggression P&amp;F: new column on taker flip"
-              >
-                P&amp;F
-              </button
-              ><button
                 id="pfBrTog"
                 class="a"
                 title="P&amp;F bricks coloured by time; off = lines"
@@ -1619,11 +1612,11 @@
         $("stTog").className = stCol ? "a" : "";
         schedule();
       }
-      /* the P&F panel (P&F button) */
+      /* the P&F panel: closed by its cross, back with the
+         P&F tag at the chart's top left */
       let pcPf = true;
       function setPcPf(v) {
         pcPf = !!v;
-        $("pfTog").className = pcPf ? "a" : "";
         schedule();
       }
       /* P&F drawn as bricks coloured like the profiles (Br
@@ -5513,6 +5506,36 @@
             g.fillRect(x0 - 2, 0, px0 - x0 + 2, H);
           }
           if (cfg.main) {
+            /* P&F: a cross at its top left closes it; once
+               closed, a P&F tag there on the chart opens it */
+            if (pcW || (cfg.tpo && !pcPf && !full)) {
+              const x = pcW ? pL + 6 : x0 + 4,
+                y = top + 4;
+              g.save();
+              g.setLineDash([]);
+              g.lineWidth = 1.5;
+              g.strokeStyle = "#8a94a3";
+              g.fillStyle = "#6b7684";
+              if (pcW) {
+                g.beginPath();
+                g.moveTo(x, y);
+                g.lineTo(x + 9, y + 9);
+                g.moveTo(x + 9, y);
+                g.lineTo(x, y + 9);
+                g.stroke();
+                icons.push({ k: "x|pc", x: x - 4, y: y - 4, w: 17,
+                  h: 17 });
+              } else {
+                g.font = "11px ui-monospace,Menlo,monospace";
+                g.textAlign = "left";
+                g.textBaseline = "top";
+                g.strokeRect(x - 0.5, y - 1.5, 40, 15);
+                g.fillText("+P&F", x + 4, y + 1);
+                icons.push({ k: "o|pc", x: x - 2, y: y - 3, w: 44,
+                  h: 19 });
+              }
+              g.restore();
+            }
             if (pcW) icon("pc", pL, pL + pcW);
             if (pcW) alIcons("pf", pL + pcW);
             if (tpoW) icon("tpo", 1, tR - 1);
@@ -6360,6 +6383,7 @@
             if (hit2) {
               const [a, w, dir] = hit2.k.split("|");
               if (a === "a") alToggle(w, dir);
+              else if (a === "x" || a === "o") setPcPf(a === "o");
               else setFull(full === hit2.k ? null : hit2.k);
               e.preventDefault();
               return;
@@ -7212,7 +7236,6 @@
       $("czTog").onclick = () => setShowCZ(!showCZ);
       $("lcTog").onclick = () => setShowLC(!showLC);
       $("agTog").onclick = () => setAgeOrd(!ageOrd);
-      $("pfTog").onclick = () => setPcPf(!pcPf);
       $("pfBrTog").onclick = () => setPfBr(!pfBr);
       $("pfSgTog").onclick = () => setPfSg(!pfSg);
       $("pfHlTog").onclick = () => setPfHl(!pfHl);
