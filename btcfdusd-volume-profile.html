@@ -1543,7 +1543,7 @@
       } catch (e) {}
       /* P&F: the LH colour switches in the last two
          columns, up = to blue, down = to orange; calm = a
-         column starting a calm run (cyan box) */
+         column starting a calm run (grey box) */
       function pfEvents() {
         const d1 = dayOf(Date.now()),
           d0 = d1 - 86400000;
@@ -4326,7 +4326,7 @@
               else g.stroke();
               g.restore();
             });
-            /* P&F: a cyan circle arms the calm alert */
+            /* P&F: a grey circle arms the calm alert */
             if (w !== "pf") return;
             const x = xr - 72,
               y = top + 3,
@@ -4338,8 +4338,8 @@
             g.beginPath();
             g.arc(x + 6, y + 6.5, 4.5, 0, 7);
             g.lineWidth = 1.2;
-            g.strokeStyle = on ? "#00b8d4" : "#b4bdc8";
-            g.fillStyle = "#00b8d4";
+            g.strokeStyle = on ? "#9e9e9e" : "#b4bdc8";
+            g.fillStyle = "#9e9e9e";
             if (on) g.fill();
             else g.stroke();
             g.restore();
@@ -4540,11 +4540,11 @@
               g.fill();
             });
             /* excitement clusters: a box round each run of columns
-               whose smoothed rank is 0.8+ (red) or 0.25- (cyan,
+               whose smoothed rank is 0.8+ (red) or 0.25- (grey,
                quiet), over its range */
             [
               ["#f23645", (q) => q >= 0.8],
-              ["#00b8d4", (q) => q <= 0.25],
+              ["#9e9e9e", (q) => q <= 0.25],
             ].forEach(([col, ok]) => {
               let run = [];
               shown.concat(null).forEach((c) => {
