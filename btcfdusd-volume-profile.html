@@ -470,7 +470,6 @@
             ><span class="box"
               ><button
                 id="pfBrTog"
-                class="a"
                 title="P&amp;F bricks coloured by time; off = lines"
               >
                 Br
@@ -484,7 +483,6 @@
               </button
               ><button
                 id="pfSwTog"
-                class="a"
                 title="Swing triangles (with Colour)"
               >
                 Sw
@@ -499,6 +497,7 @@
               </button
               ><button
                 id="pfHlTog"
+                class="a"
                 title="P&amp;F signal bricks and volume dots"
               >
                 Alrt
@@ -1648,7 +1647,7 @@
       }
       /* P&F drawn as bricks coloured like the profiles (Br
          button); off = the column lines */
-      let pfBr = true;
+      let pfBr = false;
       function setPfBr(v) {
         pfBr = !!v;
         $("pfBrTog").className = pfBr ? "a" : "";
@@ -1659,7 +1658,7 @@
          latest black one black (Br view) */
       /* Hl button: show the P&F signal bricks and volume
          dots (off: only the Sg colours) */
-      let pfHl = false;
+      let pfHl = true;
       /* Vc button: P&F bricks in the volume profile's latest
          known St colour at their price, green or red; others
          a thin neutral line (wins over Sg) */
@@ -1682,7 +1681,7 @@
         $("pfLhTog").className = pfLh ? "a" : "";
         schedule();
       }
-      let pfSw = true;
+      let pfSw = false;
       function setPfSw(v) {
         pfSw = !!v;
         $("pfSwTog").className = pfSw ? "a" : "";
@@ -4342,6 +4341,29 @@
                   ? "#00e676"
                   : "#2962ff";
             };
+            /* LH: every blue / orange hot brick by time; what
+               trades after it takes its colour, till the next */
+            const lhM = [];
+            if (pfLh)
+              all.forEach((c, k) =>
+                c.d.forEach((v, r) => {
+                  if (!hs.hot.has(k + "|" + r)) return;
+                  const col = hotCol(c, r);
+                  if (col === "#2962ff" || col === "#ff6d00")
+                    lhM.push([c.tm.get(r), col]);
+                }),
+              );
+            lhM.sort((a, b) => a[0] - b[0]);
+            const lhAt = (t) => {
+              let a = 0,
+                z = lhM.length;
+              while (a < z) {
+                const m = (a + z) >> 1;
+                if (lhM[m][0] < t) a = m + 1;
+                else z = m;
+              }
+              return a ? lhM[a - 1][1] : null;
+            };
             /* Br: bw = brick width, bricks touch (+.5 hides
                seams); hotB = highlighted boxes,
                drawn last with a brick each side */
@@ -4378,7 +4400,8 @@
                       vc != null &&
                       (vc.startsWith("rgba(8,153,129") ||
                         vc.startsWith("rgba(229,57,53")),
-                    sg = pfSg && vc == null,
+                    lh = vc == null ? lhAt(t) : null,
+                    sg = pfSg && vc == null && !lh,
                     up = sg && gT != null && r * st >= gT,
                     dn = sg && bB != null && (r + 1) * st <= bB,
                     thin =
@@ -4387,6 +4410,8 @@
                   /* Vc: the profile's green / red at this price */
                   g.fillStyle = vcOn
                     ? vc
+                    : lh
+                    ? lh
                     : up
                     ? "#089981"
                     : dn
@@ -4408,7 +4433,8 @@
               /* the column as one line, buyers green / sellers
                  black, then a real brick on the strongest boxes */
               if (!pfBr) {
-                g.strokeStyle = c.up ? "#089981" : "#000";
+                g.strokeStyle =
+                  lhAt(c.t0) || (c.up ? "#089981" : "#000");
                 g.lineWidth = 1;
                 g.beginPath();
                 g.moveTo(xm, Y(c.ph));
@@ -6982,7 +7008,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 14;
+      const DEFAULTS_VER = 15;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7090,10 +7116,14 @@
         /* P&F: default changed in version 9 */
         if (st.dv >= 9 && typeof st.pcPf === "boolean")
           setPcPf(st.pcPf);
-        if (typeof st.pfBr === "boolean") setPfBr(st.pfBr);
+        /* Br, Sw, Alrt: defaults changed in version 15 */
+        if (st.dv >= 15 && typeof st.pfBr === "boolean")
+          setPfBr(st.pfBr);
         if (typeof st.pfSg === "boolean") setPfSg(st.pfSg);
-        if (typeof st.pfHl === "boolean") setPfHl(st.pfHl);
-        if (typeof st.pfSw === "boolean") setPfSw(st.pfSw);
+        if (st.dv >= 15 && typeof st.pfHl === "boolean")
+          setPfHl(st.pfHl);
+        if (st.dv >= 15 && typeof st.pfSw === "boolean")
+          setPfSw(st.pfSw);
         if (typeof st.pfLh === "boolean") setPfLh(st.pfLh);
         if (typeof st.pfVc === "boolean") setPfVc(st.pfVc);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
