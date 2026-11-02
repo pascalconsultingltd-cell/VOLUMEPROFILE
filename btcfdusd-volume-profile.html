@@ -578,7 +578,7 @@
                   </button>
                   <button
                     id="vwTog"
-                    class="a"
+                    class=""
                     title="VWAP of the UTC day, on the main chart"
                   >
                     VWAP
@@ -997,7 +997,7 @@
         schedule();
       }
       /* the UTC day's VWAP on the main chart (VWAP button) */
-      let showVW = true;
+      let showVW = false;
       function setShowVW(v) {
         showVW = !!v;
         $("vwTog").className = showVW ? "a" : "";
@@ -7107,7 +7107,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 16;
+      const DEFAULTS_VER = 17;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7201,7 +7201,8 @@
         if (typeof st.followBox === "boolean")
           setFollowBox(st.followBox);
         if (typeof st.showFZ === "boolean") setShowFZ(st.showFZ);
-        if (typeof st.showVW === "boolean") setShowVW(st.showVW);
+        if (st.dv >= 17 && typeof st.showVW === "boolean")
+          setShowVW(st.showVW);
         /* 6h: default changed in version 4, HL / VA in 5 */
         const cur4 = st.dv >= 4,
           cur5 = st.dv >= 5;
