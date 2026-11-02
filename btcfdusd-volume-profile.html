@@ -4435,7 +4435,7 @@
                   if (!pfHl || !hot(c, r)) continue;
                   g.fillStyle = hotCol(c, r);
                   g.beginPath();
-                  g.arc(xm, Y((r + 0.5) * st), 3, 0, 7);
+                  g.arc(xm, Y((r + 0.5) * st), 2, 0, 7);
                   g.fill();
                 }
               }
@@ -4461,7 +4461,7 @@
             hotB.forEach(([xm, r, col, st]) => {
               g.fillStyle = col;
               g.beginPath();
-              g.arc(xm, Y((r + 0.5) * st), 3, 0, 7);
+              g.arc(xm, Y((r + 0.5) * st), 2, 0, 7);
               g.fill();
             });
             /*
