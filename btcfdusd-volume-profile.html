@@ -1485,24 +1485,17 @@
           Object.keys(alerts).length ? "a" : "");
       document.getElementById("alClr").onclick = alClear;
       /* arrow next to the price: hide / show the toggles,
-         remembered per device */
+         folded on every load */
       {
         const b = document.getElementById("ctlTog"),
           set = (h) => {
             document.body.classList.toggle("noctl", h);
             b.textContent = h ? "▸" : "▾";
-            try {
-              localStorage.setItem("btcfdusd-ctl", h ? "1" : "");
-            } catch (e) {}
             requestAnimationFrame(() =>
               charts.forEach((c) => c.size()),
             );
           };
-        let h0 = false;
-        try {
-          h0 = !!localStorage.getItem("btcfdusd-ctl");
-        } catch (e) {}
-        set(h0);
+        set(true);
         b.onclick = () =>
           set(!document.body.classList.contains("noctl"));
       }
