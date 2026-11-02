@@ -4317,6 +4317,33 @@
                     hb.push([c.tm.get(r), k, r, v]);
                 }),
               );
+              /* a column trading under the latest green dot's
+                 low turns orange from then, over the latest
+                 black dot's high blue; once per dot */
+              let gD = null,
+                bD = null;
+              all.forEach((c, k) => {
+                const at = (ok) => {
+                  let t = null;
+                  c.tm.forEach((tt, r) => {
+                    if (ok(r) && (t == null || tt < t)) t = tt;
+                  });
+                  return t == null ? c.t0 : t;
+                };
+                if (gD != null && c.pl < gD) {
+                  hb.push([at((r) => r * c.st < gD), k, null, OR]);
+                  gD = null;
+                }
+                if (bD != null && c.ph > bD) {
+                  const t = at((r) => (r + 1) * c.st > bD);
+                  hb.push([t, k, null, BL]);
+                  bD = null;
+                }
+                if (hs.dot.has(k)) {
+                  if (c.up) gD = c.pl;
+                  else bD = c.ph;
+                }
+              });
               hb.sort((a, b) => a[0] - b[0]);
               /* green: blue in the high half, first above the
                  latest black, or while blue rules (the latest
@@ -4325,6 +4352,11 @@
                 bT = null,
                 reg = null;
               hb.forEach(([t, k, r, v]) => {
+                if (r == null) {
+                  reg = v;
+                  lhM.push([t, v]);
+                  return;
+                }
                 const c = all[k],
                   lo = r * c.st,
                   lw = low(c, r);
