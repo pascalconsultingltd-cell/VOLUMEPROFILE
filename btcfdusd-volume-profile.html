@@ -4342,8 +4342,9 @@
             const hs = pfHot(all),
               ci = new Map(all.map((c, k) => [c, k])),
               hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
+              /* hot box dot: blue buyers, orange sellers */
               hotCol = (c, r) =>
-                (c.d.get(r) || 0) < 0 ? "#000" : "#00e676",
+                (c.d.get(r) || 0) < 0 ? "#ff6d00" : "#2962ff",
               lhM = pfLh ? pfLhSw(all, hs) : [];
             /* LH: what trades after a switch takes its colour,
                till the next */
