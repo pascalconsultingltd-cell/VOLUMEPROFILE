@@ -3137,7 +3137,11 @@
             return d < 0 ? "0,0,0" : "8,153,129";
           };
           /* the TPO profiles drawn at the left of the chart */
-          const colW = (tpoW - 6 - (nTpo - 1) * gap) / nTpo,
+          /* 62px kept clear on the right for the last price tag */
+          const colW = Math.max(
+              1,
+              (tpoW - 6 - 62 - (nTpo - 1) * gap) / nTpo,
+            ),
             cnt = cfg.tpo && tpoW > 0 ? nTpo : 0;
           profs = [];
           /* tb whole days back, tf = the slide in between; one
