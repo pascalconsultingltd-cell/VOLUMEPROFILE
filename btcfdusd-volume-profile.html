@@ -3388,7 +3388,8 @@
               vpEv = { ctx: [vf, P.step].join(), ev };
             }
             let iNow = -1,
-              rNow = null;
+              rNow = null,
+              curB = null;
             if (P.dS === dayOf(Date.now()) && k15.length) {
               P.rows.forEach((l) =>
                 l.forEach((i) => (iNow = Math.max(iNow, i))),
@@ -3418,19 +3419,19 @@
                   Math.max(1, rowH - 1),
                 );
                 /* today's latest brick (current period, price
-                   row): border in the last price blue */
-                if (r === rNow && idx === iNow) {
-                  g.strokeStyle = "#2962ff";
-                  g.lineWidth = 3;
-                  g.strokeRect(
-                    cx0 + k * lw,
-                    yT + 0.5,
-                    Math.max(1, lw - 1),
-                    Math.max(1, rowH - 1),
-                  );
-                }
+                   row): marked once every brick is drawn */
+                if (r === rNow && idx === iNow)
+                  curB = [cx0 + k * lw + lw / 2, yT + rowH / 2];
               });
             });
+            /* around it, an empty square in the last price
+               blue, 5px clear of the brick on its long side */
+            if (curB) {
+              const s = Math.max(lw, rowH) + 10;
+              g.strokeStyle = "#2962ff";
+              g.lineWidth = 2;
+              g.strokeRect(curB[0] - s / 2, curB[1] - s / 2, s, s);
+            }
             /* sub POCs: P1 solid, P2 dashed, P3 dotted, each
                tagged with its price and its birth brick; green
                above the POC before it, black below (navy with
