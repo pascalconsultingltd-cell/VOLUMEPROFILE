@@ -4292,13 +4292,16 @@
               hotCol = (c, r) =>
                 (c.d.get(r) || 0) < 0 ? "#000" : "#00e676",
               /* LH: a column trading under the latest green dot's
-                 low turns what follows orange, over the latest
-                 black dot's high blue; once per dot. lhM =
-                 [time, colour] of each switch */
+                 low makes orange pending, over the latest black
+                 dot's high blue; once per dot. Pending orange
+                 turns what follows orange on a swing low: a
+                 buyer column (pull back), then a new low; blue
+                 the mirror. lhM = [time, colour] of each switch */
               lhM = [];
             if (pfLh) {
               let gD = null,
-                bD = null;
+                bD = null,
+                pd = null;
               all.forEach((c, k) => {
                 const at = (ok) => {
                   let t = null;
@@ -4307,13 +4310,28 @@
                   });
                   return t == null ? c.t0 : t;
                 };
+                /* pd: { dn, L = extreme since the break, pb =
+                   pulled back } */
+                if (pd) {
+                  const { dn, L } = pd,
+                    x = dn ? c.pl : c.ph;
+                  if (pd.pb && (dn ? x < L : x > L)) {
+                    const t = at((r) =>
+                      dn ? r * c.st < L : (r + 1) * c.st > L,
+                    );
+                    lhM.push([t, dn ? "#ff6d00" : "#2962ff"]);
+                    pd = null;
+                  } else {
+                    pd.L = dn ? Math.min(L, x) : Math.max(L, x);
+                    if (c.up === dn) pd.pb = true;
+                  }
+                }
                 if (gD != null && c.pl < gD) {
-                  lhM.push([at((r) => r * c.st < gD), "#ff6d00"]);
+                  pd = { dn: true, L: c.pl, pb: false };
                   gD = null;
                 }
                 if (bD != null && c.ph > bD) {
-                  const t = at((r) => (r + 1) * c.st > bD);
-                  lhM.push([t, "#2962ff"]);
+                  pd = { dn: false, L: c.ph, pb: false };
                   bD = null;
                 }
                 if (hs.dot.has(k)) {
