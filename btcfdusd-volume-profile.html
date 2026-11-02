@@ -1290,6 +1290,17 @@
           fast = new Set();
         for (let k = BIG_WIN - 1; k < dt.length; k++)
           if (dt[k] < low(dt, k)) fast.add(k);
+        /* exc: excitement, each flip adds 1 and it halves every
+           30s; kept as its rank (0..1) in the BIG_WIN before it */
+        let e = 0;
+        const ex = all.map((c, k) => {
+            const h = k ? (c.t0 - all[k - 1].t0) / 3e4 : 1 / 0;
+            return (e = 1 + e * 0.5 ** h);
+          }),
+          exc = ex.map((v, k) => {
+            const w = ex.slice(Math.max(0, k - BIG_WIN + 1), k + 1);
+            return w.filter((q) => q <= v).length / w.length;
+          });
         /* gTop[k] / bBot[k]: top of the latest green
            highlight / bottom of the latest black one, as of
            column k (Sg button) */
@@ -1310,7 +1321,7 @@
           gTop[k] = gt;
           bBot[k] = bb;
         });
-        return (pfHotC = { key, hot, dot, fast, gTop, bBot });
+        return (pfHotC = { key, hot, dot, fast, exc, gTop, bBot });
       }
       /*
        * LH: a column trading under the latest green dot's low
@@ -4418,6 +4429,13 @@
                 st = c.st;
               pfX.push([c.t0, xm]);
               xs.set(c, xm);
+              /* excitement strip at the bottom: paler to redder by
+                 rank, solid red in the top 5% */
+              const q = hs.exc[ci.get(c)];
+              g.fillStyle = q > BIG_PERC
+                ? "#f23645"
+                : `rgba(242,54,69,${(q * q) / 2})`;
+              g.fillRect(xm - sl / 2, bot - 8, sl + 0.5, 8);
               /* Br: every box a brick, coloured by the time the
                  column first traded it, as the profiles; the
                  end bricks cut at the real high / low */
