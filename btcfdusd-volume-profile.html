@@ -4289,71 +4289,69 @@
             const hs = pfHot(all),
               ci = new Map(all.map((c, k) => [c, k])),
               hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
-              /* LH: the first hot green brick above the latest
-                 hot black one, the first hot black brick below
-                 the latest green */
-              past = new Set();
-            let gB = null,
-              bT = null;
-            all.forEach((c, k) =>
-              c.d.forEach((v, r) => {
-                const key = k + "|" + r,
-                  lo = r * c.st;
-                if (!hs.hot.has(key)) return;
-                if (v >= 0) {
-                  if (bT != null && lo >= bT) {
-                    past.add(key);
-                    bT = null;
-                  }
-                  gB = lo;
-                } else {
-                  if (gB != null && lo + c.st <= gB) {
-                    past.add(key);
-                    gB = null;
-                  }
-                  bT = lo + c.st;
+              /* LH: low = a brick in the low half of the range of
+                 the columns back until it spans vol/3 (10 boxes
+                 = vol) */
+              low = (c, r) => {
+                let k = ci.get(c),
+                  hi = c.ph,
+                  lo = c.pl;
+                while (k > 0 && hi - lo < (c.st * 10) / 3) {
+                  k--;
+                  hi = Math.max(hi, all[k].ph);
+                  lo = Math.min(lo, all[k].pl);
                 }
-              }),
-            );
-            /* LH: a hot brick by where it sits in the range of
-               the columns back until it spans vol/3 (10 boxes =
-               vol): green low half #00e676, high half blue;
-               black high half #000, low half orange; blue /
-               orange too for the first past the other side */
-            const hotCol = (c, r) => {
-              const sell = (c.d.get(r) || 0) < 0;
-              if (!pfLh) return sell ? "#000" : "#00e676";
-              let k = ci.get(c),
-                hi = c.ph,
-                lo = c.pl;
-              while (k > 0 && hi - lo < (c.st * 10) / 3) {
-                k--;
-                hi = Math.max(hi, all[k].ph);
-                lo = Math.min(lo, all[k].pl);
-              }
-              const low = (r + 0.5) * c.st < (hi + lo) / 2,
-                p = past.has(ci.get(c) + "|" + r);
-              return sell
-                ? low || p
-                  ? "#ff6d00"
-                  : "#000"
-                : low && !p
-                  ? "#00e676"
-                  : "#2962ff";
-            };
-            /* LH: every blue / orange hot brick by time; what
-               trades after it takes its colour, till the next */
-            const lhM = [];
-            if (pfLh)
+                return (r + 0.5) * c.st < (hi + lo) / 2;
+              },
+              BL = "#2962ff",
+              OR = "#ff6d00",
+              /* LH: hot bricks in trade order; lhM = the blue /
+                 orange ones, [time, colour] */
+              hc = new Map(),
+              lhM = [];
+            if (pfLh) {
+              const hb = [];
               all.forEach((c, k) =>
                 c.d.forEach((v, r) => {
-                  if (!hs.hot.has(k + "|" + r)) return;
-                  const col = hotCol(c, r);
-                  if (col === "#2962ff" || col === "#ff6d00")
-                    lhM.push([c.tm.get(r), col]);
+                  if (hs.hot.has(k + "|" + r))
+                    hb.push([c.tm.get(r), k, r, v]);
                 }),
               );
-            lhM.sort((a, b) => a[0] - b[0]);
+              hb.sort((a, b) => a[0] - b[0]);
+              /* green: blue in the high half, first above the
+                 latest black, or while blue rules (the latest
+                 blue / orange was blue); black: the mirror */
+              let gB = null,
+                bT = null,
+                reg = null;
+              hb.forEach(([t, k, r, v]) => {
+                const c = all[k],
+                  lo = r * c.st,
+                  lw = low(c, r);
+                let col, p;
+                if (v >= 0) {
+                  p = bT != null && lo >= bT;
+                  if (p) bT = null;
+                  gB = lo;
+                  col = p || !lw || reg === BL ? BL : "#00e676";
+                } else {
+                  p = gB != null && lo + c.st <= gB;
+                  if (p) gB = null;
+                  bT = lo + c.st;
+                  col = p || lw || reg === OR ? OR : "#000";
+                }
+                if (col === BL || col === OR) {
+                  reg = col;
+                  lhM.push([t, col]);
+                }
+                hc.set(k + "|" + r, col);
+              });
+            }
+            const hotCol = (c, r) =>
+              hc.get(ci.get(c) + "|" + r) ||
+              ((c.d.get(r) || 0) < 0 ? "#000" : "#00e676");
+            /* LH: what trades after a blue / orange hot brick
+               takes its colour, till the next */
             const lhAt = (t) => {
               let a = 0,
                 z = lhM.length;
