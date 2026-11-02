@@ -1630,11 +1630,6 @@
         if (alerts[k]) delete alerts[k];
         else {
           alerts[k] = { ctx: null, ids: [] };
-          /* a tap: the moment the browser allows sound */
-          try {
-            actx = actx || new AudioContext();
-            actx.resume();
-          } catch (e) {}
         }
         alSave();
       }
@@ -1657,6 +1652,18 @@
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) wake();
       });
+      /* sound needs a click or key on the page once per load:
+         any one turns it on, armed alerts restored or not */
+      const unmute = () => {
+        try {
+          actx = actx || new AudioContext();
+          actx.resume();
+        } catch (e) {}
+      };
+      unmute();
+      ["pointerdown", "keydown"].forEach((ev) =>
+        addEventListener(ev, unmute, true),
+      );
       wake();
       /* toast, the alert box, vibration and a beep, no system
          notification; the beep: A (880 Hz) up, E (659 Hz) down */
@@ -1674,14 +1681,17 @@
         try {
           navigator.vibrate([200, 100, 200]);
         } catch (e) {}
+        /* three beeps */
         try {
-          const o = actx.createOscillator(),
-            gn = actx.createGain();
-          o.frequency.value = up ? 880 : 659.25;
-          gn.gain.value = 0.2;
-          o.connect(gn).connect(actx.destination);
-          o.start();
-          o.stop(actx.currentTime + 0.3);
+          [0, 0.4, 0.8].forEach((s) => {
+            const o = actx.createOscillator(),
+              gn = actx.createGain();
+            o.frequency.value = up ? 880 : 659.25;
+            gn.gain.value = 0.3;
+            o.connect(gn).connect(actx.destination);
+            o.start(actx.currentTime + s);
+            o.stop(actx.currentTime + s + 0.25);
+          });
         } catch (e) {}
       }
       /* at most once a second: from the feed, and a timer */
