@@ -4331,36 +4331,26 @@
                 }
               });
               hb.sort((a, b) => a[0] - b[0]);
-              /* green: blue when first above the latest black, or
-                 while blue rules (the latest blue / orange was
-                 blue); black: the mirror */
+              /* only the brick that switches is coloured: blue
+                 for the first green above the latest black,
+                 orange the mirror */
               let gB = null,
-                bT = null,
-                reg = null;
+                bT = null;
               hb.forEach(([t, k, r, v]) => {
-                if (r == null) {
-                  reg = v;
-                  lhM.push([t, v]);
-                  return;
-                }
+                if (r == null) return lhM.push([t, v]);
                 const c = all[k],
                   lo = r * c.st;
-                let col, p;
+                let col = null;
                 if (v >= 0) {
-                  p = bT != null && lo >= bT;
-                  if (p) bT = null;
+                  if (bT != null && lo >= bT) [col, bT] = [BL, null];
                   gB = lo;
-                  col = p || reg === BL ? BL : "#00e676";
                 } else {
-                  p = gB != null && lo + c.st <= gB;
-                  if (p) gB = null;
+                  if (gB != null && lo + c.st <= gB)
+                    [col, gB] = [OR, null];
                   bT = lo + c.st;
-                  col = p || reg === OR ? OR : "#000";
                 }
-                if (col === BL || col === OR) {
-                  reg = col;
-                  lhM.push([t, col]);
-                }
+                if (!col) return;
+                lhM.push([t, col]);
                 hc.set(k + "|" + r, col);
               });
             }
