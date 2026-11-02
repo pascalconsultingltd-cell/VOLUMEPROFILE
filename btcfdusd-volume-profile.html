@@ -4295,7 +4295,8 @@
                  low makes orange pending, over the latest black
                  dot's high blue; once per dot. Pending orange
                  turns what follows orange on a swing low: a
-                 buyer column (pull back), then a new low; blue
+                 buyer column (pull back), then a low a brick
+                 under the one before; blue
                  the mirror. lhM = [time, colour] of each switch */
               lhM = [];
             if (pfLh) {
@@ -4314,10 +4315,11 @@
                    pulled back } */
                 if (pd) {
                   const { dn, L } = pd,
-                    x = dn ? c.pl : c.ph;
-                  if (pd.pb && (dn ? x < L : x > L)) {
+                    x = dn ? c.pl : c.ph,
+                    e = dn ? L - c.st : L + c.st;
+                  if (pd.pb && (dn ? x < e : x > e)) {
                     const t = at((r) =>
-                      dn ? r * c.st < L : (r + 1) * c.st > L,
+                      dn ? r * c.st < e : (r + 1) * c.st > e,
                     );
                     lhM.push([t, dn ? "#ff6d00" : "#2962ff"]);
                     pd = null;
