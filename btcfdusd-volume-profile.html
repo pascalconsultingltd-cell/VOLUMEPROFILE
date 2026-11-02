@@ -5733,6 +5733,17 @@
             g.stroke();
             g.setLineDash([]);
             ptag(mouse.y, pv.toFixed(DP), XB, XF);
+            /* and on the profiles' right edge, as the last price */
+            if (cfg.tpo && tpoW) {
+              const t = pv.toFixed(DP),
+                w = g.measureText(t).width + 12;
+              g.fillStyle = XB;
+              g.fillRect(pL - 2 - w, mouse.y - 9, w, 18);
+              g.fillStyle = XF;
+              g.textAlign = "left";
+              g.textBaseline = "middle";
+              g.fillText(t, pL - 2 - w + 6, mouse.y);
+            }
             let lbl = null;
             if (o) lbl = dlabel(o.c.t);
             /* over the P&F: the hovered column's start time */
