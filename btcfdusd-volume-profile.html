@@ -518,7 +518,7 @@
               </button
               ><button
                 id="pfHlTog"
-                class="a"
+                class=""
                 title="P&amp;F signal bricks and volume dots"
               >
                 Alrt
@@ -1763,7 +1763,7 @@
          latest black one black (Br view) */
       /* Hl button: show the P&F signal bricks and volume
          dots (off: only the Sg colours) */
-      let pfHl = true;
+      let pfHl = false;
       /* Vc button: P&F bricks in the volume profile's latest
          known St colour at their price, green or red; others
          a thin neutral line (wins over Sg) */
@@ -5291,6 +5291,33 @@
                 ptag(y, L.b.toFixed(DP), col);
             });
             g.restore();
+            /* and on the P&F, from the first column started at
+               or after each time */
+            if (pcW && pfX.length) {
+              const pR = pL + pcW,
+                pxAt = (t) => {
+                  if (t <= pfX[0][0]) return pL;
+                  const q = pfX.find(([t0]) => t0 >= t);
+                  return q ? q[1] : pR;
+                };
+              g.save();
+              g.beginPath();
+              g.rect(pL, top, pcW, bot - top);
+              g.clip();
+              g.lineWidth = 1.5;
+              g.setLineDash([]);
+              segs.forEach(([L, t0, t1]) => {
+                const xa = pxAt(t0),
+                  xb = pxAt(t1);
+                if (xb <= xa) return;
+                g.strokeStyle = L.by > 0 ? "#089981" : "#000";
+                g.beginPath();
+                g.moveTo(xa, Y(L.b));
+                g.lineTo(xb, Y(L.b));
+                g.stroke();
+              });
+              g.restore();
+            }
           }
           /* VWAP: from each UTC midnight, on (H + L + C) / 3 */
           if (cfg.main && showVW && geo.length) {
@@ -5395,7 +5422,7 @@
             g.beginPath();
             g.rect(x0, top, px0 - x0, bot - top);
             g.clip();
-            g.lineWidth = 2;
+            g.lineWidth = 1;
             piv.forEach((z, i) => {
               if (!i) return;
               const a = piv[i - 1],
@@ -7078,7 +7105,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 15;
+      const DEFAULTS_VER = 16;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7190,7 +7217,7 @@
         if (st.dv >= 15 && typeof st.pfBr === "boolean")
           setPfBr(st.pfBr);
         if (typeof st.pfSg === "boolean") setPfSg(st.pfSg);
-        if (st.dv >= 15 && typeof st.pfHl === "boolean")
+        if (st.dv >= 16 && typeof st.pfHl === "boolean")
           setPfHl(st.pfHl);
         if (st.dv >= 15 && typeof st.pfSw === "boolean")
           setPfSw(st.pfSw);
