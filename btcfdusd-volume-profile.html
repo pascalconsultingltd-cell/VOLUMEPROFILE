@@ -1630,14 +1630,7 @@
         if (alerts[k]) delete alerts[k];
         else {
           alerts[k] = { ctx: null, ids: [] };
-          /* a tap: the moment the browser allows these; asked
-             once per page load at most */
-          try {
-            const P = Notification;
-            if (!alToggle.asked && P.permission === "default")
-              P.requestPermission();
-            alToggle.asked = true;
-          } catch (e) {}
+          /* a tap: the moment the browser allows sound */
           try {
             actx = actx || new AudioContext();
             actx.resume();
@@ -1665,8 +1658,8 @@
         if (!document.hidden) wake();
       });
       wake();
-      /* toast, vibration, beep and a system notification;
-         the beep: A (880 Hz) up, the E below (659 Hz) down */
+      /* toast, the alert box, vibration and a beep, no system
+         notification; the beep: A (880 Hz) up, E (659 Hz) down */
       function notify(t, up = true) {
         toast(t);
         /* a line per alert, newest on top, until closed */
@@ -1689,23 +1682,6 @@
           o.connect(gn).connect(actx.destination);
           o.start();
           o.stop(actx.currentTime + 0.3);
-        } catch (e) {}
-        try {
-          if (Notification.permission !== "granted") return;
-          const sw = navigator.serviceWorker,
-            opt = {
-              body: t,
-              tag: t,
-              icon: "icon-192.png",
-              requireInteraction: true,
-            };
-          (sw ? sw.getRegistration() : Promise.resolve(null))
-            .then((r) =>
-              r
-                ? r.showNotification("BTCFDUSD", opt)
-                : new Notification("BTCFDUSD", opt),
-            )
-            .catch(() => {});
         } catch (e) {}
       }
       /* at most once a second: from the feed, and a timer */
