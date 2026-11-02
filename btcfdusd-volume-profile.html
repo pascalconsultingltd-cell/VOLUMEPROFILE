@@ -490,8 +490,8 @@
               ><button
                 id="pfLhTog"
                 class="a"
-                title="Hot bricks: blue / orange when on the other
-                  half of the last vol/3 range"
+                title="Blue / orange from the first hot brick past
+                  the other side's, or a volume dot broken"
               >
                 LH
               </button
@@ -4289,20 +4289,6 @@
             const hs = pfHot(all),
               ci = new Map(all.map((c, k) => [c, k])),
               hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
-              /* LH: low = a brick in the low half of the range of
-                 the columns back until it spans vol/3 (10 boxes
-                 = vol) */
-              low = (c, r) => {
-                let k = ci.get(c),
-                  hi = c.ph,
-                  lo = c.pl;
-                while (k > 0 && hi - lo < (c.st * 10) / 3) {
-                  k--;
-                  hi = Math.max(hi, all[k].ph);
-                  lo = Math.min(lo, all[k].pl);
-                }
-                return (r + 0.5) * c.st < (hi + lo) / 2;
-              },
               BL = "#2962ff",
               OR = "#ff6d00",
               /* LH: hot bricks in trade order; lhM = the blue /
@@ -4345,9 +4331,9 @@
                 }
               });
               hb.sort((a, b) => a[0] - b[0]);
-              /* green: blue in the high half, first above the
-                 latest black, or while blue rules (the latest
-                 blue / orange was blue); black: the mirror */
+              /* green: blue when first above the latest black, or
+                 while blue rules (the latest blue / orange was
+                 blue); black: the mirror */
               let gB = null,
                 bT = null,
                 reg = null;
@@ -4358,19 +4344,18 @@
                   return;
                 }
                 const c = all[k],
-                  lo = r * c.st,
-                  lw = low(c, r);
+                  lo = r * c.st;
                 let col, p;
                 if (v >= 0) {
                   p = bT != null && lo >= bT;
                   if (p) bT = null;
                   gB = lo;
-                  col = p || !lw || reg === BL ? BL : "#00e676";
+                  col = p || reg === BL ? BL : "#00e676";
                 } else {
                   p = gB != null && lo + c.st <= gB;
                   if (p) gB = null;
                   bT = lo + c.st;
-                  col = p || lw || reg === OR ? OR : "#000";
+                  col = p || reg === OR ? OR : "#000";
                 }
                 if (col === BL || col === OR) {
                   reg = col;
