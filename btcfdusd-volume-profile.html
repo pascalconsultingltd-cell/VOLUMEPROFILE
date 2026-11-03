@@ -485,7 +485,7 @@
               ><button
                 id="massTog"
                 class="a"
-                title="Only the vol mass round each sub POC, darkened"
+                title="Extra (colour), missing (empty) vs normal mass"
               >
                 Mass
               </button></span
@@ -860,6 +860,14 @@
         /* vol mass: bricks of the regimes behind the 240 vol
            (median); a PocStpCol zone colours from there */
         VOL_MASS = 227;
+      /* standard normal CDF (Abramowitz-Stegun 7.1.26) */
+      function ncdf(x) {
+        const t = 1 / (1 + (0.3275911 * Math.abs(x)) / Math.SQRT2),
+          y = 1 - t * (0.254829592 + t * (-0.284496736 + t *
+            (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) *
+            Math.exp((-x * x) / 2);
+        return x >= 0 ? (1 + y) / 2 : (1 - y) / 2;
+      }
       function stepCols(rows, step, sp, minB = 0) {
         const ks = [...rows.keys()],
           r0 = Math.min(...ks),
@@ -1803,8 +1811,8 @@
       /* St button: bricks by their steps value, sub POC
          lines and tags by the earliest session there */
       let stCol = false,
-        /* Mass button: only the vol mass around each day's
-           sub POCs, darkened */
+        /* Mass button: each day's real profile against a
+           perfect one, the vol mass normal round each sub POC */
         showMass = true;
       function setShowMass(v) {
         showMass = !!v;
@@ -3631,37 +3639,20 @@
                 (mid != null ? mid : k15[k15.length - 1].c) / P.step,
               );
             }
-            /* Mass: from each sub POC of the day, its whole row,
-               then one real brick above, one below, in turn,
-               outward through the profile until the vol mass is
-               used; only those bricks are drawn, darkened (row ->
-               how many from the left) */
-            const gone = new Map();
+            /* Mass: each sub POC's vol mass as a normal curve
+               round it, sigma = vol / 1.2816 (its 80% band two
+               vols tall, as the regimes behind the vol); exp =
+               the perfect bricks per row, all sub POCs added */
+            const exp = new Map();
             if (showMass) {
-              const ks = [...P.rows.keys()],
-                r0 = Math.min(...ks),
-                r1 = Math.max(...ks),
-                n = (r) => (P.rows.get(r) || []).length;
+              const sg = vf / 1.2816,
+                R = Math.ceil((4 * sg) / P.step);
               sp.forEach((S) => {
-                const p = Math.floor(S.px / P.step),
-                  took = new Map([[p, Math.min(n(p), VOL_MASS)]]),
-                  has = (r) => (took.get(r) || 0) < n(r);
-                let left = VOL_MASS - took.get(p),
-                  u = p + 1,
-                  w = p - 1,
-                  up = true;
-                while (left > 0) {
-                  while (u <= r1 && !has(u)) u++;
-                  while (w >= r0 && !has(w)) w--;
-                  if (u > r1 && w < r0) break;
-                  const r = (up && u <= r1) || w < r0 ? u : w;
-                  took.set(r, (took.get(r) || 0) + 1);
-                  left--;
-                  up = !up;
-                }
-                took.forEach((m, r) =>
-                  gone.set(r, Math.max(m, gone.get(r) || 0)),
-                );
+                const p = Math.floor(S.px / P.step);
+                for (let r = p - R; r <= p + R; r++)
+                  exp.set(r, (exp.get(r) || 0) + VOL_MASS * (
+                    ncdf(((r + 1) * P.step - S.px) / sg) -
+                    ncdf((r * P.step - S.px) / sg)));
               });
             }
             P.rows.forEach((lst, r) => {
@@ -3669,11 +3660,9 @@
               if (yT > bot || yT + rowH < top) return;
               lst.forEach((idx, k) => {
                 /* today's latest brick (current period, price
-                   row): marked once every brick is drawn; Mass:
-                   only its bricks */
+                   row): marked once every brick is drawn */
                 if (r === rNow && idx === iNow)
                   curB = [cx0 + k * lw + lw / 2, yT + rowH / 2];
-                if (showMass && k >= (gone.get(r) || 0)) return;
                 g.fillStyle = showUD && ud
                   ? ud
                   : stCol && shut(idx)
@@ -3686,11 +3675,28 @@
                 const bw = Math.max(1, lw - 1),
                   bh = Math.max(1, rowH - 1);
                 g.fillRect(cx0 + k * lw, yT + 0.5, bw, bh);
-                if (!showMass) return;
-                g.fillStyle = "rgba(0,0,0,.45)";
+                /* Mass: a brick the perfect mass has, faded; the
+                   extra ones keep their colour */
+                if (!showMass || k >= Math.round(exp.get(r) || 0))
+                  return;
+                g.fillStyle = "rgba(255,255,255,.7)";
                 g.fillRect(cx0 + k * lw, yT + 0.5, bw, bh);
               });
             });
+            /* Mass: the perfect bricks the profile lacks, empty
+               black squares */
+            if (showMass) {
+              g.strokeStyle = "#000";
+              g.lineWidth = 1;
+              exp.forEach((e, r) => {
+                const yT = Y((r + 1) * P.step);
+                if (yT > bot || yT + rowH < top) return;
+                for (let k = (P.rows.get(r) || []).length;
+                  k < Math.round(e); k++)
+                  g.strokeRect(cx0 + k * lw + 0.5, yT + 1,
+                    Math.max(1, lw - 2), Math.max(1, rowH - 2));
+              });
+            }
             /* around it, an empty 15px square in the last price
                blue, never tighter than the brick */
             if (curB) {
