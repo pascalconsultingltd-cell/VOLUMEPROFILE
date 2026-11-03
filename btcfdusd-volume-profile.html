@@ -5730,6 +5730,21 @@
           if (ha) {
             g.fillStyle = "#ffffff";
             g.fillRect(x0 - 2, top, px0 - x0 + 2, bot - top);
+            /* tinted like the profiles: its UTC half hour */
+            g.save();
+            g.beginPath();
+            g.rect(x0, top, px0 - x0, bot - top);
+            g.clip();
+            geo.forEach((o, i) => {
+              g.fillStyle = tpoColor(
+                Math.floor((o.c.t % 86400000) / 1800000),
+                0.08,
+              );
+              const xe =
+                i + 1 < geo.length ? geo[i + 1].x : o.x + o.w;
+              g.fillRect(o.x, top, xe - o.x, bot - top);
+            });
+            g.restore();
             geo.filter((o) => bigs.get(o.c)).forEach(candle);
             circles();
             zfb(true);
