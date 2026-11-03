@@ -577,6 +577,13 @@
                     ZFB
                   </button>
                   <button
+                    id="haTog"
+                    class=""
+                    title="Only the big candles and the ZFB"
+                  >
+                    HA
+                  </button>
+                  <button
                     id="vwTog"
                     class=""
                     title="VWAP of the UTC day, on the main chart"
@@ -994,6 +1001,14 @@
       function setShowFZ(v) {
         showFZ = !!v;
         $("fzTog").className = showFZ ? "a" : "";
+        schedule();
+      }
+      /* HA button: the main chart shows only the big candles
+         and the ZFB, the price scale and crosshair stay */
+      let onlyHA = false;
+      function setOnlyHA(v) {
+        onlyHA = !!v;
+        $("haTog").className = onlyHA ? "a" : "";
         schedule();
       }
       /* the UTC day's VWAP on the main chart (VWAP button) */
@@ -4904,7 +4919,7 @@
 
           /* candles */
 
-          (exG ? [exG].concat(geo) : geo).forEach(({ x, w, c }) => {
+          const candle = ({ x, w, c }) => {
             const col = c.c >= c.o ? "#089981" : "#000000",
               xm = x + w / 2;
             g.save();
@@ -4928,19 +4943,20 @@
             g.stroke();
             g.fillRect(x + 1, yT, Math.max(1, w - 2), hB);
             g.restore();
-          });
+          };
+          (exG ? [exG].concat(geo) : geo).forEach(candle);
           /*
            * circles: green below bullish bars, black above
            * bearish bars; the 15s window gets its own
            */
-          {
-            const fl = bigFlags(
+          const bigs = bigFlags(
               arr,
               Math.max(0, arr.length - off - N),
               Math.min(arr.length, arr.length - off),
-            );
+            ),
+            circles = () =>
             geo.forEach((o) => {
-              const f = fl.get(o.c);
+              const f = bigs.get(o.c);
               if (!f || side) return;
               const c = o.c;
               if (c.c === c.o) return;
@@ -4952,7 +4968,7 @@
               g.arc(o.x + o.w / 2, y, 5, 0, 6.2832);
               g.fill();
             });
-          }
+          circles();
           /*
            * vertical grid: a line every 6 hours counted from
            * UTC midnight, where the day and its levels change
@@ -5378,7 +5394,7 @@
            * extreme is a pivot, where it was made; a leg takes its
            * channel's colour: yellow down, blue up. Dashed = open.
            */
-          if (cfg.main && showFZ && geo.length) {
+          const zfb = () => {
             const piv = zfbPiv(arr),
               where = new Map(geo.map((o) => [o.c, o]));
             /* pivots off screen: just past the chart's edge */
@@ -5411,7 +5427,8 @@
               g.stroke();
             });
             g.restore();
-          }
+          };
+          if (cfg.main && showFZ && geo.length) zfb();
           /*
            * own orders (from orders.js): a segment at the
            * order price for as long as the order was alive,
@@ -5677,6 +5694,16 @@
             g.fillStyle = "#ffffff";
             g.fillRect(x0 - 2, 0, px0 - x0 + 2, H);
           }
+          /* HA: the chart wiped, then only the big candles,
+             their circles and the ZFB again */
+          const ha = cfg.main && onlyHA && !side && geo.length;
+          if (ha) {
+            g.fillStyle = "#ffffff";
+            g.fillRect(x0 - 2, top, px0 - x0 + 2, bot - top);
+            geo.filter((o) => bigs.get(o.c)).forEach(candle);
+            circles();
+            zfb();
+          }
           if (cfg.main) {
             /* P&F: a cross at its top left closes it; once
                closed, a P&F tag there on the chart opens it */
@@ -5760,7 +5787,8 @@
           }
           /* the waiting axis tags, ladder ones underneath */
           tagsNow = true;
-          tq.filter((a) => a[2] === "#fff")
+          if (!ha)
+            tq.filter((a) => a[2] === "#fff")
             .concat(tq.filter((a) => a[2] !== "#fff"))
             .forEach((a) => ptag(...a));
           /* hover */
@@ -7173,6 +7201,7 @@
           autoBox,
           followBox,
           showFZ,
+          onlyHA,
           showVW,
           nBox,
           hlLad,
@@ -7241,6 +7270,7 @@
         if (typeof st.followBox === "boolean")
           setFollowBox(st.followBox);
         if (typeof st.showFZ === "boolean") setShowFZ(st.showFZ);
+        if (typeof st.onlyHA === "boolean") setOnlyHA(st.onlyHA);
         if (st.dv >= 17 && typeof st.showVW === "boolean")
           setShowVW(st.showVW);
         /* 6h: default changed in version 4, HL / VA in 5 */
@@ -7511,6 +7541,7 @@
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("fzTog").onclick = () => setShowFZ(!showFZ);
+      $("haTog").onclick = () => setOnlyHA(!onlyHA);
       $("vwTog").onclick = () => setShowVW(!showVW);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
