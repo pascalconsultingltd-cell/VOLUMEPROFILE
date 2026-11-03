@@ -6940,6 +6940,30 @@
             }
             last = up;
           }
+          /* an older swing level on the left, unbroken till
+             now, broken by one of the last two candles */
+          const hN = Math.max(arr[n - 2].h, arr[n - 1].h),
+            lN = Math.min(arr[n - 2].l, arr[n - 1].l);
+          let hi = -Infinity,
+            lo = Infinity,
+            m = n - 3;
+          for (let i = piv.length - 4; i > 0; i--) {
+            const z = piv[i],
+              k = ix.get(z.c);
+            for (; m > k; m--)
+              if (okC(arr[m])) {
+                hi = Math.max(hi, arr[m].h);
+                lo = Math.min(lo, arr[m].l);
+              }
+            if (z.low ? lo >= z.p && lN < z.p : hi <= z.p && hN > z.p)
+              out.push({
+                id: "zz" + z.c.t,
+                up: !z.low,
+                txt:
+                  (z.low ? "breaks down left " : "breaks up left ") +
+                  (z.p | 0),
+              });
+          }
           return { ctx: (cfg.main ? TF : "") + mode, ev: out };
         }
         /* line-break views re-anchor on bricks in drawInner */
