@@ -488,6 +488,13 @@
                 title="Real - perfect (normal vol mass) bricks"
               >
                 Mass
+              </button
+              ><button
+                id="perfTog"
+                class="a"
+                title="Perfect profile (normal vol mass) outline"
+              >
+                Perf
               </button></span
             ></span
           ></span
@@ -1813,7 +1820,14 @@
       let stCol = false,
         /* Mass button: each day's profile as a delta, real -
            perfect bricks (vol mass normal round each sub POC) */
-        showMass = true;
+        showMass = true,
+        /* Perf button: the perfect profile outlined over it */
+        showPerf = true;
+      function setShowPerf(v) {
+        showPerf = !!v;
+        $("perfTog").className = showPerf ? "a" : "";
+        schedule();
+      }
       function setShowMass(v) {
         showMass = !!v;
         $("massTog").className = showMass ? "a" : "";
@@ -3644,7 +3658,7 @@
                vols tall, as the regimes behind the vol); exp =
                the perfect bricks per row, all sub POCs added */
             const exp = new Map();
-            if (showMass) {
+            if (showMass || showPerf) {
               const sg = vf / 1.2816,
                 R = Math.ceil((4 * sg) / P.step);
               sp.forEach((S) => {
@@ -3701,6 +3715,24 @@
               g.fillStyle = "#6b7684";
               g.fillRect(ax - 0.5, yA, 1,
                 Y(Math.min(...ks) * P.step) - yA);
+            }
+            /* Perf: the perfect profile's edge, row by row, a
+               black step line from the profile's left edge */
+            if (showPerf && exp.size) {
+              const ks = [...exp.keys()].sort((a, b) => b - a);
+              g.save();
+              g.strokeStyle = "#000";
+              g.lineWidth = 1.5;
+              g.beginPath();
+              g.moveTo(cx0, Y((ks[0] + 1) * P.step));
+              ks.forEach((r) => {
+                const x = cx0 + exp.get(r) * lw;
+                g.lineTo(x, Y((r + 1) * P.step));
+                g.lineTo(x, Y(r * P.step));
+              });
+              g.lineTo(cx0, Y(ks[ks.length - 1] * P.step));
+              g.stroke();
+              g.restore();
             }
             /* around it, an empty 15px square in the last price
                blue, never tighter than the brick */
@@ -7394,6 +7426,7 @@
           showPOC,
           stCol,
           showMass,
+          showPerf,
           pcPf,
           pfBr,
           pfSg,
@@ -7482,6 +7515,8 @@
         if (typeof st.stCol === "boolean") setStCol(st.stCol);
         if (typeof st.showMass === "boolean")
           setShowMass(st.showMass);
+        if (typeof st.showPerf === "boolean")
+          setShowPerf(st.showPerf);
         if (cur5 && typeof st.showVA === "boolean")
           setShowVA(st.showVA);
         if (typeof st.showUD === "boolean") setShowUD(st.showUD);
@@ -7724,6 +7759,7 @@
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
       $("massTog").onclick = () => setShowMass(!showMass);
+      $("perfTog").onclick = () => setShowPerf(!showPerf);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("fzTog").onclick = () => setShowFZ(!showFZ);
