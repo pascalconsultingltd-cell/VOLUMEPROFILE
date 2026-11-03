@@ -3657,9 +3657,10 @@
                   curB = [cx0 + k * lw + lw / 2, yT + rowH / 2];
               });
             });
-            /* Mass: from each sub POC of the day its row,
-               then one brick above, one below, outward through
-               the profile until the vol mass is used; in black */
+            /* Mass: from each sub POC of the day, one real brick
+               above (from its row up), one below (from the row
+               under it down), in turn, outward through the
+               profile until the vol mass is used; in black */
             if (showMass) {
               const ks = [...P.rows.keys()],
                 r0 = Math.min(...ks),
@@ -3668,10 +3669,10 @@
               g.fillStyle = "rgba(0,0,0,.45)";
               sp.forEach((S) => {
                 const p = Math.floor(S.px / P.step),
-                  took = new Map([[p, Math.min(n(p), VOL_MASS)]]),
+                  took = new Map(),
                   has = (r) => (took.get(r) || 0) < n(r);
-                let left = VOL_MASS - took.get(p),
-                  u = p + 1,
+                let left = VOL_MASS,
+                  u = p,
                   w = p - 1,
                   up = true;
                 while (left > 0) {
