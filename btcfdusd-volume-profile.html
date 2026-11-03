@@ -536,6 +536,13 @@
                 title="The same, one vol each side of a POC at most"
               >
                 PocStpCol2
+              </button
+              ><button
+                id="pfByTog"
+                class="a"
+                title="Black dot on StpCol2 green: buy; mirror: sell"
+              >
+                Buy
               </button></span
             ></span
         ></span>
@@ -1821,6 +1828,15 @@
         /* Vc2 button: the same, steps one vol each side of a
            sub POC at most */
         pfVc2 = true;
+      /* Buy button: a seller dot (black) while the latest
+         PocStpCol2 brick is green = buy, a buyer dot while it
+         is red = sell */
+      let pfBy = true;
+      function setPfBy(v) {
+        pfBy = !!v;
+        $("pfByTog").className = pfBy ? "a" : "";
+        schedule();
+      }
       function setPfVc(v, two) {
         pfVc = !!v && !two;
         pfVc2 = !!v && !!two;
@@ -4476,12 +4492,12 @@
                traded at time t on row r: same day, same
                period (the last closed one while it forms),
                same price, as the profile shows it */
-            const vcAt = (t, r, st) => {
+            const vcAt = (t, r, st, two = pfVc2) => {
               const dS = dayOf(t);
               let i = Math.floor((t - dS) / TPO_MS);
               if (dS + (i + 1) * TPO_MS > Date.now()) i--;
               if (i < 0) return "";
-              const m = stFor(dS, i, pfVc2);
+              const m = stFor(dS, i, two);
               const row = Math.floor(((r + 0.5) * st) / m.step);
               return m.get(row) || "";
             };
@@ -4504,6 +4520,28 @@
               }
               return a ? lhM[a - 1][1] : null;
             };
+            /* Buy: the latest PocStpCol2 green (g) / red (r)
+               brick in time as at each column's end */
+            const by = new Map();
+            if (pfBy && shown.length) {
+              let last = null;
+              for (
+                let k = Math.max(0, ci.get(shown[0]) - 300);
+                k < all.length;
+                k++
+              ) {
+                const c = all[k];
+                [...c.tm]
+                  .sort((a, b) => a[1] - b[1])
+                  .forEach(([r, t]) => {
+                    const v = vcAt(t, r, c.st, true);
+                    if (v.startsWith("rgba(8,153,129")) last = "g";
+                    else if (v.startsWith("rgba(229,57,53"))
+                      last = "r";
+                  });
+                by.set(c, last);
+              }
+            }
             /* Br: bw = brick width, bricks touch (+.5 hides
                seams); hotB = highlighted boxes,
                drawn last with a brick each side */
@@ -4601,7 +4639,20 @@
                   c: c.ph,
                 },
               });
-              if (!pfHl || !hs.dot.has(ci.get(c))) return;
+              const dot = hs.dot.has(ci.get(c)),
+                b = by.get(c);
+              /* Buy: blue triangle under, sell: orange over */
+              if (dot && (c.up ? b === "r" : b === "g")) {
+                const y = c.up ? Y(c.ph) - 22 : Y(c.pl) + 22,
+                  h = c.up ? 7 : -7;
+                g.fillStyle = c.up ? "#ff6d00" : "#2962ff";
+                g.beginPath();
+                g.moveTo(xm - 6, y - h);
+                g.lineTo(xm + 6, y - h);
+                g.lineTo(xm, y + h);
+                g.fill();
+              }
+              if (!pfHl || !dot) return;
               /* as the main chart's big-candle circles */
               const y = c.up ? Y(c.pl) + 12 : Y(c.ph) - 12;
               g.beginPath();
@@ -7236,7 +7287,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 19;
+      const DEFAULTS_VER = 20;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7289,6 +7340,7 @@
           pfLh,
           pfVc,
           pfVc2,
+          pfBy,
           showOrders,
           showLines,
           showGr,
@@ -7358,6 +7410,8 @@
         if (st.dv >= 15 && typeof st.pfSw === "boolean")
           setPfSw(st.pfSw);
         if (typeof st.pfLh === "boolean") setPfLh(st.pfLh);
+        if (st.dv >= 20 && typeof st.pfBy === "boolean")
+          setPfBy(st.pfBy);
         if (st.dv >= 19 && typeof st.pfVc === "boolean")
           setPfVc(st.pfVc || st.pfVc2, st.pfVc2);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
@@ -7601,6 +7655,7 @@
       $("pfLhTog").onclick = () => setPfLh(!pfLh);
       $("pfVcTog").onclick = () => setPfVc(!pfVc);
       $("pfVc2Tog").onclick = () => setPfVc(!pfVc2, true);
+      $("pfByTog").onclick = () => setPfBy(!pfBy);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
