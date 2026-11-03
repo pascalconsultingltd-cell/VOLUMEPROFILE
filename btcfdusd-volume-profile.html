@@ -5790,17 +5790,20 @@
             g.stroke();
             g.setLineDash([]);
             ptag(mouse.y, pv.toFixed(DP), XB, XF);
-            /* and on the profiles' right edge, as the last price */
-            if (cfg.tpo && tpoW) {
-              const t = pv.toFixed(DP),
-                w = g.measureText(t).width + 12;
-              g.fillStyle = XB;
-              g.fillRect(pL - 2 - w, mouse.y - 9, w, 18);
-              g.fillStyle = XF;
-              g.textAlign = "left";
-              g.textBaseline = "middle";
-              g.fillText(t, pL - 2 - w + 6, mouse.y);
-            }
+            /* and on the profiles' right edge, as the last
+               price; maximised, on the left edge too */
+            const t = pv.toFixed(DP),
+              w = g.measureText(t).width + 12,
+              lTag = (x) => {
+                g.fillStyle = XB;
+                g.fillRect(x, mouse.y - 9, w, 18);
+                g.fillStyle = XF;
+                g.textAlign = "left";
+                g.textBaseline = "middle";
+                g.fillText(t, x + 6, mouse.y);
+              };
+            if (cfg.tpo && tpoW) lTag(pL - 2 - w);
+            if (fl) lTag(4);
             let lbl = null;
             if (o) lbl = dlabel(o.c.t);
             /* over the P&F: the hovered column's start time */
