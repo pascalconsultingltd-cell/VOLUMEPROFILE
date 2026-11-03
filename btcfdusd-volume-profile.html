@@ -526,21 +526,15 @@
               </button
               ><button
                 id="pfVcTog"
+                class="a"
                 title="P&amp;F bricks in the profile's St colours"
               >
                 PocStpCol
               </button
               ><button
-                id="pfVc2Tog"
-                class="a"
-                title="The same, one vol each side of a POC at most"
-              >
-                PocStpCol2
-              </button
-              ><button
                 id="pfByTog"
                 class="a"
-                title="Black dot on StpCol2 green: buy; mirror: sell"
+                title="Black dot on StpCol green: buy; mirror: sell"
               >
                 Buy
               </button></span
@@ -845,16 +839,14 @@
        * bricks above so far, green = more below, stronger =
        * more lopsided. A POC row takes its P colour, the
        * low rows in between stay grey. Map row -> colour.
-       * cap: rows each side at most; a zone with fewer than
-       * minB bricks stays grey.
+       * A zone with fewer than minB bricks stays grey.
        */
       const SPC = ["0,51,102", "47,128,200", "107,118,132"],
         SGREY = "rgba(107,118,132,.3)",
         /* PocStpCol: bricks a zone needs before it colours,
-           the median of the regimes behind the 240 vol;
-           PocStpCol2 (zones one vol each side) half that */
-        ST2_MIN = 227;
-      function stepCols(rows, step, sp, cap = Infinity, minB = 0) {
+           the median of the regimes behind the 240 vol */
+        ST_MIN = 227;
+      function stepCols(rows, step, sp, minB = 0) {
         const ks = [...rows.keys()],
           r0 = Math.min(...ks),
           c = [],
@@ -875,14 +867,8 @@
         rs.forEach((p, k) => {
           const dn = Math.max(-1, ...rs.filter((r) => r < p)),
             up = Math.min(n, ...rs.filter((r) => r > p)),
-            a = Math.max(
-              p - cap,
-              dn < 0 ? 0 : Math.min(p, cut(dn, p) + 1),
-            ),
-            b = Math.min(
-              p + cap,
-              up >= n ? n - 1 : Math.max(p, cut(p, up) - 1),
-            );
+            a = dn < 0 ? 0 : Math.min(p, cut(dn, p) + 1),
+            b = up >= n ? n - 1 : Math.max(p, cut(p, up) - 1);
           out.set(p + r0, "rgb(" + SPC[k] + ")");
           let tot = 0;
           for (let r = a; r <= b; r++) tot += c[r];
@@ -1832,12 +1818,9 @@
       /* Vc button: P&F bricks in the volume profile's latest
          known St colour at their price, green or red; others
          a thin neutral line (wins over Sg) */
-      let pfVc = false,
-        /* Vc2 button: the same, steps one vol each side of a
-           sub POC at most */
-        pfVc2 = true;
+      let pfVc = true;
       /* Buy button: a seller dot (black) while the latest
-         PocStpCol2 brick is green = buy, a buyer dot while it
+         PocStpCol brick is green = buy, a buyer dot while it
          is red = sell */
       let pfBy = true;
       function setPfBy(v) {
@@ -1845,11 +1828,9 @@
         $("pfByTog").className = pfBy ? "a" : "";
         schedule();
       }
-      function setPfVc(v, two) {
-        pfVc = !!v && !two;
-        pfVc2 = !!v && !!two;
+      function setPfVc(v) {
+        pfVc = !!v;
         $("pfVcTog").className = pfVc ? "a" : "";
-        $("pfVc2Tog").className = pfVc2 ? "a" : "";
         schedule();
       }
       function setPfHl(v) {
@@ -3446,8 +3427,7 @@
            * so the days shown do not change them; m.step = their
            * row size, look colours up by price
            */
-          /* two: steps one vol each side at most (P&F Vc2) */
-          const stFor = (dS, i, two) => {
+          const stFor = (dS, i) => {
             const vC = volFor(dS),
               P = dayProf(
                 dS,
@@ -3455,8 +3435,7 @@
               ),
               vf = vC || P.step * 10,
               ps = P.ps.filter((q) => q.i <= i),
-              cap = two ? Math.round(vf / P.step) : Infinity,
-              key = [dS, i, vf, P.step, cap].join();
+              key = [dS, i, vf, P.step].join();
             if (stFz.has(key)) return stFz.get(key);
             const rows = new Map();
             P.rows.forEach((l, r) => {
@@ -3468,8 +3447,7 @@
                   rows,
                   P.step,
                   subPocs(dS, ps, vf, P.step),
-                  cap,
-                  two ? ST2_MIN / 2 : ST2_MIN,
+                  ST_MIN,
                 )
               : new Map();
             m.step = P.step;
@@ -4501,12 +4479,12 @@
                traded at time t on row r: same day, same
                period (the last closed one while it forms),
                same price, as the profile shows it */
-            const vcAt = (t, r, st, two = pfVc2) => {
+            const vcAt = (t, r, st) => {
               const dS = dayOf(t);
               let i = Math.floor((t - dS) / TPO_MS);
               if (dS + (i + 1) * TPO_MS > Date.now()) i--;
               if (i < 0) return "";
-              const m = stFor(dS, i, two);
+              const m = stFor(dS, i);
               const row = Math.floor(((r + 0.5) * st) / m.step);
               return m.get(row) || "";
             };
@@ -4529,7 +4507,7 @@
               }
               return a ? lhM[a - 1][1] : null;
             };
-            /* Buy: the latest PocStpCol2 green (g) / red (r)
+            /* Buy: the latest PocStpCol green (g) / red (r)
                brick in time as at each column's end */
             const by = new Map();
             if (pfBy && shown.length) {
@@ -4543,7 +4521,7 @@
                 [...c.tm]
                   .sort((a, b) => a[1] - b[1])
                   .forEach(([r, t]) => {
-                    const v = vcAt(t, r, c.st, true);
+                    const v = vcAt(t, r, c.st);
                     if (v.startsWith("rgba(8,153,129")) last = "g";
                     else if (v.startsWith("rgba(229,57,53"))
                       last = "r";
@@ -4584,7 +4562,7 @@
                   const k = ci.get(c),
                     gT = hs.gTop[k],
                     bB = hs.bBot[k],
-                    vc = pfVc || pfVc2 ? vcAt(t, r, st) : null,
+                    vc = pfVc ? vcAt(t, r, st) : null,
                     vcOn =
                       vc != null &&
                       (vc.startsWith("rgba(8,153,129") ||
@@ -7296,7 +7274,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 20;
+      const DEFAULTS_VER = 21;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7348,7 +7326,6 @@
           pfSw,
           pfLh,
           pfVc,
-          pfVc2,
           pfBy,
           showOrders,
           showLines,
@@ -7421,8 +7398,8 @@
         if (typeof st.pfLh === "boolean") setPfLh(st.pfLh);
         if (st.dv >= 20 && typeof st.pfBy === "boolean")
           setPfBy(st.pfBy);
-        if (st.dv >= 19 && typeof st.pfVc === "boolean")
-          setPfVc(st.pfVc || st.pfVc2, st.pfVc2);
+        if (st.dv >= 21 && typeof st.pfVc === "boolean")
+          setPfVc(st.pfVc);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         if (typeof st.stCol === "boolean") setStCol(st.stCol);
@@ -7663,7 +7640,6 @@
       $("pfSwTog").onclick = () => setPfSw(!pfSw);
       $("pfLhTog").onclick = () => setPfLh(!pfLh);
       $("pfVcTog").onclick = () => setPfVc(!pfVc);
-      $("pfVc2Tog").onclick = () => setPfVc(!pfVc2, true);
       $("pfByTog").onclick = () => setPfBy(!pfBy);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
