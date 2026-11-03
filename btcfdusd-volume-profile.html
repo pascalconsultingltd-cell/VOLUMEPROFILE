@@ -1818,8 +1818,8 @@
       /* St button: bricks by their steps value, sub POC
          lines and tags by the earliest session there */
       let stCol = false,
-        /* Mass button: each day's profile as a delta, real -
-           perfect bricks (vol mass normal round each sub POC) */
+        /* Mass button: over each day's profile its delta, real
+           - perfect bricks (vol mass normal round each sub POC) */
         showMass = true,
         /* Perf button: the perfect profile outlined over it */
         showPerf = true;
@@ -3677,7 +3677,6 @@
                    row): marked once every brick is drawn */
                 if (r === rNow && idx === iNow)
                   curB = [cx0 + k * lw + lw / 2, yT + rowH / 2];
-                if (showMass) return;
                 g.fillStyle = showUD && ud
                   ? ud
                   : stCol && shut(idx)
@@ -3693,8 +3692,9 @@
               });
             });
             /* Mass: per row real - perfect bricks as bars from an
-               axis, extra (+) right in green, missing (-) left in
-               red; the axis leaves room for the widest red */
+               axis over the profile, extra (+) right in green,
+               missing (-) left in red; the axis leaves room for
+               the widest red */
             if (showMass) {
               const dl = new Map(exp);
               dl.forEach((e, r) => dl.set(r, -Math.round(e)));
@@ -3707,7 +3707,8 @@
               dl.forEach((v, r) => {
                 const yT = Y((r + 1) * P.step);
                 if (!v || yT > bot || yT + rowH < top) return;
-                g.fillStyle = v > 0 ? "#089981" : "#e53935";
+                g.fillStyle = v > 0 ? "rgba(8,153,129,.6)"
+                  : "rgba(229,57,53,.6)";
                 g.fillRect(v > 0 ? ax : ax + v * lw, yT + 0.5,
                   Math.abs(v) * lw, Math.max(1, rowH - 1));
               });
