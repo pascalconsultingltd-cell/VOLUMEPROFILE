@@ -1324,7 +1324,9 @@
        * orange on a swing low: a buyer column (pull back), then
        * a low a brick under the one before; blue the mirror.
        * Trading back a brick past the pull-back's high (low)
-       * switches back. [time, colour, price] of each switch.
+       * switches back, and that colour back the same way a
+       * brick past the switching column's other end.
+       * [time, colour, price] of each switch.
        */
       function pfLhSw(all, hs) {
         const lhM = [];
@@ -1349,7 +1351,9 @@
                 dn ? (r + 1) * c.st > X : r * c.st < X,
               );
             lhM.push([t, dn ? "#2962ff" : "#ff6d00", X]);
-            ex = null;
+            /* the exit's colour exits the same way: a brick
+               past this column's other end turns it back */
+            ex = { dn: !dn, X: dn ? c.pl : c.ph };
           }
           /* pd: { dn, L = extreme since the break, pb =
              pulled back, X = pull-back extreme } */
@@ -6930,7 +6934,8 @@
                 out.push({
                   id: "zz" + piv[i - 2].c.t,
                   up,
-                  txt: (up ? "breaks up " : "breaks down ") + (lv | 0),
+                  txt:
+                    (up ? "breaks up " : "breaks down ") + (lv | 0),
                 });
             }
             last = up;
