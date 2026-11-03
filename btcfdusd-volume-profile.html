@@ -537,6 +537,13 @@
                 title="Black dot on StpCol green: buy; mirror: sell"
               >
                 Buy
+              </button
+              ><button
+                id="pfXbTog"
+                class="a"
+                title="High (red) and low (grey) activity boxes"
+              >
+                Act
               </button></span
             ></span
         ></span>
@@ -1822,7 +1829,14 @@
       /* Buy button: a seller dot (black) while the latest
          PocStpCol brick is green = buy, a buyer dot while it
          is red = sell */
-      let pfBy = true;
+      let pfBy = true,
+        /* Act button: the red / grey activity boxes */
+        pfXb = true;
+      function setPfXb(v) {
+        pfXb = !!v;
+        $("pfXbTog").className = pfXb ? "a" : "";
+        schedule();
+      }
       function setPfBy(v) {
         pfBy = !!v;
         $("pfByTog").className = pfBy ? "a" : "";
@@ -4656,11 +4670,11 @@
             });
             /* excitement clusters: a box round each run of columns
                whose smoothed rank is 0.8+ (red) or 0.25- (grey,
-               quiet), over its range */
-            [
+               quiet), over its range (Act button) */
+            (pfXb ? [
               ["#f23645", (q) => q >= 0.8],
               ["#9e9e9e", (q) => q <= 0.25],
-            ].forEach(([col, ok]) => {
+            ] : []).forEach(([col, ok]) => {
               let run = [];
               shown.concat(null).forEach((c) => {
                 if (c && ok(hs.exc[ci.get(c)]))
@@ -7327,6 +7341,7 @@
           pfLh,
           pfVc,
           pfBy,
+          pfXb,
           showOrders,
           showLines,
           showGr,
@@ -7398,6 +7413,7 @@
         if (typeof st.pfLh === "boolean") setPfLh(st.pfLh);
         if (st.dv >= 20 && typeof st.pfBy === "boolean")
           setPfBy(st.pfBy);
+        if (typeof st.pfXb === "boolean") setPfXb(st.pfXb);
         if (st.dv >= 21 && typeof st.pfVc === "boolean")
           setPfVc(st.pfVc);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
@@ -7641,6 +7657,7 @@
       $("pfLhTog").onclick = () => setPfLh(!pfLh);
       $("pfVcTog").onclick = () => setPfVc(!pfVc);
       $("pfByTog").onclick = () => setPfBy(!pfBy);
+      $("pfXbTog").onclick = () => setPfXb(!pfXb);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
