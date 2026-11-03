@@ -1432,6 +1432,11 @@
             );
             out.push([Math.max(t, wT), want, lv]);
             shown = want;
+            /* a swing already past the new colour's level is
+               stale: wait for a fresh one */
+            if (dn) {
+              if (sh != null && sh <= lv) sh = null;
+            } else if (sl != null && sl >= lv) sl = null;
           }
         });
         return out;
