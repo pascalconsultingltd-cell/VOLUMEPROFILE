@@ -3700,11 +3700,11 @@
                       Math.max(1, rowH - 1),
                     );
                 });
-                /* its barycentre, left of the profile at the POC:
-                   red above the POC, green below (as PocStpCol) */
+                /* its barycentre, left of the profile at its own
+                   price: green above its POC, red below */
                 const by = sw / sm;
-                bary.push([cx0 - 3, Y(S.px), by.toFixed(0),
-                  by > S.px ? "#e53935" : "#089981"]);
+                bary.push([cx0 - 3, Y(by), by.toFixed(0),
+                  by < S.px ? "#e53935" : "#089981"]);
                 g.fillStyle = "rgba(0,0,0,.45)";
               });
               g.save();
