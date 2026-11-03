@@ -5629,6 +5629,35 @@
             g.restore();
             g.lineWidth = 1;
           }
+          /* HA: the chart wiped, then only the big candles,
+             their circles and the ZFB again, under the
+             drawn lines */
+          const ha = cfg.main && onlyHA && !side && geo.length;
+          if (ha) {
+            g.fillStyle = "#ffffff";
+            g.fillRect(x0 - 2, top, px0 - x0 + 2, bot - top);
+            /* tinted like the profiles: its UTC half hour */
+            g.save();
+            g.beginPath();
+            g.rect(x0, top, px0 - x0, bot - top);
+            g.clip();
+            geo.forEach((o, i) => {
+              g.fillStyle = tpoColor(
+                Math.floor((o.c.t % 86400000) / 1800000),
+                0.08,
+              );
+              const xe =
+                i + 1 < geo.length ? geo[i + 1].x : o.x + o.w;
+              g.fillRect(o.x, top, xe - o.x, bot - top);
+            });
+            lad.filter((s) => s[2] > x0).forEach((s) =>
+              hseg(s[0], Math.max(s[1], x0), ...s.slice(2)),
+            );
+            g.restore();
+            geo.filter((o) => bigs.get(o.c)).forEach(candle);
+            circles();
+            zfb(true);
+          }
           lines.forEach((l) => {
             const sel = l === hl || l === drag;
             g.strokeStyle = g.fillStyle = "#8e44ad";
@@ -5729,34 +5758,6 @@
             g.fillStyle = "#ffffff";
             g.fillRect(x0 - 2, 0, px0 - x0 + 2, H);
           }
-          /* HA: the chart wiped, then only the big candles,
-             their circles and the ZFB again */
-          const ha = cfg.main && onlyHA && !side && geo.length;
-          if (ha) {
-            g.fillStyle = "#ffffff";
-            g.fillRect(x0 - 2, top, px0 - x0 + 2, bot - top);
-            /* tinted like the profiles: its UTC half hour */
-            g.save();
-            g.beginPath();
-            g.rect(x0, top, px0 - x0, bot - top);
-            g.clip();
-            geo.forEach((o, i) => {
-              g.fillStyle = tpoColor(
-                Math.floor((o.c.t % 86400000) / 1800000),
-                0.08,
-              );
-              const xe =
-                i + 1 < geo.length ? geo[i + 1].x : o.x + o.w;
-              g.fillRect(o.x, top, xe - o.x, bot - top);
-            });
-            lad.filter((s) => s[2] > x0).forEach((s) =>
-              hseg(s[0], Math.max(s[1], x0), ...s.slice(2)),
-            );
-            g.restore();
-            geo.filter((o) => bigs.get(o.c)).forEach(candle);
-            circles();
-            zfb(true);
-          }
           if (cfg.main) {
             /* P&F: a cross at its top left closes it; once
                closed, a P&F tag there on the chart opens it */
@@ -5840,9 +5841,8 @@
           }
           /* the waiting axis tags, ladder ones underneath */
           tagsNow = true;
-          /* HA: the ladder's white ones only */
           tq.filter((a) => a[2] === "#fff")
-            .concat(ha ? [] : tq.filter((a) => a[2] !== "#fff"))
+            .concat(tq.filter((a) => a[2] !== "#fff"))
             .forEach((a) => ptag(...a));
           /* hover */
 
