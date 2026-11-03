@@ -491,6 +491,7 @@
             ><span class="box"
               ><button
                 id="pfBrTog"
+                class="a"
                 title="P&amp;F bricks coloured by time; off = lines"
               >
                 Br
@@ -528,6 +529,13 @@
                 title="P&amp;F bricks in the profile's St colours"
               >
                 PocStpCol
+              </button
+              ><button
+                id="pfVc2Tog"
+                class="a"
+                title="The same, one vol each side of a POC at most"
+              >
+                PocStpCol2
               </button></span
             ></span
         ></span>
@@ -830,10 +838,11 @@
        * bricks above so far, green = more below, stronger =
        * more lopsided. A POC row takes its P colour, the
        * low rows in between stay grey. Map row -> colour.
+       * cap: rows each side at most.
        */
       const SPC = ["0,51,102", "47,128,200", "107,118,132"],
         SGREY = "rgba(107,118,132,.3)";
-      function stepCols(rows, step, sp) {
+      function stepCols(rows, step, sp, cap = Infinity) {
         const ks = [...rows.keys()],
           r0 = Math.min(...ks),
           c = [],
@@ -854,8 +863,14 @@
         rs.forEach((p, k) => {
           const dn = Math.max(-1, ...rs.filter((r) => r < p)),
             up = Math.min(n, ...rs.filter((r) => r > p)),
-            a = dn < 0 ? 0 : Math.min(p, cut(dn, p) + 1),
-            b = up >= n ? n - 1 : Math.max(p, cut(p, up) - 1);
+            a = Math.max(
+              p - cap,
+              dn < 0 ? 0 : Math.min(p, cut(dn, p) + 1),
+            ),
+            b = Math.min(
+              p + cap,
+              up >= n ? n - 1 : Math.max(p, cut(p, up) - 1),
+            );
           out.set(p + r0, "rgb(" + SPC[k] + ")");
           const J = Math.max(b - p, p - a);
           for (let j = 1, U = 0, L = 0; j <= J; j++) {
@@ -1787,7 +1802,7 @@
       }
       /* P&F drawn as bricks coloured like the profiles (Br
          button); off = the column lines */
-      let pfBr = false;
+      let pfBr = true;
       function setPfBr(v) {
         pfBr = !!v;
         $("pfBrTog").className = pfBr ? "a" : "";
@@ -1802,10 +1817,15 @@
       /* Vc button: P&F bricks in the volume profile's latest
          known St colour at their price, green or red; others
          a thin neutral line (wins over Sg) */
-      let pfVc = false;
-      function setPfVc(v) {
-        pfVc = !!v;
+      let pfVc = false,
+        /* Vc2 button: the same, steps one vol each side of a
+           sub POC at most */
+        pfVc2 = true;
+      function setPfVc(v, two) {
+        pfVc = !!v && !two;
+        pfVc2 = !!v && !!two;
         $("pfVcTog").className = pfVc ? "a" : "";
+        $("pfVc2Tog").className = pfVc2 ? "a" : "";
         schedule();
       }
       function setPfHl(v) {
@@ -3402,7 +3422,8 @@
            * so the days shown do not change them; m.step = their
            * row size, look colours up by price
            */
-          const stFor = (dS, i) => {
+          /* two: steps one vol each side at most (P&F Vc2) */
+          const stFor = (dS, i, two) => {
             const vC = volFor(dS),
               P = dayProf(
                 dS,
@@ -3410,7 +3431,8 @@
               ),
               vf = vC || P.step * 10,
               ps = P.ps.filter((q) => q.i <= i),
-              key = [dS, i, vf, P.step].join();
+              cap = two ? Math.round(vf / P.step) : Infinity,
+              key = [dS, i, vf, P.step, cap].join();
             if (stFz.has(key)) return stFz.get(key);
             const rows = new Map();
             P.rows.forEach((l, r) => {
@@ -3422,6 +3444,7 @@
                   rows,
                   P.step,
                   subPocs(dS, ps, vf, P.step),
+                  cap,
                 )
               : new Map();
             m.step = P.step;
@@ -4458,7 +4481,7 @@
               let i = Math.floor((t - dS) / TPO_MS);
               if (dS + (i + 1) * TPO_MS > Date.now()) i--;
               if (i < 0) return "";
-              const m = stFor(dS, i);
+              const m = stFor(dS, i, pfVc2);
               const row = Math.floor(((r + 0.5) * st) / m.step);
               return m.get(row) || "";
             };
@@ -4514,7 +4537,7 @@
                   const k = ci.get(c),
                     gT = hs.gTop[k],
                     bB = hs.bBot[k],
-                    vc = pfVc ? vcAt(t, r, st) : null,
+                    vc = pfVc || pfVc2 ? vcAt(t, r, st) : null,
                     vcOn =
                       vc != null &&
                       (vc.startsWith("rgba(8,153,129") ||
@@ -7213,7 +7236,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 18;
+      const DEFAULTS_VER = 19;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7265,6 +7288,7 @@
           pfSw,
           pfLh,
           pfVc,
+          pfVc2,
           showOrders,
           showLines,
           showGr,
@@ -7326,7 +7350,7 @@
         if (st.dv >= 9 && typeof st.pcPf === "boolean")
           setPcPf(st.pcPf);
         /* Br, Sw, Alrt: defaults changed in version 15 */
-        if (st.dv >= 15 && typeof st.pfBr === "boolean")
+        if (st.dv >= 19 && typeof st.pfBr === "boolean")
           setPfBr(st.pfBr);
         if (typeof st.pfSg === "boolean") setPfSg(st.pfSg);
         if (st.dv >= 16 && typeof st.pfHl === "boolean")
@@ -7334,7 +7358,8 @@
         if (st.dv >= 15 && typeof st.pfSw === "boolean")
           setPfSw(st.pfSw);
         if (typeof st.pfLh === "boolean") setPfLh(st.pfLh);
-        if (typeof st.pfVc === "boolean") setPfVc(st.pfVc);
+        if (st.dv >= 19 && typeof st.pfVc === "boolean")
+          setPfVc(st.pfVc || st.pfVc2, st.pfVc2);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         if (typeof st.stCol === "boolean") setStCol(st.stCol);
@@ -7575,6 +7600,7 @@
       $("pfSwTog").onclick = () => setPfSw(!pfSw);
       $("pfLhTog").onclick = () => setPfLh(!pfLh);
       $("pfVcTog").onclick = () => setPfVc(!pfVc);
+      $("pfVc2Tog").onclick = () => setPfVc(!pfVc2, true);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
