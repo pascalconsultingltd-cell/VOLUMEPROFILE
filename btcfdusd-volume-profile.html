@@ -3701,10 +3701,10 @@
                     );
                 });
                 /* its barycentre, left of the profile at its own
-                   price: green above its POC, red below */
+                   price: red above its POC, green below */
                 const by = sw / sm;
                 bary.push([cx0 - 3, Y(by), by.toFixed(0),
-                  by < S.px ? "#e53935" : "#089981"]);
+                  by > S.px ? "#e53935" : "#089981"]);
                 g.fillStyle = "rgba(0,0,0,.45)";
               });
               g.save();
