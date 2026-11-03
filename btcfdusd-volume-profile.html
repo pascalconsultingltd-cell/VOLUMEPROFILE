@@ -4029,8 +4029,10 @@
             );
           });
           g.font = "11px ui-monospace,Menlo,monospace";
-          /* a horizontal stroke between two x positions */
-          const hseg = (yv, xa, xb, col, dash, wd) => {
+          /* a horizontal stroke between two x positions; lad =
+             the vol ladder's, drawn again in HA mode */
+          const lad = [],
+            hseg = (yv, xa, xb, col, dash, wd) => {
             const y = Y(yv);
             if (y < top || y > bot) return;
             g.strokeStyle = col;
@@ -4256,16 +4258,19 @@
               (last ? [tpoRun].concat(runs) : runs).forEach((r) =>
                 /* "0": no line under the POC band, dashed when
                    the band is off */
-                lv(r).forEach(([p, t, col, solid]) =>
-                  t === "0" && showPOC ? 0 : hseg(
+                lv(r).forEach(([p, t, col, solid]) => {
+                  if (t === "0" && showPOC) return;
+                  const s = [
                     p,
                     r.xa,
                     r.xb,
                     col === "#000000" ? "rgba(0,0,0,.5)" : col,
                     solid && t !== "0" ? [] : [3, 3],
                     t.length > 1 ? 1 : 1.5,
-                  ),
-                ),
+                  ];
+                  lad.push(s);
+                  hseg(...s);
+                }),
               );
             if (!last) return;
             /* prices in the axis column, on white patches */
@@ -5744,6 +5749,9 @@
                 i + 1 < geo.length ? geo[i + 1].x : o.x + o.w;
               g.fillRect(o.x, top, xe - o.x, bot - top);
             });
+            lad.filter((s) => s[2] > x0).forEach((s) =>
+              hseg(s[0], Math.max(s[1], x0), ...s.slice(2)),
+            );
             g.restore();
             geo.filter((o) => bigs.get(o.c)).forEach(candle);
             circles();
@@ -5832,9 +5840,9 @@
           }
           /* the waiting axis tags, ladder ones underneath */
           tagsNow = true;
-          if (!ha)
-            tq.filter((a) => a[2] === "#fff")
-            .concat(tq.filter((a) => a[2] !== "#fff"))
+          /* HA: the ladder's white ones only */
+          tq.filter((a) => a[2] === "#fff")
+            .concat(ha ? [] : tq.filter((a) => a[2] !== "#fff"))
             .forEach((a) => ptag(...a));
           /* hover */
 
