@@ -1341,10 +1341,6 @@
        * Trading back a brick past the pull-back's high (low)
        * switches back, and that colour back the same way a
        * brick past the switching column's other end.
-       * Shown only once price also trades a brick past the
-       * last swing the other way: a finished column of 7
-       * bricks or more, or a brick back past where the old
-       * colour started; till then the old colour stays.
        * [time, colour, price] of each switch.
        */
       function pfLhSw(all, hs) {
@@ -1352,19 +1348,7 @@
         let gD = null,
           bD = null,
           pd = null,
-          ex = null,
-          /* LH's colour (and since when), the one shown,
-             the swing low / high */
-          want = null,
-          wT = 0,
-          shown = null,
-          /* where the shown colour started; past it undoes
-             it, 7 bricks past if it came from a failed break */
-          from = null,
-          fb = false,
-          sl = null,
-          sh = null;
-        const out = [];
+          ex = null;
         all.forEach((c, k) => {
           const at = (ok) => {
             let t = null;
@@ -1420,37 +1404,11 @@
             if (c.up) gD = c.pl;
             else bD = c.ph;
           }
-          lhM.forEach(([t, col]) => {
-            if (t >= wT) [want, wT] = [col, t];
-          });
-          lhM.length = 0;
-          const p = k && all[k - 1];
-          if (p && p.ph - p.pl >= 7 * p.st)
-            if (p.up) sh = p.ph;
-            else sl = p.pl;
-          const dn = want === "#ff6d00",
-            sw = dn ? sl ?? -Infinity : sh ?? Infinity,
-            far = fb ? 7 * c.st : 0,
-            lv = dn
-              ? Math.max(sw, (from ?? -Infinity) - far) - c.st
-              : Math.min(sw, (from ?? Infinity) + far) + c.st;
-          if (want && want !== shown && isFinite(lv) &&
-            (dn ? c.pl < lv : c.ph > lv)) {
-            const t = at((r) =>
-              dn ? r * c.st < lv : (r + 1) * c.st > lv,
-            );
-            out.push([Math.max(t, wT), want, lv]);
-            shown = want;
-            fb = lv !== (dn ? sw - c.st : sw + c.st);
-            from = lv;
-            /* a swing already past the new colour's level is
-               stale: wait for a fresh one */
-            if (dn) {
-              if (sh != null && sh <= lv) sh = null;
-            } else if (sl != null && sl >= lv) sl = null;
-          }
         });
-        return out;
+        /* only real changes of colour */
+        return lhM
+          .sort((a, b) => a[0] - b[0])
+          .filter((m, i, a) => !i || m[1] !== a[i - 1][1]);
       }
       /*
        * A day's vol, as vol() in imports.py / 2: the height of
