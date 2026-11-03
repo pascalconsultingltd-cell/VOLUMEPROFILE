@@ -850,8 +850,9 @@
        */
       const SPC = ["0,51,102", "47,128,200", "107,118,132"],
         SGREY = "rgba(107,118,132,.3)",
-        /* PocStpCol2: bricks a zone needs before it colours,
-           the median of the regimes behind the 240 vol */
+        /* PocStpCol: bricks a zone needs before it colours,
+           the median of the regimes behind the 240 vol;
+           PocStpCol2 (zones one vol each side) half that */
         ST2_MIN = 227;
       function stepCols(rows, step, sp, cap = Infinity, minB = 0) {
         const ks = [...rows.keys()],
@@ -3468,7 +3469,7 @@
                   P.step,
                   subPocs(dS, ps, vf, P.step),
                   cap,
-                  two ? ST2_MIN : 0,
+                  two ? ST2_MIN / 2 : ST2_MIN,
                 )
               : new Map();
             m.step = P.step;
