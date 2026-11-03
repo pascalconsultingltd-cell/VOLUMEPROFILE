@@ -826,8 +826,8 @@
       /*
        * steps colours (simplified/POC): from each sub POC
        * one row each side per step, up to the lowest row
-       * towards the next POC or the day's end; green = more
-       * bricks above so far, red = more below, stronger =
+       * towards the next POC or the day's end; red = more
+       * bricks above so far, green = more below, stronger =
        * more lopsided. A POC row takes its P colour, the
        * low rows in between stay grey. Map row -> colour.
        */
@@ -865,7 +865,7 @@
               /* only a clear imbalance (over 60 / 40) */
               col = Math.abs(v) <= 0.2
                 ? SGREY
-                : (v > 0 ? "rgba(8,153,129," : "rgba(229,57,53,") +
+                : (v > 0 ? "rgba(229,57,53," : "rgba(8,153,129,") +
                   (0.15 + 0.85 * Math.abs(v)).toFixed(2) + ")";
             if (p + j <= b) out.set(p + j + r0, col);
             if (p - j >= a) out.set(p - j + r0, col);
