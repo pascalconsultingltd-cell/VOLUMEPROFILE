@@ -485,7 +485,7 @@
               ><button
                 id="massTog"
                 class="a"
-                title="Vol mass around the latest sub POCs, in black"
+                title="Vol mass around each day's sub POCs, in black"
               >
                 Mass
               </button></span
@@ -1803,8 +1803,8 @@
       /* St button: bricks by their steps value, sub POC
          lines and tags by the earliest session there */
       let stCol = false,
-        /* Mass button: the vol mass in black around the
-           latest day's sub POCs */
+        /* Mass button: the vol mass in black around each
+           day's sub POCs */
         showMass = true;
       function setShowMass(v) {
         showMass = !!v;
@@ -3657,10 +3657,10 @@
                   curB = [cx0 + k * lw + lw / 2, yT + rowH / 2];
               });
             });
-            /* Mass: from each sub POC of the latest day its row,
+            /* Mass: from each sub POC of the day its row,
                then one brick above, one below, outward through
                the profile until the vol mass is used; in black */
-            if (showMass && d === tpoDays.length - 1) {
+            if (showMass) {
               const ks = [...P.rows.keys()],
                 r0 = Math.min(...ks),
                 r1 = Math.max(...ks),
