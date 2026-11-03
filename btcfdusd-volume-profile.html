@@ -578,7 +578,7 @@
                   </button>
                   <button
                     id="haTog"
-                    class=""
+                    class="a"
                     title="Only the big candles and the ZFB"
                   >
                     HA
@@ -1005,7 +1005,7 @@
       }
       /* HA button: the main chart shows only the big candles
          and the ZFB, the price scale and crosshair stay */
-      let onlyHA = false;
+      let onlyHA = true;
       function setOnlyHA(v) {
         onlyHA = !!v;
         $("haTog").className = onlyHA ? "a" : "";
@@ -3145,6 +3145,25 @@
               exG = { x: x0 - w + sh, w, c: ec };
             }
           }
+          /* HA button: only the big candles and the ZFB, on
+             the profiles' UTC half hour colours, very light */
+          const ha = cfg.main && onlyHA && !side && geo.length;
+          if (ha) {
+            g.save();
+            g.beginPath();
+            g.rect(x0, top, px0 - x0, bot - top);
+            g.clip();
+            geo.forEach((o, i) => {
+              g.fillStyle = tpoColor(
+                Math.floor((o.c.t % 86400000) / 1800000),
+                0.08,
+              );
+              const xe =
+                i + 1 < geo.length ? geo[i + 1].x : o.x + o.w;
+              g.fillRect(o.x, top, xe - o.x, bot - top);
+            });
+            g.restore();
+          }
           /*
            * one day's TPO profile: rows of 30-minute
            * bricks, its POC row and its 70% value area.
@@ -4029,10 +4048,8 @@
             );
           });
           g.font = "11px ui-monospace,Menlo,monospace";
-          /* a horizontal stroke between two x positions; lad =
-             the vol ladder's, drawn again in HA mode */
-          const lad = [],
-            hseg = (yv, xa, xb, col, dash, wd) => {
+          /* a horizontal stroke between two x positions */
+          const hseg = (yv, xa, xb, col, dash, wd) => {
             const y = Y(yv);
             if (y < top || y > bot) return;
             g.strokeStyle = col;
@@ -4258,19 +4275,16 @@
               (last ? [tpoRun].concat(runs) : runs).forEach((r) =>
                 /* "0": no line under the POC band, dashed when
                    the band is off */
-                lv(r).forEach(([p, t, col, solid]) => {
-                  if (t === "0" && showPOC) return;
-                  const s = [
+                lv(r).forEach(([p, t, col, solid]) =>
+                  t === "0" && showPOC ? 0 : hseg(
                     p,
                     r.xa,
                     r.xb,
                     col === "#000000" ? "rgba(0,0,0,.5)" : col,
                     solid && t !== "0" ? [] : [3, 3],
                     t.length > 1 ? 1 : 1.5,
-                  ];
-                  lad.push(s);
-                  hseg(...s);
-                }),
+                  ),
+                ),
               );
             if (!last) return;
             /* prices in the axis column, on white patches */
@@ -4935,56 +4949,56 @@
 
           /* candles */
 
-          const candle = ({ x, w, c }) => {
-            const col = c.c >= c.o ? "#089981" : "#000000",
-              xm = x + w / 2;
-            g.save();
-            g.beginPath();
-            g.rect(x0, top, px0 - x0, bot - top);
-            g.clip();
-            /* main chart: 80% opaque, the wick not through the
-               body so it does not show darker there */
-            if (cfg.main) g.globalAlpha = 0.8;
-            g.strokeStyle = col;
-            g.fillStyle = col;
-            const yo = Y(c.o),
-              yc = Y(c.c),
-              yT = Math.min(yo, yc),
-              hB = Math.max(1, Math.abs(yo - yc));
-            g.beginPath();
-            g.moveTo(xm, Y(c.h));
-            g.lineTo(xm, yT);
-            g.moveTo(xm, yT + hB);
-            g.lineTo(xm, Y(c.l));
-            g.stroke();
-            g.fillRect(x + 1, yT, Math.max(1, w - 2), hB);
-            g.restore();
-          };
-          (exG ? [exG].concat(geo) : geo).forEach(candle);
+          /* big candles: their circles, and HA shows only them */
+          const bigs = bigFlags(
+            arr,
+            Math.max(0, arr.length - off - N),
+            Math.min(arr.length, arr.length - off),
+          );
+          (exG ? [exG].concat(geo) : geo)
+            .filter((o) => !ha || bigs.get(o.c))
+            .forEach(({ x, w, c }) => {
+              const col = c.c >= c.o ? "#089981" : "#000000",
+                xm = x + w / 2;
+              g.save();
+              g.beginPath();
+              g.rect(x0, top, px0 - x0, bot - top);
+              g.clip();
+              /* main chart: 80% opaque, the wick not through the
+                 body so it does not show darker there */
+              if (cfg.main) g.globalAlpha = 0.8;
+              g.strokeStyle = col;
+              g.fillStyle = col;
+              const yo = Y(c.o),
+                yc = Y(c.c),
+                yT = Math.min(yo, yc),
+                hB = Math.max(1, Math.abs(yo - yc));
+              g.beginPath();
+              g.moveTo(xm, Y(c.h));
+              g.lineTo(xm, yT);
+              g.moveTo(xm, yT + hB);
+              g.lineTo(xm, Y(c.l));
+              g.stroke();
+              g.fillRect(x + 1, yT, Math.max(1, w - 2), hB);
+              g.restore();
+            });
           /*
            * circles: green below bullish bars, black above
            * bearish bars; the 15s window gets its own
            */
-          const bigs = bigFlags(
-              arr,
-              Math.max(0, arr.length - off - N),
-              Math.min(arr.length, arr.length - off),
-            ),
-            circles = () =>
-            geo.forEach((o) => {
-              const f = bigs.get(o.c);
-              if (!f || side) return;
-              const c = o.c;
-              if (c.c === c.o) return;
-              const bull = c.c > c.o,
-                y = bull ? Y(c.l) + 12 : Y(c.h) - 12;
-              if (y < top || y > bot) return;
-              g.fillStyle = bull ? "#4caf50" : "#000000";
-              g.beginPath();
-              g.arc(o.x + o.w / 2, y, 5, 0, 6.2832);
-              g.fill();
-            });
-          circles();
+          geo.forEach((o) => {
+            const f = bigs.get(o.c);
+            if (!f || side) return;
+            const c = o.c;
+            if (c.c === c.o) return;
+            const bull = c.c > c.o,
+              y = bull ? Y(c.l) + 12 : Y(c.h) - 12;
+            if (y < top || y > bot) return;
+            g.fillStyle = bull ? "#4caf50" : "#000000";
+            g.beginPath();
+            g.arc(o.x + o.w / 2, y, 5, 0, 6.2832);
+            g.fill();
+          });
           /*
            * vertical grid: a line every 6 hours counted from
            * UTC midnight, where the day and its levels change
@@ -5463,7 +5477,7 @@
             });
             g.restore();
           };
-          if (cfg.main && showFZ && geo.length) zfb();
+          if (cfg.main && (showFZ || ha) && geo.length) zfb(ha);
           /*
            * own orders (from orders.js): a segment at the
            * order price for as long as the order was alive,
@@ -5628,35 +5642,6 @@
             });
             g.restore();
             g.lineWidth = 1;
-          }
-          /* HA: the chart wiped, then only the big candles,
-             their circles and the ZFB again, under the
-             drawn lines */
-          const ha = cfg.main && onlyHA && !side && geo.length;
-          if (ha) {
-            g.fillStyle = "#ffffff";
-            g.fillRect(x0 - 2, top, px0 - x0 + 2, bot - top);
-            /* tinted like the profiles: its UTC half hour */
-            g.save();
-            g.beginPath();
-            g.rect(x0, top, px0 - x0, bot - top);
-            g.clip();
-            geo.forEach((o, i) => {
-              g.fillStyle = tpoColor(
-                Math.floor((o.c.t % 86400000) / 1800000),
-                0.08,
-              );
-              const xe =
-                i + 1 < geo.length ? geo[i + 1].x : o.x + o.w;
-              g.fillRect(o.x, top, xe - o.x, bot - top);
-            });
-            lad.filter((s) => s[2] > x0).forEach((s) =>
-              hseg(s[0], Math.max(s[1], x0), ...s.slice(2)),
-            );
-            g.restore();
-            geo.filter((o) => bigs.get(o.c)).forEach(candle);
-            circles();
-            zfb(true);
           }
           lines.forEach((l) => {
             const sel = l === hl || l === drag;
@@ -7228,7 +7213,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 17;
+      const DEFAULTS_VER = 18;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7323,7 +7308,8 @@
         if (typeof st.followBox === "boolean")
           setFollowBox(st.followBox);
         if (typeof st.showFZ === "boolean") setShowFZ(st.showFZ);
-        if (typeof st.onlyHA === "boolean") setOnlyHA(st.onlyHA);
+        if (st.dv >= 18 && typeof st.onlyHA === "boolean")
+          setOnlyHA(st.onlyHA);
         if (st.dv >= 17 && typeof st.showVW === "boolean")
           setShowVW(st.showVW);
         /* 6h: default changed in version 4, HL / VA in 5 */
