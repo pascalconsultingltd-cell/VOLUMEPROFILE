@@ -1343,7 +1343,8 @@
        * brick past the switching column's other end.
        * Shown only once price also trades a brick past the
        * last swing the other way: a finished column of 7
-       * bricks or more; till then the old colour stays.
+       * bricks or more, or a brick back past where the old
+       * colour started; till then the old colour stays.
        * [time, colour, price] of each switch.
        */
       function pfLhSw(all, hs) {
@@ -1357,6 +1358,10 @@
           want = null,
           wT = 0,
           shown = null,
+          /* where the shown colour started; past it undoes
+             it, 7 bricks past if it came from a failed break */
+          from = null,
+          fb = false,
           sl = null,
           sh = null;
         const out = [];
@@ -1424,14 +1429,20 @@
             if (p.up) sh = p.ph;
             else sl = p.pl;
           const dn = want === "#ff6d00",
-            lv = dn ? sl - c.st : sh + c.st;
-          if (want && want !== shown && (dn ? sl : sh) != null &&
+            sw = dn ? sl ?? -Infinity : sh ?? Infinity,
+            far = fb ? 7 * c.st : 0,
+            lv = dn
+              ? Math.max(sw, (from ?? -Infinity) - far) - c.st
+              : Math.min(sw, (from ?? Infinity) + far) + c.st;
+          if (want && want !== shown && isFinite(lv) &&
             (dn ? c.pl < lv : c.ph > lv)) {
             const t = at((r) =>
               dn ? r * c.st < lv : (r + 1) * c.st > lv,
             );
             out.push([Math.max(t, wT), want, lv]);
             shown = want;
+            fb = lv !== (dn ? sw - c.st : sw + c.st);
+            from = lv;
             /* a swing already past the new colour's level is
                stale: wait for a fresh one */
             if (dn) {
