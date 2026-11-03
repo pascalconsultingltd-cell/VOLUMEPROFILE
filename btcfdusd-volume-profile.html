@@ -485,7 +485,7 @@
               ><button
                 id="massTog"
                 class="a"
-                title="80% of the vol mass round each sub POC, black"
+                title="The vol mass round each sub POC, in black"
               >
                 Mass
               </button></span
@@ -3659,8 +3659,8 @@
             });
             /* Mass: from each sub POC of the day, its whole row,
                then one real brick above, one below, in turn,
-               outward through the profile until 80% of the vol
-               mass is used; in black */
+               outward through the profile until the vol mass is
+               used; in black */
             if (showMass) {
               const ks = [...P.rows.keys()],
                 r0 = Math.min(...ks),
@@ -3670,7 +3670,7 @@
               g.fillStyle = "rgba(0,0,0,.45)";
               sp.forEach((S) => {
                 const p = Math.floor(S.px / P.step),
-                  M = Math.round(0.8 * VOL_MASS),
+                  M = VOL_MASS,
                   took = new Map([[p, Math.min(n(p), M)]]),
                   has = (r) => (took.get(r) || 0) < n(r);
                 let left = M - took.get(p),
