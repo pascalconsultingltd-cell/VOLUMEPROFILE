@@ -481,6 +481,13 @@
                 title="Bricks by steps value around their sub POC"
               >
                 PocStpCol
+              </button
+              ><button
+                id="massTog"
+                class="a"
+                title="Vol mass around the latest sub POCs, in black"
+              >
+                Mass
               </button></span
             ></span
           ></span
@@ -1795,7 +1802,15 @@
       }
       /* St button: bricks by their steps value, sub POC
          lines and tags by the earliest session there */
-      let stCol = false;
+      let stCol = false,
+        /* Mass button: the vol mass in black around the
+           latest day's sub POCs */
+        showMass = true;
+      function setShowMass(v) {
+        showMass = !!v;
+        $("massTog").className = showMass ? "a" : "";
+        schedule();
+      }
       function setStCol(v) {
         stCol = !!v;
         $("stTog").className = stCol ? "a" : "";
@@ -3642,6 +3657,44 @@
                   curB = [cx0 + k * lw + lw / 2, yT + rowH / 2];
               });
             });
+            /* Mass: from each sub POC of the latest day its row,
+               then one brick above, one below, outward through
+               the profile until the vol mass is used; in black */
+            if (showMass && d === tpoDays.length - 1) {
+              const ks = [...P.rows.keys()],
+                r0 = Math.min(...ks),
+                r1 = Math.max(...ks),
+                n = (r) => (P.rows.get(r) || []).length;
+              g.fillStyle = "rgba(0,0,0,.45)";
+              sp.forEach((S) => {
+                const p = Math.floor(S.px / P.step),
+                  took = new Map([[p, Math.min(n(p), VOL_MASS)]]),
+                  has = (r) => (took.get(r) || 0) < n(r);
+                let left = VOL_MASS - took.get(p),
+                  u = p + 1,
+                  w = p - 1,
+                  up = true;
+                while (left > 0) {
+                  while (u <= r1 && !has(u)) u++;
+                  while (w >= r0 && !has(w)) w--;
+                  if (u > r1 && w < r0) break;
+                  const r = (up && u <= r1) || w < r0 ? u : w;
+                  took.set(r, (took.get(r) || 0) + 1);
+                  left--;
+                  up = !up;
+                }
+                took.forEach((m, r) => {
+                  const yT = Y((r + 1) * P.step);
+                  for (let k = 0; k < m; k++)
+                    g.fillRect(
+                      cx0 + k * lw,
+                      yT + 0.5,
+                      Math.max(1, lw - 1),
+                      Math.max(1, rowH - 1),
+                    );
+                });
+              });
+            }
             /* around it, an empty 15px square in the last price
                blue, never tighter than the brick */
             if (curB) {
@@ -7333,6 +7386,7 @@
           ageOrd,
           showPOC,
           stCol,
+          showMass,
           pcPf,
           pfBr,
           pfSg,
@@ -7419,6 +7473,8 @@
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         if (typeof st.stCol === "boolean") setStCol(st.stCol);
+        if (typeof st.showMass === "boolean")
+          setShowMass(st.showMass);
         if (cur5 && typeof st.showVA === "boolean")
           setShowVA(st.showVA);
         if (typeof st.showUD === "boolean") setShowUD(st.showUD);
@@ -7660,6 +7716,7 @@
       $("pfXbTog").onclick = () => setPfXb(!pfXb);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
+      $("massTog").onclick = () => setShowMass(!showMass);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("fzTog").onclick = () => setShowFZ(!showFZ);
