@@ -3725,9 +3725,13 @@
               });
             }
             /* Perf: the perfect profile's edge, row by row, a
-               black step line from the profile's left edge */
-            if (showPerf && exp.size) {
-              const ks = [...exp.keys()].sort((a, b) => b - a);
+               black step line from the profile's left edge; only
+               over its rows of a brick or more */
+            const pk = [...exp.keys()]
+              .filter((r) => Math.round(exp.get(r)) >= 1)
+              .sort((a, b) => b - a);
+            if (showPerf && pk.length) {
+              const ks = pk;
               g.save();
               g.strokeStyle = "#000";
               g.lineWidth = 1.5;
