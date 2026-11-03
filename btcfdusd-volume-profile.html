@@ -1342,7 +1342,7 @@
        * switches back, and that colour back the same way a
        * brick past the switching column's other end.
        * Shown only once price also trades a brick past the
-       * last swing the other way: a finished column of 5
+       * last swing the other way: a finished column of 7
        * bricks or more; till then the old colour stays.
        * [time, colour, price] of each switch.
        */
@@ -1420,7 +1420,7 @@
           });
           lhM.length = 0;
           const p = k && all[k - 1];
-          if (p && p.ph - p.pl >= 5 * p.st)
+          if (p && p.ph - p.pl >= 7 * p.st)
             if (p.up) sh = p.ph;
             else sl = p.pl;
           const dn = want === "#ff6d00",
