@@ -485,7 +485,7 @@
               ><button
                 id="massTog"
                 class="a"
-                title="Hide the vol mass round each sub POC"
+                title="Only the vol mass round each sub POC, darkened"
               >
                 Mass
               </button></span
@@ -1803,8 +1803,8 @@
       /* St button: bricks by their steps value, sub POC
          lines and tags by the earliest session there */
       let stCol = false,
-        /* Mass button: the vol mass around each day's sub
-           POCs hidden, the other bricks shown */
+        /* Mass button: only the vol mass around each day's
+           sub POCs, darkened */
         showMass = true;
       function setShowMass(v) {
         showMass = !!v;
@@ -3634,8 +3634,8 @@
             /* Mass: from each sub POC of the day, its whole row,
                then one real brick above, one below, in turn,
                outward through the profile until the vol mass is
-               used; those bricks are not drawn (row -> how many
-               from the left) */
+               used; only those bricks are drawn, darkened (row ->
+               how many from the left) */
             const gone = new Map();
             if (showMass) {
               const ks = [...P.rows.keys()],
@@ -3669,11 +3669,11 @@
               if (yT > bot || yT + rowH < top) return;
               lst.forEach((idx, k) => {
                 /* today's latest brick (current period, price
-                   row): marked once every brick is drawn; Mass
-                   bricks are not drawn */
+                   row): marked once every brick is drawn; Mass:
+                   only its bricks */
                 if (r === rNow && idx === iNow)
                   curB = [cx0 + k * lw + lw / 2, yT + rowH / 2];
-                if (k < (gone.get(r) || 0)) return;
+                if (showMass && k >= (gone.get(r) || 0)) return;
                 g.fillStyle = showUD && ud
                   ? ud
                   : stCol && shut(idx)
@@ -3683,12 +3683,12 @@
                         ),
                       ) || SGREY
                     : tpoColor(idx, 0.72);
-                g.fillRect(
-                  cx0 + k * lw,
-                  yT + 0.5,
-                  Math.max(1, lw - 1),
-                  Math.max(1, rowH - 1),
-                );
+                const bw = Math.max(1, lw - 1),
+                  bh = Math.max(1, rowH - 1);
+                g.fillRect(cx0 + k * lw, yT + 0.5, bw, bh);
+                if (!showMass) return;
+                g.fillStyle = "rgba(0,0,0,.45)";
+                g.fillRect(cx0 + k * lw, yT + 0.5, bw, bh);
               });
             });
             /* around it, an empty 15px square in the last price
