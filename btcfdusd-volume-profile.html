@@ -5405,9 +5405,26 @@
            * extreme is a pivot, where it was made; a leg takes its
            * channel's colour: yellow down, blue up. Dashed = open.
            */
-          const zfb = () => {
+          const zfb = (ha) => {
             const piv = zfbPiv(arr),
-              where = new Map(geo.map((o) => [o.c, o]));
+              where = new Map(geo.map((o) => [o.c, o])),
+              nP = piv.length;
+            /* HA: the open leg thin and solid, to the most
+               extreme price since its origin */
+            if (ha && nP > 1) {
+              const z = piv[nP - 1];
+              for (
+                let k = arr.indexOf(piv[nP - 2].c) + 1;
+                k < arr.length;
+                k++
+              ) {
+                const q = arr[k];
+                if (okC(q) && (z.low ? q.l < z.p : q.h > z.p)) {
+                  z.p = z.low ? q.l : q.h;
+                  z.c = q;
+                }
+              }
+            }
             /* pivots off screen: just past the chart's edge */
             const xOf = (z) => {
               const o = where.get(z.c);
@@ -5431,7 +5448,9 @@
               g.strokeStyle = z.low
                 ? "rgb(230,159,0)"
                 : "rgb(41,98,255)";
-              g.setLineDash(i === piv.length - 1 ? [6, 4] : []);
+              const open = i === nP - 1;
+              g.lineWidth = open && ha ? 1 : 2;
+              g.setLineDash(open && !ha ? [6, 4] : []);
               g.beginPath();
               g.moveTo(xa, Y(a.p));
               g.lineTo(xb, Y(z.p));
@@ -5713,7 +5732,7 @@
             g.fillRect(x0 - 2, top, px0 - x0 + 2, bot - top);
             geo.filter((o) => bigs.get(o.c)).forEach(candle);
             circles();
-            zfb();
+            zfb(true);
           }
           if (cfg.main) {
             /* P&F: a cross at its top left closes it; once
