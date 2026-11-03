@@ -1341,6 +1341,9 @@
        * Trading back a brick past the pull-back's high (low)
        * switches back, and that colour back the same way a
        * brick past the switching column's other end.
+       * Shown only once price also trades a brick past the
+       * last swing the other way: a finished column of 5
+       * bricks or more; till then the old colour stays.
        * [time, colour, price] of each switch.
        */
       function pfLhSw(all, hs) {
@@ -1348,7 +1351,15 @@
         let gD = null,
           bD = null,
           pd = null,
-          ex = null;
+          ex = null,
+          /* LH's colour (and since when), the one shown,
+             the swing low / high */
+          want = null,
+          wT = 0,
+          shown = null,
+          sl = null,
+          sh = null;
+        const out = [];
         all.forEach((c, k) => {
           const at = (ok) => {
             let t = null;
@@ -1404,11 +1415,26 @@
             if (c.up) gD = c.pl;
             else bD = c.ph;
           }
+          lhM.forEach(([t, col]) => {
+            if (t >= wT) [want, wT] = [col, t];
+          });
+          lhM.length = 0;
+          const p = k && all[k - 1];
+          if (p && p.ph - p.pl >= 5 * p.st)
+            if (p.up) sh = p.ph;
+            else sl = p.pl;
+          const dn = want === "#ff6d00",
+            lv = dn ? sl - c.st : sh + c.st;
+          if (want && want !== shown && (dn ? sl : sh) != null &&
+            (dn ? c.pl < lv : c.ph > lv)) {
+            const t = at((r) =>
+              dn ? r * c.st < lv : (r + 1) * c.st > lv,
+            );
+            out.push([Math.max(t, wT), want, lv]);
+            shown = want;
+          }
         });
-        /* only real changes of colour */
-        return lhM
-          .sort((a, b) => a[0] - b[0])
-          .filter((m, i, a) => !i || m[1] !== a[i - 1][1]);
+        return out;
       }
       /*
        * A day's vol, as vol() in imports.py / 2: the height of
