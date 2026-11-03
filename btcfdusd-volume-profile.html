@@ -3670,6 +3670,13 @@
                     ncdf((r * P.step - S.px) / sg)));
               });
             }
+            /* Mass: a row's delta counts only over 2 x its Poisson
+               spread (root of the perfect count, 1 at least) */
+            const sig = (r) => {
+              const e = exp.get(r) || 0;
+              return Math.abs((P.rows.get(r) || []).length -
+                Math.round(e)) > 2 * Math.sqrt(Math.max(e, 1));
+            };
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
@@ -3691,8 +3698,9 @@
                   bh = Math.max(1, rowH - 1);
                 g.fillRect(cx0 + k * lw, yT + 0.5, bw, bh);
                 /* Mass: a brick the perfect mass has, faded; the
-                   extra ones keep their colour */
-                if (!showMass || k >= Math.round(exp.get(r) || 0))
+                   extra ones keep their colour where they count */
+                if (!showMass ||
+                  (k >= Math.round(exp.get(r) || 0) && sig(r)))
                   return;
                 g.fillStyle = "rgba(255,255,255,.7)";
                 g.fillRect(cx0 + k * lw, yT + 0.5, bw, bh);
@@ -3706,7 +3714,7 @@
               g.lineWidth = 1;
               exp.forEach((e, r) => {
                 const yT = Y((r + 1) * P.step);
-                if (yT > bot || yT + rowH < top) return;
+                if (yT > bot || yT + rowH < top || !sig(r)) return;
                 for (let k = (P.rows.get(r) || []).length;
                   k < Math.round(e); k++)
                   g.strokeRect(cx0 + k * lw + 0.5, yT + 1,
@@ -3718,7 +3726,8 @@
                 dl.set(r, (dl.get(r) || 0) + l.length));
               dl.forEach((v, r) => {
                 const yT = Y((r + 1) * P.step);
-                if (!v || yT > bot || yT + rowH < top) return;
+                if (!v || !sig(r) || yT > bot || yT + rowH < top)
+                  return;
                 g.fillStyle = v > 0 ? "#089981" : "#e53935";
                 g.fillRect(cx0 - 2 - (Math.abs(v) * lw) / 2, yT + 0.5,
                   (Math.abs(v) * lw) / 2, Math.max(1, rowH - 1));
