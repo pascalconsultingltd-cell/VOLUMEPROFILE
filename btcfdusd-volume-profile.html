@@ -850,9 +850,9 @@
        */
       const SPC = ["0,51,102", "47,128,200", "107,118,132"],
         SGREY = "rgba(107,118,132,.3)",
-        /* PocStpCol: bricks a zone needs before it colours,
-           the median of the regimes behind the 240 vol */
-        ST_MIN = 227;
+        /* vol mass: bricks of the regimes behind the 240 vol
+           (median); a PocStpCol zone colours from there */
+        VOL_MASS = 227;
       function stepCols(rows, step, sp, minB = 0) {
         const ks = [...rows.keys()],
           r0 = Math.min(...ks),
@@ -3461,7 +3461,7 @@
                   rows,
                   P.step,
                   subPocs(dS, ps, vf, P.step),
-                  ST_MIN,
+                  VOL_MASS,
                 )
               : new Map();
             m.step = P.step;
