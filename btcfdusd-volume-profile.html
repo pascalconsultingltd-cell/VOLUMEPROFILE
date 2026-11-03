@@ -1707,6 +1707,7 @@
         } catch (e) {}
         /* three beeps */
         try {
+          actx.resume();
           [0, 0.4, 0.8].forEach((s) => {
             const o = actx.createOscillator(),
               gn = actx.createGain();
@@ -1751,7 +1752,17 @@
           );
         });
       }
-      setInterval(alTick, 1000);
+      /* a tab behind other windows slows its timers to once a
+         minute, a worker's are not: it keeps the alerts ticking */
+      try {
+        new Worker(
+          URL.createObjectURL(
+            new Blob(["setInterval(() => postMessage(0), 1000)"]),
+          ),
+        ).onmessage = alTick;
+      } catch (e) {
+        setInterval(alTick, 1000);
+      }
       /* POC bands and tags on the chart (POC button) */
       let showPOC = false;
       function setShowPOC(v) {
