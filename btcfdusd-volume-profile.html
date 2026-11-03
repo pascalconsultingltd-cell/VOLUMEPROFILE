@@ -845,11 +845,15 @@
        * bricks above so far, green = more below, stronger =
        * more lopsided. A POC row takes its P colour, the
        * low rows in between stay grey. Map row -> colour.
-       * cap: rows each side at most.
+       * cap: rows each side at most; a zone with fewer than
+       * minB bricks stays grey.
        */
       const SPC = ["0,51,102", "47,128,200", "107,118,132"],
-        SGREY = "rgba(107,118,132,.3)";
-      function stepCols(rows, step, sp, cap = Infinity) {
+        SGREY = "rgba(107,118,132,.3)",
+        /* PocStpCol2: bricks a zone needs before it colours,
+           the median of the regimes behind the 240 vol */
+        ST2_MIN = 227;
+      function stepCols(rows, step, sp, cap = Infinity, minB = 0) {
         const ks = [...rows.keys()],
           r0 = Math.min(...ks),
           c = [],
@@ -879,6 +883,9 @@
               up >= n ? n - 1 : Math.max(p, cut(p, up) - 1),
             );
           out.set(p + r0, "rgb(" + SPC[k] + ")");
+          let tot = 0;
+          for (let r = a; r <= b; r++) tot += c[r];
+          if (tot < minB) return;
           const J = Math.max(b - p, p - a);
           for (let j = 1, U = 0, L = 0; j <= J; j++) {
             U += p + j <= b ? c[p + j] : 0;
@@ -3461,6 +3468,7 @@
                   P.step,
                   subPocs(dS, ps, vf, P.step),
                   cap,
+                  two ? ST2_MIN : 0,
                 )
               : new Map();
             m.step = P.step;
