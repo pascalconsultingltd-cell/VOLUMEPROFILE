@@ -485,7 +485,7 @@
               ><button
                 id="massTog"
                 class="a"
-                title="The vol mass round each sub POC, in black"
+                title="Hide the vol mass round each sub POC"
               >
                 Mass
               </button></span
@@ -1803,8 +1803,8 @@
       /* St button: bricks by their steps value, sub POC
          lines and tags by the earliest session there */
       let stCol = false,
-        /* Mass button: the vol mass in black around each
-           day's sub POCs */
+        /* Mass button: the vol mass around each day's sub
+           POCs hidden, the other bricks shown */
         showMass = true;
       function setShowMass(v) {
         showMass = !!v;
@@ -3631,11 +3631,49 @@
                 (mid != null ? mid : k15[k15.length - 1].c) / P.step,
               );
             }
-
+            /* Mass: from each sub POC of the day, its whole row,
+               then one real brick above, one below, in turn,
+               outward through the profile until the vol mass is
+               used; those bricks are not drawn (row -> how many
+               from the left) */
+            const gone = new Map();
+            if (showMass) {
+              const ks = [...P.rows.keys()],
+                r0 = Math.min(...ks),
+                r1 = Math.max(...ks),
+                n = (r) => (P.rows.get(r) || []).length;
+              sp.forEach((S) => {
+                const p = Math.floor(S.px / P.step),
+                  took = new Map([[p, Math.min(n(p), VOL_MASS)]]),
+                  has = (r) => (took.get(r) || 0) < n(r);
+                let left = VOL_MASS - took.get(p),
+                  u = p + 1,
+                  w = p - 1,
+                  up = true;
+                while (left > 0) {
+                  while (u <= r1 && !has(u)) u++;
+                  while (w >= r0 && !has(w)) w--;
+                  if (u > r1 && w < r0) break;
+                  const r = (up && u <= r1) || w < r0 ? u : w;
+                  took.set(r, (took.get(r) || 0) + 1);
+                  left--;
+                  up = !up;
+                }
+                took.forEach((m, r) =>
+                  gone.set(r, Math.max(m, gone.get(r) || 0)),
+                );
+              });
+            }
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
               lst.forEach((idx, k) => {
+                /* today's latest brick (current period, price
+                   row): marked once every brick is drawn; Mass
+                   bricks are not drawn */
+                if (r === rNow && idx === iNow)
+                  curB = [cx0 + k * lw + lw / 2, yT + rowH / 2];
+                if (k < (gone.get(r) || 0)) return;
                 g.fillStyle = showUD && ud
                   ? ud
                   : stCol && shut(idx)
@@ -3651,74 +3689,8 @@
                   Math.max(1, lw - 1),
                   Math.max(1, rowH - 1),
                 );
-                /* today's latest brick (current period, price
-                   row): marked once every brick is drawn */
-                if (r === rNow && idx === iNow)
-                  curB = [cx0 + k * lw + lw / 2, yT + rowH / 2];
               });
             });
-            /* Mass: from each sub POC of the day, its whole row,
-               then one real brick above, one below, in turn,
-               outward through the profile until the vol mass is
-               used; in black */
-            if (showMass) {
-              const ks = [...P.rows.keys()],
-                r0 = Math.min(...ks),
-                r1 = Math.max(...ks),
-                n = (r) => (P.rows.get(r) || []).length;
-              const bary = [];
-              g.fillStyle = "rgba(0,0,0,.45)";
-              sp.forEach((S) => {
-                const p = Math.floor(S.px / P.step),
-                  M = VOL_MASS,
-                  took = new Map([[p, Math.min(n(p), M)]]),
-                  has = (r) => (took.get(r) || 0) < n(r);
-                let left = M - took.get(p),
-                  u = p + 1,
-                  w = p - 1,
-                  up = true;
-                while (left > 0) {
-                  while (u <= r1 && !has(u)) u++;
-                  while (w >= r0 && !has(w)) w--;
-                  if (u > r1 && w < r0) break;
-                  const r = (up && u <= r1) || w < r0 ? u : w;
-                  took.set(r, (took.get(r) || 0) + 1);
-                  left--;
-                  up = !up;
-                }
-                let sw = 0,
-                  sm = 0;
-                took.forEach((m, r) => {
-                  const yT = Y((r + 1) * P.step);
-                  sw += m * (r + 0.5) * P.step;
-                  sm += m;
-                  for (let k = 0; k < m; k++)
-                    g.fillRect(
-                      cx0 + k * lw,
-                      yT + 0.5,
-                      Math.max(1, lw - 1),
-                      Math.max(1, rowH - 1),
-                    );
-                });
-                /* its barycentre, left of the profile at its own
-                   price: red above its POC, green below */
-                const by = sw / sm;
-                bary.push([cx0 - 3, Y(by), by.toFixed(0),
-                  by > S.px ? "#e53935" : "#089981"]);
-                g.fillStyle = "rgba(0,0,0,.45)";
-              });
-              g.save();
-              g.font = "bold 10px ui-monospace,Menlo,monospace";
-              g.textAlign = "right";
-              g.textBaseline = "middle";
-              bary.forEach(([x, y, t, c]) => {
-                g.fillStyle = c;
-                /* the first day's: kept on screen */
-                const w = g.measureText(t).width;
-                g.fillText(t, Math.max(x, w + 2), y);
-              });
-              g.restore();
-            }
             /* around it, an empty 15px square in the last price
                blue, never tighter than the brick */
             if (curB) {
