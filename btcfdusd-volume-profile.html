@@ -3666,6 +3666,7 @@
                 r0 = Math.min(...ks),
                 r1 = Math.max(...ks),
                 n = (r) => (P.rows.get(r) || []).length;
+              const bary = [];
               g.fillStyle = "rgba(0,0,0,.45)";
               sp.forEach((S) => {
                 const p = Math.floor(S.px / P.step),
@@ -3685,8 +3686,12 @@
                   left--;
                   up = !up;
                 }
+                let sw = 0,
+                  sm = 0;
                 took.forEach((m, r) => {
                   const yT = Y((r + 1) * P.step);
+                  sw += m * (r + 0.5) * P.step;
+                  sm += m;
                   for (let k = 0; k < m; k++)
                     g.fillRect(
                       cx0 + k * lw,
@@ -3695,7 +3700,24 @@
                       Math.max(1, rowH - 1),
                     );
                 });
+                /* its barycentre, left of the profile at the POC:
+                   red above the POC, green below (as PocStpCol) */
+                const by = sw / sm;
+                bary.push([cx0 - 3, Y(S.px), by.toFixed(0),
+                  by > S.px ? "#e53935" : "#089981"]);
+                g.fillStyle = "rgba(0,0,0,.45)";
               });
+              g.save();
+              g.font = "bold 10px ui-monospace,Menlo,monospace";
+              g.textAlign = "right";
+              g.textBaseline = "middle";
+              bary.forEach(([x, y, t, c]) => {
+                g.fillStyle = c;
+                /* the first day's: kept on screen */
+                const w = g.measureText(t).width;
+                g.fillText(t, Math.max(x, w + 2), y);
+              });
+              g.restore();
             }
             /* around it, an empty 15px square in the last price
                blue, never tighter than the brick */
