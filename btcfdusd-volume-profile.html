@@ -481,13 +481,6 @@
                 title="Bricks by steps value around their sub POC"
               >
                 PocStpCol
-              </button>
-              <button
-                id="st2Tog"
-                class=""
-                title="PocStpCol, one vol each side of a POC at most"
-              >
-                PocStpCol2
               </button></span
             ></span
           ></span
@@ -837,11 +830,10 @@
        * bricks above so far, green = more below, stronger =
        * more lopsided. A POC row takes its P colour, the
        * low rows in between stay grey. Map row -> colour.
-       * cap: rows each side at most (St2: one vol).
        */
       const SPC = ["0,51,102", "47,128,200", "107,118,132"],
         SGREY = "rgba(107,118,132,.3)";
-      function stepCols(rows, step, sp, cap = Infinity) {
+      function stepCols(rows, step, sp) {
         const ks = [...rows.keys()],
           r0 = Math.min(...ks),
           c = [],
@@ -862,14 +854,8 @@
         rs.forEach((p, k) => {
           const dn = Math.max(-1, ...rs.filter((r) => r < p)),
             up = Math.min(n, ...rs.filter((r) => r > p)),
-            a = Math.max(
-              p - cap,
-              dn < 0 ? 0 : Math.min(p, cut(dn, p) + 1),
-            ),
-            b = Math.min(
-              p + cap,
-              up >= n ? n - 1 : Math.max(p, cut(p, up) - 1),
-            );
+            a = dn < 0 ? 0 : Math.min(p, cut(dn, p) + 1),
+            b = up >= n ? n - 1 : Math.max(p, cut(p, up) - 1);
           out.set(p + r0, "rgb(" + SPC[k] + ")");
           const J = Math.max(b - p, p - a);
           for (let j = 1, U = 0, L = 0; j <= J; j++) {
@@ -1786,14 +1772,10 @@
       }
       /* St button: bricks by their steps value, sub POC
          lines and tags by the earliest session there */
-      let stCol = false,
-        /* St2 button: the same, one vol each side at most */
-        stCol2 = false;
-      function setStCol(v, two) {
-        stCol = !!v && !two;
-        stCol2 = !!v && !!two;
+      let stCol = false;
+      function setStCol(v) {
+        stCol = !!v;
         $("stTog").className = stCol ? "a" : "";
-        $("st2Tog").className = stCol2 ? "a" : "";
         schedule();
       }
       /* the P&F panel: closed by its cross, back with the
@@ -3428,8 +3410,7 @@
               ),
               vf = vC || P.step * 10,
               ps = P.ps.filter((q) => q.i <= i),
-              cap = stCol2 ? Math.round(vf / P.step) : Infinity,
-              key = [dS, i, vf, P.step, cap].join();
+              key = [dS, i, vf, P.step].join();
             if (stFz.has(key)) return stFz.get(key);
             const rows = new Map();
             P.rows.forEach((l, r) => {
@@ -3441,7 +3422,6 @@
                   rows,
                   P.step,
                   subPocs(dS, ps, vf, P.step),
-                  cap,
                 )
               : new Map();
             m.step = P.step;
@@ -3603,7 +3583,7 @@
               lst.forEach((idx, k) => {
                 g.fillStyle = showUD && ud
                   ? ud
-                  : (stCol || stCol2) && shut(idx)
+                  : stCol && shut(idx)
                     ? stAt(idx).get(
                         Math.floor(
                           ((r + 0.5) * P.step) / stAt(idx).step,
@@ -3641,7 +3621,7 @@
                   pv = zPrev.get(P.dS + "|" + S.px),
                   row = P.rows.get(Math.floor(S.px / P.step)),
                   c =
-                    (stCol || stCol2) && row && row.length
+                    stCol && row && row.length
                       ? tpoColor(Math.min(...row))
                       : pv == null
                       ? "#003366"
@@ -3983,9 +3963,7 @@
                 done =
                   li != null &&
                   q.ds + (li + 1) * TPO_MS <= Date.now(),
-                m = (stCol || stCol2) && done
-                  ? stFor(q.ds, li)
-                  : null,
+                m = stCol && done ? stFor(q.ds, li) : null,
                 mid =
                   li == null
                     ? SGREY
@@ -7280,7 +7258,6 @@
           ageOrd,
           showPOC,
           stCol,
-          stCol2,
           pcPf,
           pfBr,
           pfSg,
@@ -7361,7 +7338,6 @@
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         if (typeof st.stCol === "boolean") setStCol(st.stCol);
-        if (st.stCol2 === true) setStCol(true, true);
         if (cur5 && typeof st.showVA === "boolean")
           setShowVA(st.showVA);
         if (typeof st.showUD === "boolean") setShowUD(st.showUD);
@@ -7601,7 +7577,6 @@
       $("pfVcTog").onclick = () => setPfVc(!pfVc);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
-      $("st2Tog").onclick = () => setStCol(!stCol2, true);
       $("boxTog").onclick = () => setAutoBox(!autoBox);
       $("fboxTog").onclick = () => setFollowBox(!followBox);
       $("fzTog").onclick = () => setShowFZ(!showFZ);
