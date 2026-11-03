@@ -1818,8 +1818,9 @@
       /* St button: bricks by their steps value, sub POC
          lines and tags by the earliest session there */
       let stCol = false,
-        /* Mass button: over each day's profile its delta, real
-           - perfect bricks (vol mass normal round each sub POC) */
+        /* Mass button: each day's profile against a perfect one
+           (vol mass normal round each sub POC): fits faded, extra
+           in colour, missing empty; the delta in a strip left */
         showMass = true,
         /* Perf button: the perfect profile outlined over it */
         showPerf = true;
@@ -3689,33 +3690,39 @@
                 const bw = Math.max(1, lw - 1),
                   bh = Math.max(1, rowH - 1);
                 g.fillRect(cx0 + k * lw, yT + 0.5, bw, bh);
+                /* Mass: a brick the perfect mass has, faded; the
+                   extra ones keep their colour */
+                if (!showMass || k >= Math.round(exp.get(r) || 0))
+                  return;
+                g.fillStyle = "rgba(255,255,255,.7)";
+                g.fillRect(cx0 + k * lw, yT + 0.5, bw, bh);
               });
             });
-            /* Mass: per row real - perfect bricks as bars from an
-               axis over the profile, extra (+) right in green,
-               missing (-) left in red; the axis leaves room for
-               the widest red */
+            /* Mass: the perfect bricks the profile lacks, empty
+               black squares; per row real - perfect as a strip
+               left of the profile, green extra, red missing */
             if (showMass) {
+              g.strokeStyle = "#000";
+              g.lineWidth = 1;
+              exp.forEach((e, r) => {
+                const yT = Y((r + 1) * P.step);
+                if (yT > bot || yT + rowH < top) return;
+                for (let k = (P.rows.get(r) || []).length;
+                  k < Math.round(e); k++)
+                  g.strokeRect(cx0 + k * lw + 0.5, yT + 1,
+                    Math.max(1, lw - 2), Math.max(1, rowH - 2));
+              });
               const dl = new Map(exp);
               dl.forEach((e, r) => dl.set(r, -Math.round(e)));
               P.rows.forEach((l, r) =>
                 dl.set(r, (dl.get(r) || 0) + l.length));
-              const vs = [...dl.values()],
-                ks = [...dl.keys()],
-                ax = cx0 + Math.min(colW / 2,
-                  Math.max(0, ...vs.map((v) => -v)) * lw + 2);
               dl.forEach((v, r) => {
                 const yT = Y((r + 1) * P.step);
                 if (!v || yT > bot || yT + rowH < top) return;
-                g.fillStyle = v > 0 ? "rgba(8,153,129,.6)"
-                  : "rgba(229,57,53,.6)";
-                g.fillRect(v > 0 ? ax : ax + v * lw, yT + 0.5,
-                  Math.abs(v) * lw, Math.max(1, rowH - 1));
+                g.fillStyle = v > 0 ? "#089981" : "#e53935";
+                g.fillRect(cx0 - 2 - (Math.abs(v) * lw) / 2, yT + 0.5,
+                  (Math.abs(v) * lw) / 2, Math.max(1, rowH - 1));
               });
-              const yA = Y((Math.max(...ks) + 1) * P.step);
-              g.fillStyle = "#6b7684";
-              g.fillRect(ax - 0.5, yA, 1,
-                Y(Math.min(...ks) * P.step) - yA);
             }
             /* Perf: the perfect profile's edge, row by row, a
                black step line from the profile's left edge */
