@@ -554,7 +554,7 @@
               </button
               ><button
                 id="pfXbTog"
-                class="a"
+                class=""
                 title="High (red) and low (grey) activity boxes"
               >
                 Act
@@ -1876,7 +1876,7 @@
          is red = sell */
       let pfBy = false,
         /* Act button: the red / grey activity boxes */
-        pfXb = true,
+        pfXb = false,
         /* IC button: the ipoc channel */
         pfIc = true;
       function setPfIc(v) {
@@ -3528,12 +3528,21 @@
               /* rows in it with extra bricks vs all sub POCs'
                  perfect mass (Mass' green delta) */
               m.ex = [];
+              /* and the row missing most (red); ties: the middle
+                 of the tallest run of them */
+              let top = 0,
+                run = 0,
+                best = 0;
               for (let r = a; r <= b; r++) {
                 const e = sps.reduce((x, Q) => x + VOL_MASS * (
-                  ncdf(((r + 1) * P.step - Q.px) / sg) -
-                  ncdf((r * P.step - Q.px) / sg)), 0);
-                if ((rows.get(r) || []).length > Math.round(e))
-                  m.ex.push(r * P.step);
+                    ncdf(((r + 1) * P.step - Q.px) / sg) -
+                    ncdf((r * P.step - Q.px) / sg)), 0),
+                  d = (rows.get(r) || []).length - Math.round(e);
+                if (d > 0) m.ex.push(r * P.step);
+                if (-d > top) (top = -d), (best = run = 0);
+                run = -d === top && top > 0 ? run + 1 : 0;
+                if (run > best)
+                  (best = run), (m.rl = (r + 1 - run / 2) * P.step);
               }
               m.ex.step = P.step;
             }
@@ -5152,7 +5161,7 @@
                 if (dS + (i + 1) * TPO_MS > Date.now()) i--;
                 if (i < 0) (dS = prevDay(dS)), (i = 47);
                 const m = stFor(dS, i);
-                return m.ic && [pa + sl * jOf(k), m.ic, m.ex];
+                return m.ic && [pa + sl * jOf(k), m.ic, m.ex, m.rl];
               });
               /* green: rows with extra bricks then */
               g.fillStyle = "rgba(8,153,129,.25)";
@@ -5176,6 +5185,19 @@
                 });
                 g.stroke();
               });
+              /* red: the biggest missing zone's middle */
+              g.strokeStyle = "#e53935";
+              g.lineWidth = 1.5;
+              g.beginPath();
+              let on = false;
+              pts.forEach((q) => {
+                if (!q || q[3] == null) return (on = false);
+                const y = Y(q[3]);
+                g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
+                g.lineTo(q[0] + sl / 2, y);
+                on = true;
+              });
+              g.stroke();
               g.lineWidth = 1;
             }
             g.restore();
@@ -7499,7 +7521,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 22;
+      const DEFAULTS_VER = 23;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7617,7 +7639,7 @@
         if (st.dv >= 9 && typeof st.pcPf === "boolean")
           setPcPf(st.pcPf);
         /* Br, Sw, Alrt: defaults changed in version 15;
-           Alrt, Buy off in version 22 */
+           Alrt, Buy off in version 22, Act in 23 */
         if (st.dv >= 19 && typeof st.pfBr === "boolean")
           setPfBr(st.pfBr);
         if (typeof st.pfSg === "boolean") setPfSg(st.pfSg);
@@ -7628,7 +7650,8 @@
         if (typeof st.pfLh === "boolean") setPfLh(st.pfLh);
         if (st.dv >= 22 && typeof st.pfBy === "boolean")
           setPfBy(st.pfBy);
-        if (typeof st.pfXb === "boolean") setPfXb(st.pfXb);
+        if (st.dv >= 23 && typeof st.pfXb === "boolean")
+          setPfXb(st.pfXb);
         if (typeof st.pfIc === "boolean") setPfIc(st.pfIc);
         if (st.dv >= 21 && typeof st.pfVc === "boolean")
           setPfVc(st.pfVc);
