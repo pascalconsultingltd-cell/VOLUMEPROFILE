@@ -3610,6 +3610,7 @@
               /* 4th, 5th: the curve's 90% / 10% points, 1 vol out */
               m.ic = [S.px, (b + 1) * step, a * step, S.px + vf,
                 S.px - vf];
+              m.d = dS;
               /* rows in it with extra bricks vs all sub POCs'
                  perfect mass (Mass' green delta) */
               m.ex = [];
@@ -5241,9 +5242,24 @@
             /* IC: ipoc channel, each column as at its start (no
                repaint): ipoc thick, edges thin */
             if (pfIc) {
+              /* IC% bands per ipoc run (same day, moves < 1 vol):
+                 the top only rises, the bottom only falls */
+              let hi, lo, pv = null, pd;
+              const bd = items.slice(0, k1).map((c) => {
+                const m = icFor(c.t0);
+                if (!m.ic) return (pv = null);
+                const [p, , , h, l] = m.ic;
+                if (pv === null || m.d !== pd ||
+                  Math.abs(p - pv) >= h - p)
+                  (hi = h), (lo = l);
+                else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
+                (pv = p), (pd = m.d);
+                return [hi, lo];
+              });
               const pts = cv2.map((c, k) => {
                 const m = icFor(c.t0);
-                return m.ic && [pa + sl * jOf(k), m.ic, m.ex, m.rl];
+                return m.ic && [pa + sl * jOf(k),
+                  [...m.ic.slice(0, 3), ...bd[k0 + k]], m.ex, m.rl];
               });
               /* green: rows with extra bricks then */
               g.fillStyle = "rgba(8,153,129,.25)";
