@@ -5356,7 +5356,7 @@
            * the same height starts in the opposite direction,
            * and so on. Following highs = green, lows = black.
            */
-          if (cfg.main && (autoBox || followBox)) {
+          if (cfg.main && (autoBox || (followBox && !ha))) {
             /* the latest nBox big candles, newest first */
             const bigs = [],
               where = new Map(geo.map((o) => [o.c, o]));
@@ -5396,8 +5396,8 @@
                 pts = [{ c: q, ext }];
               }
               runs.push({ dn, pts, live: !bi });
-              /* FB: the following channels */
-              (followBox ? runs : []).forEach((r) => {
+              /* FB: the following channels, none in HA mode */
+              (followBox && !ha ? runs : []).forEach((r) => {
                 /* far = the side away from the trailed edge;
                    the 66% line sits 34% in from it */
                 const far = (e) => (r.dn ? e + ht : e - ht),
