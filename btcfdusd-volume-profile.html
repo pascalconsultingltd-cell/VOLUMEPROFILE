@@ -3614,8 +3614,9 @@
               /* rows in it with extra bricks vs all sub POCs'
                  perfect mass (Mass' green delta) */
               m.ex = [];
-              /* and the row missing most (red); ties: the middle
-                 of the tallest run of them */
+              /* and the row missing the biggest share of what it
+                 expects, 3+ bricks (red); ties: the middle of the
+                 tallest run of them */
               let top = 0,
                 run = 0,
                 best = 0;
@@ -3623,10 +3624,12 @@
                 const e = sps.reduce((x, Q) => x + VOL_MASS * (
                     ncdf(((r + 1) * step - Q.px) / sg) -
                     ncdf((r * step - Q.px) / sg)), 0),
-                  d = (rows.get(r) || []).length - Math.round(e);
+                  E = Math.round(e),
+                  d = (rows.get(r) || []).length - E,
+                  g = E >= 3 ? -d / E : 0;
                 if (d > 0) m.ex.push(r * step);
-                if (-d > top) (top = -d), (best = run = 0);
-                run = -d === top && top > 0 ? run + 1 : 0;
+                if (g > top) (top = g), (best = run = 0);
+                run = g === top && top > 0 ? run + 1 : 0;
                 if (run > best)
                   (best = run), (m.rl = (r + 1 - run / 2) * step);
               }
