@@ -6014,6 +6014,7 @@
           const XH = "rgba(184,134,11,.8)",
             XB = "#ffe58a",
             XF = "#1a1f26";
+          tpoT = null;
           if (
             mouse &&
             mouse.x >= 4 &&
@@ -6088,6 +6089,7 @@
                         timeZone: "UTC",
                       }),
                     t0 = P.dS + idx * TPO_MS;
+                  tpoT = t0;
                   lbl =
                     day + " " + f(t0) + "–" + f(t0 + TPO_MS) +
                     " UTC";
@@ -6142,6 +6144,40 @@
               g.restore();
               /* and that column's time under the P&F */
               ttag(px, dlabel(pt), XB, XF);
+            }
+          }
+          /* candle hovered (or mirrored): its TPO period's bricks
+             outlined; TPO brick hovered: its half hour shaded */
+          {
+            const o = mouse && mouse.x >= x0 && hover >= 0 &&
+                geo[hover],
+              mx = xh && xh.from !== api ? xh.t : null,
+              tc = o ? o.c.t : tpoT != null ? null : mx,
+              ts = tpoT != null ? tpoT : xh && xh.from !== api
+                && xh.tpo ? mx : null,
+              P = tc != null && profs.find((q) => q.show &&
+                q.poc != null && tc >= q.dS && tc < q.dS + 864e5);
+            if (P) {
+              const i = Math.floor((tc - P.dS) / TPO_MS);
+              g.strokeStyle = "#e8590c";
+              g.lineWidth = 2;
+              P.rows.forEach((l, r) => {
+                const k = l.indexOf(i);
+                if (k >= 0)
+                  g.strokeRect(P.cx0 + k * P.lw,
+                    Y((r + 1) * P.step) + 0.5,
+                    Math.max(1, P.lw - 1), Math.max(1, P.rowH - 1));
+              });
+              g.lineWidth = 1;
+            }
+            const cm = TF === "5m" ? 300000 : 15000,
+              v = ts == null || !geo ? [] : geo.filter((q) =>
+                q.c.t + cm > ts && q.c.t < ts + TPO_MS);
+            if (v.length) {
+              const a = v[0].x, b = v[v.length - 1];
+              g.fillStyle = "rgba(184,134,11,.15)";
+              g.fillRect(a, top, b.x + b.w - a, bot - top);
+              ttag((a + b.x + b.w) / 2, dlabel(ts), XB, XF);
             }
           }
           /* hovering a P&F column: its time on this chart too */
@@ -6408,7 +6444,8 @@
                   t:
                     hover >= 0 && geo[hover]
                       ? geo[hover].c.t
-                      : pfTime(x),
+                      : tpoT != null ? tpoT : pfTime(x),
+                  tpo: hover < 0 && tpoT != null,
                   from: api,
                 }
               : null;
@@ -6504,6 +6541,7 @@
           if (l.l === "pc" || l.l === "tp") return xsOf(l);
           return view.pfX && view.pfX.length ? pfXAt(l.t) : null;
         }
+        var tpoT = null; /* hovered TPO period start */
         function geoAt(t) {
           let r = null;
           if (geo)
