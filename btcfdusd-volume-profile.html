@@ -5152,13 +5152,15 @@
               jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
             drawPfCols(pfc, cv2, jOf, pa, sl);
             /* IC: ipoc channel, each column at its last closed
-               period: ipoc thick, curve edges thin */
+               period (the live one: now): ipoc thick, edges thin */
             if (pfIc) {
               const pts = cv2.map((c, k) => {
                 const t = Math.max(c.t0, ...c.tm.values());
                 let dS = dayOf(t),
                   i = Math.floor((t - dS) / TPO_MS);
-                if (dS + (i + 1) * TPO_MS > Date.now()) i--;
+                /* the live column: the forming period, live */
+                if (c !== pfc[pfc.length - 1] &&
+                  dS + (i + 1) * TPO_MS > Date.now()) i--;
                 if (i < 0) (dS = prevDay(dS)), (i = 47);
                 const m = stFor(dS, i);
                 return m.ic && [pa + sl * jOf(k), m.ic, m.ex, m.rl];
