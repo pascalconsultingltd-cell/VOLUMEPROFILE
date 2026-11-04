@@ -558,6 +558,13 @@
                 title="High (red) and low (grey) activity boxes"
               >
                 Act
+              </button
+              ><button
+                id="pfIcTog"
+                class="a"
+                title="Latest ipoc and its normal curve edges"
+              >
+                IC
               </button></span
             ></span
         ></span>
@@ -1869,7 +1876,14 @@
          is red = sell */
       let pfBy = true,
         /* Act button: the red / grey activity boxes */
-        pfXb = true;
+        pfXb = true,
+        /* IC button: the ipoc channel */
+        pfIc = true;
+      function setPfIc(v) {
+        pfIc = !!v;
+        $("pfIcTog").className = pfIc ? "a" : "";
+        schedule();
+      }
       function setPfXb(v) {
         pfXb = !!v;
         $("pfXbTog").className = pfXb ? "a" : "";
@@ -3494,15 +3508,24 @@
               const f = l.filter((x) => x <= i);
               if (f.length) rows.set(r, f);
             });
-            const m = ps.length
-              ? stepCols(
-                  rows,
-                  P.step,
-                  subPocs(dS, ps, vf, P.step),
-                  VOL_MASS,
-                )
-              : new Map();
+            const sps = ps.length ? subPocs(dS, ps, vf, P.step) : [],
+              m = ps.length
+                ? stepCols(rows, P.step, sps, VOL_MASS)
+                : new Map();
             m.step = P.step;
+            /* IC: the latest ipoc, its normal curve's edges (rows
+               where its vol mass still gives a brick) */
+            const S = byAge({ rows, step: P.step }, sps).pop();
+            if (S) {
+              const sg = vf / 1.2816,
+                z = (r) => ncdf((r * P.step - S.px) / sg),
+                n = (r) => VOL_MASS * (z(r + 1) - z(r));
+              let a = Math.floor(S.px / P.step),
+                b = a;
+              while (n(b + 1) >= 1) b++;
+              while (n(a - 1) >= 1) a--;
+              m.ic = [S.px, (b + 1) * P.step, a * P.step];
+            }
             if (dS + (i + 1) * TPO_MS <= Date.now()) {
               if (stFz.size > 3000) stFz.clear();
               stFz.set(key, m);
@@ -5108,6 +5131,39 @@
               cv2 = items.slice(k0, k1),
               jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
             drawPfCols(pfc, cv2, jOf, pa, sl);
+            /* IC: ipoc channel, each column at its last closed
+               period: ipoc solid, curve edges dashed */
+            if (pfIc) {
+              const pts = cv2.map((c, k) => {
+                const t = Math.max(c.t0, ...c.tm.values());
+                let dS = dayOf(t),
+                  i = Math.floor((t - dS) / TPO_MS);
+                if (dS + (i + 1) * TPO_MS > Date.now()) i--;
+                if (i < 0) (dS = prevDay(dS)), (i = 47);
+                const m = stFor(dS, i);
+                return m.ic && [pa + sl * jOf(k), m.ic];
+              });
+              g.fillStyle = "rgba(142,68,173,.07)";
+              pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
+                Y(q[1][1]), sl + 0.5, Y(q[1][2]) - Y(q[1][1])));
+              g.strokeStyle = "#8e44ad";
+              [0, 1, 2].forEach((j) => {
+                g.setLineDash(j ? [4, 3] : []);
+                g.lineWidth = j ? 1 : 1.5;
+                g.beginPath();
+                let on = false;
+                pts.forEach((q) => {
+                  if (!q) return (on = false);
+                  const y = Y(q[1][j]);
+                  g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
+                  g.lineTo(q[0] + sl / 2, y);
+                  on = true;
+                });
+                g.stroke();
+              });
+              g.setLineDash([]);
+              g.lineWidth = 1;
+            }
             g.restore();
             /* framed, named, and says so when it is empty */
             panel(pa, pcW);
@@ -7485,6 +7541,7 @@
           pfVc,
           pfBy,
           pfXb,
+          pfIc,
           showOrders,
           showLines,
           showGr,
@@ -7557,6 +7614,7 @@
         if (st.dv >= 20 && typeof st.pfBy === "boolean")
           setPfBy(st.pfBy);
         if (typeof st.pfXb === "boolean") setPfXb(st.pfXb);
+        if (typeof st.pfIc === "boolean") setPfIc(st.pfIc);
         if (st.dv >= 21 && typeof st.pfVc === "boolean")
           setPfVc(st.pfVc);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
@@ -7805,6 +7863,7 @@
       $("pfVcTog").onclick = () => setPfVc(!pfVc);
       $("pfByTog").onclick = () => setPfBy(!pfBy);
       $("pfXbTog").onclick = () => setPfXb(!pfXb);
+      $("pfIcTog").onclick = () => setPfIc(!pfIc);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
       $("massTog").onclick = () => setShowMass(!showMass);
