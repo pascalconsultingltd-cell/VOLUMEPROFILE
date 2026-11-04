@@ -547,7 +547,7 @@
               </button
               ><button
                 id="pfByTog"
-                class="a"
+                class=""
                 title="Black dot on StpCol green: buy; mirror: sell"
               >
                 Buy
@@ -1874,7 +1874,7 @@
       /* Buy button: a seller dot (black) while the latest
          PocStpCol brick is green = buy, a buyer dot while it
          is red = sell */
-      let pfBy = true,
+      let pfBy = false,
         /* Act button: the red / grey activity boxes */
         pfXb = true,
         /* IC button: the ipoc channel */
@@ -5143,10 +5143,10 @@
                 const m = stFor(dS, i);
                 return m.ic && [pa + sl * jOf(k), m.ic];
               });
-              g.fillStyle = "rgba(142,68,173,.07)";
+              g.fillStyle = "rgba(41,98,255,.07)";
               pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
                 Y(q[1][1]), sl + 0.5, Y(q[1][2]) - Y(q[1][1])));
-              g.strokeStyle = "#8e44ad";
+              g.strokeStyle = "#2962ff";
               [0, 1, 2].forEach((j) => {
                 g.setLineDash(j ? [4, 3] : []);
                 g.lineWidth = j ? 1 : 1.5;
@@ -7485,7 +7485,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 21;
+      const DEFAULTS_VER = 22;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7602,16 +7602,17 @@
         /* P&F: default changed in version 9 */
         if (st.dv >= 9 && typeof st.pcPf === "boolean")
           setPcPf(st.pcPf);
-        /* Br, Sw, Alrt: defaults changed in version 15 */
+        /* Br, Sw, Alrt: defaults changed in version 15;
+           Alrt, Buy off in version 22 */
         if (st.dv >= 19 && typeof st.pfBr === "boolean")
           setPfBr(st.pfBr);
         if (typeof st.pfSg === "boolean") setPfSg(st.pfSg);
-        if (st.dv >= 16 && typeof st.pfHl === "boolean")
+        if (st.dv >= 22 && typeof st.pfHl === "boolean")
           setPfHl(st.pfHl);
         if (st.dv >= 15 && typeof st.pfSw === "boolean")
           setPfSw(st.pfSw);
         if (typeof st.pfLh === "boolean") setPfLh(st.pfLh);
-        if (st.dv >= 20 && typeof st.pfBy === "boolean")
+        if (st.dv >= 22 && typeof st.pfBy === "boolean")
           setPfBy(st.pfBy);
         if (typeof st.pfXb === "boolean") setPfXb(st.pfXb);
         if (typeof st.pfIc === "boolean") setPfIc(st.pfIc);
