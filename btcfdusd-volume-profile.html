@@ -568,10 +568,17 @@
               </button
               ><button
                 id="pfIqTog"
-                class="a"
+                class=""
                 title="IC: 10% / 90% of the curve (1 vol out)"
               >
                 IC%
+              </button
+              ><button
+                id="pfRlTog"
+                class=""
+                title="IC: the row missing most of its bricks"
+              >
+                Gap
               </button></span
             ></span
         ></span>
@@ -1887,7 +1894,14 @@
         /* IC button: the ipoc channel */
         pfIc = true,
         /* IC% button: its 10% / 90% lines and tails */
-        pfIq = true;
+        pfIq = false,
+        /* Gap button: the IC's red line */
+        pfRl = false;
+      function setPfRl(v) {
+        pfRl = !!v;
+        $("pfRlTog").className = pfRl ? "a" : "";
+        schedule();
+      }
       function setPfIq(v) {
         pfIq = !!v;
         $("pfIqTog").className = pfIq ? "a" : "";
@@ -5297,18 +5311,20 @@
                 g.stroke();
               });
               /* red: the biggest missing zone's middle */
-              g.strokeStyle = "#e53935";
-              g.lineWidth = 1.5;
-              g.beginPath();
-              let on = false;
-              pts.forEach((q) => {
-                if (!q || q[3] == null) return (on = false);
-                const y = Y(q[3]);
-                g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
-                g.lineTo(q[0] + sl / 2, y);
-                on = true;
-              });
-              g.stroke();
+              if (pfRl) {
+                g.strokeStyle = "#e53935";
+                g.lineWidth = 1.5;
+                g.beginPath();
+                let on = false;
+                pts.forEach((q) => {
+                  if (!q || q[3] == null) return (on = false);
+                  const y = Y(q[3]);
+                  g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
+                  g.lineTo(q[0] + sl / 2, y);
+                  on = true;
+                });
+                g.stroke();
+              }
               g.lineWidth = 1;
             }
             g.restore();
@@ -7655,7 +7671,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 24;
+      const DEFAULTS_VER = 25;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7713,6 +7729,7 @@
           pfXb,
           pfIc,
           pfIq,
+          pfRl,
           showOrders,
           showLines,
           showGr,
@@ -7788,7 +7805,9 @@
         if (st.dv >= 23 && typeof st.pfXb === "boolean")
           setPfXb(st.pfXb);
         if (typeof st.pfIc === "boolean") setPfIc(st.pfIc);
-        if (typeof st.pfIq === "boolean") setPfIq(st.pfIq);
+        if (st.dv >= 25 && typeof st.pfIq === "boolean")
+          setPfIq(st.pfIq);
+        if (typeof st.pfRl === "boolean") setPfRl(st.pfRl);
         if (st.dv >= 21 && typeof st.pfVc === "boolean")
           setPfVc(st.pfVc);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
@@ -8041,6 +8060,7 @@
       $("pfXbTog").onclick = () => setPfXb(!pfXb);
       $("pfIcTog").onclick = () => setPfIc(!pfIc);
       $("pfIqTog").onclick = () => setPfIq(!pfIq);
+      $("pfRlTog").onclick = () => setPfRl(!pfRl);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
       $("massTog").onclick = () => setShowMass(!showMass);
