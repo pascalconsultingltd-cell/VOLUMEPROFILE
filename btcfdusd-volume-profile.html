@@ -565,6 +565,13 @@
                 title="Latest ipoc and its normal curve edges"
               >
                 IC
+              </button
+              ><button
+                id="pfIqTog"
+                class="a"
+                title="IC: 10% / 90% of the curve (1 vol out)"
+              >
+                IC%
               </button></span
             ></span
         ></span>
@@ -1878,7 +1885,14 @@
         /* Act button: the red / grey activity boxes */
         pfXb = false,
         /* IC button: the ipoc channel */
-        pfIc = true;
+        pfIc = true,
+        /* IC% button: its 10% / 90% lines and tails */
+        pfIq = true;
+      function setPfIq(v) {
+        pfIq = !!v;
+        $("pfIqTog").className = pfIq ? "a" : "";
+        schedule();
+      }
       function setPfIc(v) {
         pfIc = !!v;
         $("pfIcTog").className = pfIc ? "a" : "";
@@ -3593,7 +3607,9 @@
                 b = a;
               while (n(b + 1) >= 1) b++;
               while (n(a - 1) >= 1) a--;
-              m.ic = [S.px, (b + 1) * step, a * step];
+              /* 4th, 5th: the curve's 90% / 10% points, 1 vol out */
+              m.ic = [S.px, (b + 1) * step, a * step, S.px + vf,
+                S.px - vf];
               /* rows in it with extra bricks vs all sub POCs'
                  perfect mass (Mass' green delta) */
               m.ex = [];
@@ -5237,9 +5253,19 @@
               g.fillStyle = "rgba(41,98,255,.07)";
               pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
                 Y(q[1][1]), sl + 0.5, Y(q[1][2]) - Y(q[1][1])));
+              /* IC%: the 10% tails, darker */
+              g.fillStyle = "rgba(41,98,255,.1)";
+              if (pfIq) pts.forEach((q) => {
+                if (!q) return;
+                const [, t, u, h, l] = q[1];
+                if (h < t) g.fillRect(q[0] - sl / 2, Y(t), sl + 0.5,
+                  Y(h) - Y(t));
+                if (l > u) g.fillRect(q[0] - sl / 2, Y(l), sl + 0.5,
+                  Y(u) - Y(l));
+              });
               g.strokeStyle = "#2962ff";
-              [0, 1, 2].forEach((j) => {
-                g.lineWidth = j ? 1 : 1.5;
+              (pfIq ? [0, 1, 2, 3, 4] : [0, 1, 2]).forEach((j) => {
+                g.lineWidth = j > 2 ? 0.5 : j ? 1 : 1.5;
                 g.beginPath();
                 let on = false;
                 pts.forEach((q) => {
@@ -7667,6 +7693,7 @@
           pfBy,
           pfXb,
           pfIc,
+          pfIq,
           showOrders,
           showLines,
           showGr,
@@ -7742,6 +7769,7 @@
         if (st.dv >= 23 && typeof st.pfXb === "boolean")
           setPfXb(st.pfXb);
         if (typeof st.pfIc === "boolean") setPfIc(st.pfIc);
+        if (typeof st.pfIq === "boolean") setPfIq(st.pfIq);
         if (st.dv >= 21 && typeof st.pfVc === "boolean")
           setPfVc(st.pfVc);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
@@ -7993,6 +8021,7 @@
       $("pfByTog").onclick = () => setPfBy(!pfBy);
       $("pfXbTog").onclick = () => setPfXb(!pfXb);
       $("pfIcTog").onclick = () => setPfIc(!pfIc);
+      $("pfIqTog").onclick = () => setPfIq(!pfIq);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
       $("massTog").onclick = () => setShowMass(!showMass);
