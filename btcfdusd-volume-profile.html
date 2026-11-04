@@ -3525,6 +3525,17 @@
               while (n(b + 1) >= 1) b++;
               while (n(a - 1) >= 1) a--;
               m.ic = [S.px, (b + 1) * P.step, a * P.step];
+              /* rows in it with extra bricks vs all sub POCs'
+                 perfect mass (Mass' green delta) */
+              m.ex = [];
+              for (let r = a; r <= b; r++) {
+                const e = sps.reduce((x, Q) => x + VOL_MASS * (
+                  ncdf(((r + 1) * P.step - Q.px) / sg) -
+                  ncdf((r * P.step - Q.px) / sg)), 0);
+                if ((rows.get(r) || []).length > Math.round(e))
+                  m.ex.push(r * P.step);
+              }
+              m.ex.step = P.step;
             }
             if (dS + (i + 1) * TPO_MS <= Date.now()) {
               if (stFz.size > 3000) stFz.clear();
@@ -5141,8 +5152,13 @@
                 if (dS + (i + 1) * TPO_MS > Date.now()) i--;
                 if (i < 0) (dS = prevDay(dS)), (i = 47);
                 const m = stFor(dS, i);
-                return m.ic && [pa + sl * jOf(k), m.ic];
+                return m.ic && [pa + sl * jOf(k), m.ic, m.ex];
               });
+              /* green: rows with extra bricks then */
+              g.fillStyle = "rgba(8,153,129,.25)";
+              pts.forEach((q) => q && q[2].forEach((p) =>
+                g.fillRect(q[0] - sl / 2, Y(p + q[2].step),
+                  sl + 0.5, Y(p) - Y(p + q[2].step))));
               g.fillStyle = "rgba(41,98,255,.07)";
               pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
                 Y(q[1][1]), sl + 0.5, Y(q[1][2]) - Y(q[1][1])));
