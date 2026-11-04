@@ -3089,6 +3089,29 @@
             mid0 = (hi + lo) / 2 + ypan;
           hi = mid0 + ((hi0 - lo0) / 2) * ysc;
           lo = mid0 - ((hi0 - lo0) / 2) * ysc;
+          /* locked or zoomed, the latest candle in view: the
+             scale still takes the last price and the open
+             zigzag leg (its origin and extreme) */
+          const cN = arr[arr.length - 1];
+          if (cfg.main && okC(cN) && vis[vis.length - 1] === cN) {
+            const pv = zfbPiv(arr),
+              n = pv.length;
+            let a = cN.c,
+              b = cN.c;
+            if (n > 1) {
+              const z = pv[n - 1];
+              for (let k = arr.indexOf(pv[n - 2].c) + 1;
+                k < arr.length; k++)
+                if (okC(arr[k]))
+                  if (z.low) a = Math.min(a, arr[k].l);
+                  else b = Math.max(b, arr[k].h);
+              a = Math.min(a, z.p, pv[n - 2].p);
+              b = Math.max(b, z.p, pv[n - 2].p);
+            }
+            const m = (hi - lo) * 0.03;
+            hi = Math.max(hi, b + m);
+            lo = Math.min(lo, a - m);
+          }
           const Y = (p) => top + ((hi - p) / (hi - lo)) * ch;
           /* a window frame: light grey, rounded corners */
           const panel = (x, w) => {
