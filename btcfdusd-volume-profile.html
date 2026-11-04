@@ -579,6 +579,13 @@
                 title="IC: the row missing most of its bricks"
               >
                 Gap
+              </button
+              ><button
+                id="pfBsTog"
+                class="a"
+                title="IC: arrow when the extra bricks lean one way"
+              >
+                Bias
               </button></span
             ></span
         ></span>
@@ -1896,7 +1903,14 @@
         /* IC% button: its 10% / 90% lines and tails */
         pfIq = false,
         /* Gap button: the IC's red line */
-        pfRl = false;
+        pfRl = false,
+        /* Bias button: the IC's bias arrows */
+        pfBs = true;
+      function setPfBs(v) {
+        pfBs = !!v;
+        $("pfBsTog").className = pfBs ? "a" : "";
+        schedule();
+      }
       function setPfRl(v) {
         pfRl = !!v;
         $("pfRlTog").className = pfRl ? "a" : "";
@@ -3633,7 +3647,9 @@
                  tallest run of them */
               let top = 0,
                 run = 0,
-                best = 0;
+                best = 0,
+                up = 0,
+                dn = 0;
               for (let r = a; r <= b; r++) {
                 const e = sps.reduce((x, Q) => x + VOL_MASS * (
                     ncdf(((r + 1) * step - Q.px) / sg) -
@@ -3642,12 +3658,16 @@
                   d = (rows.get(r) || []).length - E,
                   g = E >= 3 ? -d / E : 0;
                 if (d > 0) m.ex.push(r * step);
+                if (d > 0 && (r + 0.5) * step > S.px) up += d;
+                else if (d > 0) dn += d;
                 if (g > top) (top = g), (best = run = 0);
                 run = g === top && top > 0 ? run + 1 : 0;
                 if (run > best)
                   (best = run), (m.rl = (r + 1 - run / 2) * step);
               }
               m.ex.step = step;
+              /* bias: extra bricks above vs below the ipoc */
+              m.sk = (up - dn) / (up + dn || 1);
             }
             /* kept once its candles are all loaded */
             if (k15.length && k15[0].t <= dS &&
@@ -5261,22 +5281,27 @@
             if (pfIc) {
               /* edges per ipoc (a new one: a move of 1 vol or more):
                  they only widen, on a new high or low */
-              let hi, lo, pv = null;
+              /* bias arrow: the green over 60 / 40 on one side of
+                 the ipoc, first time since the other side */
+              let hi, lo, pv = null, bs = 0;
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
                 if (!m.ic) return (pv = null);
+                const b = Math.abs(m.sk) > 0.2 ? Math.sign(m.sk) : 0,
+                  f = b && b !== bs ? b : 0;
+                if (b) bs = b;
                 const [p, h, l, v] = m.ic;
                 if (pv === null || Math.abs(p - pv) >= v - p)
                   (hi = h), (lo = l);
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
                 pv = p;
-                return [hi, lo];
+                return [hi, lo, f];
               });
               const pts = cv2.map((c, k) => {
                 const m = icFor(c.t0);
                 return m.ic && [pa + sl * jOf(k),
                   [m.ic[0], ...bd[k0 + k], ...m.ic.slice(3)],
-                  m.ex, m.rl];
+                  m.ex, m.rl, bd[k0 + k][2]];
               });
               /* green: rows with extra bricks then */
               g.fillStyle = "rgba(8,153,129,.25)";
@@ -5325,6 +5350,19 @@
                 });
                 g.stroke();
               }
+              /* bias: green up under the channel, red down over */
+              if (pfBs) pts.forEach((q) => {
+                if (!q || !q[4]) return;
+                const u = q[4] > 0,
+                  y = u ? Y(q[1][2]) + 9 : Y(q[1][1]) - 9,
+                  w = Math.max(4, sl / 2);
+                g.fillStyle = u ? "#089981" : "#e53935";
+                g.beginPath();
+                g.moveTo(q[0], u ? y - 7 : y + 7);
+                g.lineTo(q[0] - w, u ? y + 3 : y - 3);
+                g.lineTo(q[0] + w, u ? y + 3 : y - 3);
+                g.fill();
+              });
               g.lineWidth = 1;
             }
             g.restore();
@@ -7730,6 +7768,7 @@
           pfIc,
           pfIq,
           pfRl,
+          pfBs,
           showOrders,
           showLines,
           showGr,
@@ -7808,6 +7847,7 @@
         if (st.dv >= 25 && typeof st.pfIq === "boolean")
           setPfIq(st.pfIq);
         if (typeof st.pfRl === "boolean") setPfRl(st.pfRl);
+        if (typeof st.pfBs === "boolean") setPfBs(st.pfBs);
         if (st.dv >= 21 && typeof st.pfVc === "boolean")
           setPfVc(st.pfVc);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
@@ -8061,6 +8101,7 @@
       $("pfIcTog").onclick = () => setPfIc(!pfIc);
       $("pfIqTog").onclick = () => setPfIq(!pfIq);
       $("pfRlTog").onclick = () => setPfRl(!pfRl);
+      $("pfBsTog").onclick = () => setPfBs(!pfBs);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
       $("massTog").onclick = () => setShowMass(!showMass);
