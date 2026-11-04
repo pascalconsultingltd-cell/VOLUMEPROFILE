@@ -5714,6 +5714,9 @@
                 }
               }
             }
+            /* legs' times for the crosshair; the open one runs on */
+            zLegs = piv.slice(1).map((z, i) =>
+              [piv[i].c.t, i === nP - 2 ? Infinity : z.c.t]);
             /* pivots off screen: just past the chart's edge */
             const xOf = (z) => {
               const o = where.get(z.c);
@@ -5747,6 +5750,7 @@
             });
             g.restore();
           };
+          zLegs = [];
           if (cfg.main && (showFZ || ha) && geo.length) zfb(ha);
           /*
            * own orders (from orders.js): a segment at the
@@ -6246,21 +6250,39 @@
               tc = o ? o.c.t : tpoT != null ? null : mx,
               ts = tpoT != null ? tpoT : xh && xh.from !== api
                 && xh.tpo ? mx : null,
-              P = tc != null && profs.find((q) => q.show &&
-                q.poc != null && tc >= q.dS && tc < q.dS + 864e5);
-            if (P) {
-              const i = Math.floor((tc - P.dS) / TPO_MS);
-              g.strokeStyle = "#e8590c";
-              g.lineWidth = 2;
-              P.rows.forEach((l, r) => {
-                const k = l.indexOf(i);
-                if (k >= 0)
-                  g.strokeRect(P.cx0 + k * P.lw,
-                    Y((r + 1) * P.step) + 0.5,
-                    Math.max(1, P.lw - 1), Math.max(1, P.rowH - 1));
+              pOf = (t) => profs.find((q) => q.show &&
+                q.poc != null && t >= q.dS && t < q.dS + 864e5),
+              /* its zigzag leg: each candle's bricks (period,
+                 rows it traded); no leg: the whole period */
+              leg = tc != null &&
+                zLegs.find(([a, b]) => tc >= a && tc <= b),
+              hit = new Set();
+            g.strokeStyle = "#e8590c";
+            g.lineWidth = 2;
+            const box = (P, i, r) => {
+              const l = P.rows.get(r),
+                k = l ? l.indexOf(i) : -1;
+              if (k < 0 || hit.has(P.dS + "|" + i + "|" + r)) return;
+              hit.add(P.dS + "|" + i + "|" + r);
+              g.strokeRect(P.cx0 + k * P.lw,
+                Y((r + 1) * P.step) + 0.5,
+                Math.max(1, P.lw - 1), Math.max(1, P.rowH - 1));
+            };
+            if (leg)
+              arr.forEach((q) => {
+                const P = okC(q) && q.t >= leg[0] && q.t <= leg[1] &&
+                  pOf(q.t);
+                if (!P) return;
+                const i = Math.floor((q.t - P.dS) / TPO_MS);
+                for (let r = Math.floor(q.l / P.step);
+                  r <= Math.floor(q.h / P.step); r++) box(P, i, r);
               });
-              g.lineWidth = 1;
+            else if (tc != null && pOf(tc)) {
+              const P = pOf(tc),
+                i = Math.floor((tc - P.dS) / TPO_MS);
+              P.rows.forEach((l, r) => box(P, i, r));
             }
+            g.lineWidth = 1;
             const cm = TF === "5m" ? 300000 : 15000,
               v = ts == null || !geo ? [] : geo.filter((q) =>
                 q.c.t + cm > ts && q.c.t < ts + TPO_MS);
@@ -6632,7 +6654,8 @@
           if (l.l === "pc" || l.l === "tp") return xsOf(l);
           return view.pfX && view.pfX.length ? pfXAt(l.t) : null;
         }
-        var tpoT = null; /* hovered TPO period start */
+        var tpoT = null, /* hovered TPO period start */
+          zLegs = []; /* zigzag legs: [start, end] times */
         function geoAt(t) {
           let r = null;
           if (geo)
