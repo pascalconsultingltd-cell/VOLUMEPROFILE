@@ -5132,7 +5132,7 @@
               jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
             drawPfCols(pfc, cv2, jOf, pa, sl);
             /* IC: ipoc channel, each column at its last closed
-               period: ipoc solid, curve edges dashed */
+               period: ipoc thick, curve edges thin */
             if (pfIc) {
               const pts = cv2.map((c, k) => {
                 const t = Math.max(c.t0, ...c.tm.values());
@@ -5148,7 +5148,6 @@
                 Y(q[1][1]), sl + 0.5, Y(q[1][2]) - Y(q[1][1])));
               g.strokeStyle = "#2962ff";
               [0, 1, 2].forEach((j) => {
-                g.setLineDash(j ? [4, 3] : []);
                 g.lineWidth = j ? 1 : 1.5;
                 g.beginPath();
                 let on = false;
@@ -5161,7 +5160,6 @@
                 });
                 g.stroke();
               });
-              g.setLineDash([]);
               g.lineWidth = 1;
             }
             g.restore();
