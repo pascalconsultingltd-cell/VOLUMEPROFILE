@@ -3090,10 +3090,10 @@
           hi = mid0 + ((hi0 - lo0) / 2) * ysc;
           lo = mid0 - ((hi0 - lo0) / 2) * ysc;
           /* locked or zoomed, the latest candle in view: the
-             scale still takes the last price and the open
-             zigzag leg (its origin and extreme) */
-          const cN = arr[arr.length - 1];
-          if (cfg.main && okC(cN) && vis[vis.length - 1] === cN) {
+             scale still takes the last price and the last
+             two zigzag legs (finished and open) */
+          const cN = vis[vis.length - 1];
+          if (cfg.main && off <= 0) {
             const pv = zfbPiv(arr),
               n = pv.length;
             let a = cN.c,
@@ -3105,10 +3105,14 @@
                 if (okC(arr[k]))
                   if (z.low) a = Math.min(a, arr[k].l);
                   else b = Math.max(b, arr[k].h);
-              a = Math.min(a, z.p, pv[n - 2].p);
-              b = Math.max(b, z.p, pv[n - 2].p);
+              /* and the last finished leg */
+              pv.slice(-3).forEach((q) => {
+                a = Math.min(a, q.p);
+                b = Math.max(b, q.p);
+              });
             }
-            const m = (hi - lo) * 0.03;
+            /* at least 1 vol of margin above and below */
+            const m = volN > 0 ? volN : (hi - lo) * 0.05;
             hi = Math.max(hi, b + m);
             lo = Math.min(lo, a - m);
           }
