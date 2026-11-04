@@ -3014,7 +3014,7 @@
             tpoW0 = cfg.tpo
               ? tpoFrac != null
                 ? Math.max(80, Math.min(W * 0.75, tpoFrac * W))
-                : Math.max(80, W * 0.4 - 5)
+                : Math.max(80, W * 0.2 - 5)
               : 0,
             /*
              * full = "main" / "tpo" / "pc": that window takes
@@ -3034,8 +3034,8 @@
               : fl === "pc"
                 ? x1 - 35
                 : pcPx ||
-                  /* profiles 40%, P&F 20%, chart 40% */
-                  Math.round(0.2 * W),
+                  /* profiles 20%, P&F 40%, chart 40% */
+                  Math.round(0.4 * W),
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
             px0 = W - axW;
@@ -7521,7 +7521,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 23;
+      const DEFAULTS_VER = 24;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7693,7 +7693,9 @@
          * from the saved chart state; the main chart always
          * opens on volume candles (VC).
          */
-        const keep = (s) => s && { TF: s.TF, nTpo: s.nTpo };
+        /* TPO days: back to 3 in version 24 */
+        const keep = (s) =>
+          s && { TF: s.TF, nTpo: st.dv >= 24 ? s.nTpo : 3 };
         mainChart.setState(keep(st.main));
         miniChart.setState(keep(st.mini));
         schedule();
