@@ -3513,18 +3513,60 @@
                 ? stepCols(rows, P.step, sps, VOL_MASS)
                 : new Map();
             m.step = P.step;
+            if (dS + (i + 1) * TPO_MS <= Date.now()) {
+              if (stFz.size > 3000) stFz.clear();
+              stFz.set(key, m);
+            }
+            return m;
+          };
+          /*
+           * IC at time t, never repainted: the day's 15m candles
+           * closed by t only (none yet: the day before, whole)
+           */
+          const icFor = (t) => {
+            let dS = dayOf(t),
+              cut = Math.floor(t / 9e5) * 9e5;
+            if (cut <= dS) (cut = dS), (dS = prevDay(dS));
+            const vC = volFor(dS),
+              step = vC ? Math.max(1, Math.ceil(vC / 10))
+                : dayProf(dS).step,
+              vf = vC || step * 10,
+              key = ["ic", dS, cut, vf, step].join();
+            if (stFz.has(key)) return stFz.get(key);
+            const per = new Map(),
+              rows = new Map(),
+              m = {};
+            k15.forEach((c) => {
+              if (!okC(c) || c.t < dS || c.t >= cut) return;
+              const i = Math.floor((c.t - dS) / TPO_MS),
+                q = per.get(i);
+              if (!q) per.set(i, { i, h: c.h, l: c.l });
+              else {
+                q.h = Math.max(q.h, c.h);
+                q.l = Math.min(q.l, c.l);
+              }
+            });
+            const ps = [...per.values()].sort((x, y) => x.i - y.i);
+            ps.forEach((q) => {
+              for (let r = Math.floor(q.l / step);
+                r <= Math.floor(q.h / step); r++) {
+                if (!rows.has(r)) rows.set(r, []);
+                rows.get(r).push(q.i);
+              }
+            });
+            const sps = ps.length ? subPocs(dS, ps, vf, step) : [];
             /* IC: the latest ipoc, its normal curve's edges (rows
                where its vol mass still gives a brick) */
-            const S = byAge({ rows, step: P.step }, sps).pop();
+            const S = byAge({ rows, step }, sps).pop();
             if (S) {
               const sg = vf / 1.2816,
-                z = (r) => ncdf((r * P.step - S.px) / sg),
+                z = (r) => ncdf((r * step - S.px) / sg),
                 n = (r) => VOL_MASS * (z(r + 1) - z(r));
-              let a = Math.floor(S.px / P.step),
+              let a = Math.floor(S.px / step),
                 b = a;
               while (n(b + 1) >= 1) b++;
               while (n(a - 1) >= 1) a--;
-              m.ic = [S.px, (b + 1) * P.step, a * P.step];
+              m.ic = [S.px, (b + 1) * step, a * step];
               /* rows in it with extra bricks vs all sub POCs'
                  perfect mass (Mass' green delta) */
               m.ex = [];
@@ -3535,18 +3577,20 @@
                 best = 0;
               for (let r = a; r <= b; r++) {
                 const e = sps.reduce((x, Q) => x + VOL_MASS * (
-                    ncdf(((r + 1) * P.step - Q.px) / sg) -
-                    ncdf((r * P.step - Q.px) / sg)), 0),
+                    ncdf(((r + 1) * step - Q.px) / sg) -
+                    ncdf((r * step - Q.px) / sg)), 0),
                   d = (rows.get(r) || []).length - Math.round(e);
-                if (d > 0) m.ex.push(r * P.step);
+                if (d > 0) m.ex.push(r * step);
                 if (-d > top) (top = -d), (best = run = 0);
                 run = -d === top && top > 0 ? run + 1 : 0;
                 if (run > best)
-                  (best = run), (m.rl = (r + 1 - run / 2) * P.step);
+                  (best = run), (m.rl = (r + 1 - run / 2) * step);
               }
-              m.ex.step = P.step;
+              m.ex.step = step;
             }
-            if (dS + (i + 1) * TPO_MS <= Date.now()) {
+            /* kept once its candles are all loaded */
+            if (k15.length && k15[0].t <= dS &&
+              k15[k15.length - 1].t >= cut - 9e5) {
               if (stFz.size > 3000) stFz.clear();
               stFz.set(key, m);
             }
@@ -5151,18 +5195,11 @@
               cv2 = items.slice(k0, k1),
               jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
             drawPfCols(pfc, cv2, jOf, pa, sl);
-            /* IC: ipoc channel, each column at its last closed
-               period (the live one: now): ipoc thick, edges thin */
+            /* IC: ipoc channel, each column as at its start (no
+               repaint): ipoc thick, edges thin */
             if (pfIc) {
               const pts = cv2.map((c, k) => {
-                const t = Math.max(c.t0, ...c.tm.values());
-                let dS = dayOf(t),
-                  i = Math.floor((t - dS) / TPO_MS);
-                /* the live column: the forming period, live */
-                if (c !== pfc[pfc.length - 1] &&
-                  dS + (i + 1) * TPO_MS > Date.now()) i--;
-                if (i < 0) (dS = prevDay(dS)), (i = 47);
-                const m = stFor(dS, i);
+                const m = icFor(c.t0);
                 return m.ic && [pa + sl * jOf(k), m.ic, m.ex, m.rl];
               });
               /* green: rows with extra bricks then */
