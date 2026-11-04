@@ -1279,6 +1279,8 @@
                 up,
                 st,
                 t0: vt,
+                /* p0: the last price as it starts */
+                p0: f,
                 lo: Math.min(b, Math.floor(f / st)),
                 hi: Math.max(b, Math.floor(f / st)),
                 ph: Math.max(vHi, f),
@@ -5350,11 +5352,11 @@
                 });
                 g.stroke();
               }
-              /* bias: green up under the channel, red down over */
-              if (pfBs) pts.forEach((q) => {
+              /* bias: at the last price as the column starts */
+              if (pfBs) pts.forEach((q, k) => {
                 if (!q || !q[4]) return;
                 const u = q[4] > 0,
-                  y = u ? Y(q[1][2]) + 9 : Y(q[1][1]) - 9,
+                  y = Y(cv2[k].p0) + (u ? 9 : -9),
                   w = Math.max(4, sl / 2);
                 g.fillStyle = u ? "#089981" : "#e53935";
                 g.beginPath();
