@@ -5242,24 +5242,24 @@
             /* IC: ipoc channel, each column as at its start (no
                repaint): ipoc thick, edges thin */
             if (pfIc) {
-              /* IC% bands per ipoc run (same day, moves < 1 vol):
-                 the top only rises, the bottom only falls */
-              let hi, lo, pv = null, pd;
+              /* edges per ipoc (a new one: a move of 1 vol or more):
+                 they only widen, on a new high or low */
+              let hi, lo, pv = null;
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
                 if (!m.ic) return (pv = null);
-                const [p, , , h, l] = m.ic;
-                if (pv === null || m.d !== pd ||
-                  Math.abs(p - pv) >= h - p)
+                const [p, h, l, v] = m.ic;
+                if (pv === null || Math.abs(p - pv) >= v - p)
                   (hi = h), (lo = l);
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
-                (pv = p), (pd = m.d);
+                pv = p;
                 return [hi, lo];
               });
               const pts = cv2.map((c, k) => {
                 const m = icFor(c.t0);
                 return m.ic && [pa + sl * jOf(k),
-                  [...m.ic.slice(0, 3), ...bd[k0 + k]], m.ex, m.rl];
+                  [m.ic[0], ...bd[k0 + k], ...m.ic.slice(3)],
+                  m.ex, m.rl];
               });
               /* green: rows with extra bricks then */
               g.fillStyle = "rgba(8,153,129,.25)";
