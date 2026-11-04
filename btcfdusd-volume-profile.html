@@ -4238,8 +4238,7 @@
               ? zLast.p
               : zR && zR.poc != null && zR.full
                 ? (zR.poc + 0.5) * zR.step
-                : null,
-            zCol = zFix != null ? "rgb(" + pocRgb(zDay) + ")" : null;
+                : null;
           segs.forEach((sg, i) => {
             const R = dayProf(prevDay(sg.dS));
             if (R.poc == null || !R.full) return;
@@ -4351,7 +4350,7 @@
             const lv = ({ ref, refUp }) => {
               const a = [];
               if (ref == null) {
-                a.push([z0, "0", fx ? zCol : pCol, 1]);
+                a.push([z0, "0", "#8e44ad", 1]); /* purple zero */
                 for (let k = kS; inK(k); k += kS)
                   a.push(
                     [z0 + k * v, "+" + k, "#000000"],
@@ -4426,7 +4425,7 @@
                     r.xb,
                     col === "#000000" ? "rgba(0,0,0,.5)" : col,
                     solid && t !== "0" ? [] : [3, 3],
-                    t.length > 1 ? 1 : 1.5,
+                    t.length > 1 || t === "0" ? 1 : 1.5,
                   ),
                 ),
               );
