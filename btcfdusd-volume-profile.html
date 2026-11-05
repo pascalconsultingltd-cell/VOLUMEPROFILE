@@ -3641,9 +3641,10 @@
               m.ic = [S.px, (b + 1) * step, a * step, S.px + vf,
                 S.px - vf];
               m.d = dS;
-              /* rows in it with extra bricks vs all sub POCs'
-                 perfect mass (Mass' green delta) */
-              m.ex = [];
+              /* green line: the row with the most extra bricks vs
+                 all sub POCs' perfect mass (Mass' green delta); no
+                 clear max: their weighted average */
+              let gm = 0, g2 = 0, gr = 0, gs = 0, gw = 0;
               /* and the row missing the biggest share of what it
                  expects, 3+ bricks (red); ties: the middle of the
                  tallest run of them */
@@ -3659,7 +3660,9 @@
                   E = Math.round(e),
                   d = (rows.get(r) || []).length - E,
                   g = E >= 3 ? -d / E : 0;
-                if (d > 0) m.ex.push(r * step);
+                if (d > 0) (gs += d * (r + 0.5) * step), (gw += d);
+                if (d > gm) (g2 = gm), (gm = d), (gr = r);
+                else if (d > g2) g2 = d;
                 if (d > 0 && (r + 0.5) * step > S.px) up += d;
                 else if (d > 0) dn += d;
                 if (g > top) (top = g), (best = run = 0);
@@ -3667,7 +3670,7 @@
                 if (run > best)
                   (best = run), (m.rl = (r + 1 - run / 2) * step);
               }
-              m.ex.step = step;
+              if (gw) m.gl = gm > g2 ? (gr + 0.5) * step : gs / gw;
               /* bias: extra bricks above vs below the ipoc */
               m.sk = (up - dn) / (up + dn || 1);
             }
@@ -5303,13 +5306,8 @@
                 const m = icFor(c.t0);
                 return m.ic && [pa + sl * jOf(k),
                   [m.ic[0], ...bd[k0 + k], ...m.ic.slice(3)],
-                  m.ex, m.rl, bd[k0 + k][2]];
+                  m.gl, m.rl, bd[k0 + k][2]];
               });
-              /* green: rows with extra bricks then */
-              g.fillStyle = "rgba(8,153,129,.25)";
-              pts.forEach((q) => q && q[2].forEach((p) =>
-                g.fillRect(q[0] - sl / 2, Y(p + q[2].step),
-                  sl + 0.5, Y(p) - Y(p + q[2].step))));
               g.fillStyle = "rgba(41,98,255,.07)";
               pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
                 Y(q[1][1]), sl + 0.5, Y(q[1][2]) - Y(q[1][1])));
@@ -5335,6 +5333,20 @@
                   g.lineTo(q[0] + sl / 2, y);
                   on = true;
                 });
+                g.stroke();
+              });
+              /* green line: green above the ipoc, red below */
+              g.lineWidth = 1.5;
+              pts.forEach((q, k) => {
+                if (!q || q[2] == null) return;
+                const y = Y(q[2]), p = pts[k - 1],
+                  x = q[0] - sl / 2;
+                g.strokeStyle =
+                  q[2] > q[1][0] ? "#089981" : "#e53935";
+                g.beginPath();
+                g.moveTo(x, p && p[2] != null ? Y(p[2]) : y);
+                g.lineTo(x, y);
+                g.lineTo(x + sl, y);
                 g.stroke();
               });
               /* red: the biggest missing zone's middle */
