@@ -5226,8 +5226,8 @@
                  they only widen, on a new high or low */
               /* bias arrow: the zone's side of the ipoc, 3+ extra
                  bricks, first time since the other side, a blank
-                 or a new ipoc; none while price is out of the
-                 channel (a blank) */
+                 or a new ipoc; none in an excursion (a jump: price
+                 out of the channel), a blank */
               let hi, lo, pv = null, bs = 0;
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
@@ -5239,17 +5239,17 @@
                   (hi = h), (lo = l), (bs = 0);
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
                 pv = p;
-                const o = c.p0 > hi || c.p0 < lo,
-                  f = b && b !== bs && !o ? b : 0;
-                bs = o ? 0 : b;
-                return [hi, lo, f, o];
+                const exc = c.p0 > hi || c.p0 < lo,
+                  f = b && b !== bs && !exc ? b : 0;
+                bs = exc ? 0 : b;
+                return [hi, lo, f, exc];
               });
               const pts = cv2.map((c, k) => {
                 const m = icFor(c.t0);
                 return m.ic && [pa + sl * jOf(k),
                   [m.ic[0], ...bd[k0 + k].slice(0, 2),
                     ...m.ic.slice(3)],
-                  /* no zone while price is out of the channel */
+                  /* no zone in an excursion */
                   !bd[k0 + k][3] && m.gl, m.rl, bd[k0 + k][2]];
               });
               g.fillStyle = "rgba(41,98,255,.07)";
