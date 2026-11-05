@@ -3104,9 +3104,10 @@
           lo = mid0 - ((hi0 - lo0) / 2) * ysc;
           /* locked or zoomed, the latest candle in view: the
              scale still takes the last price and the last
-             two zigzag legs (finished and open) */
+             two zigzag legs (finished and open); not once
+             dragged up / down, or the drag squeezes it */
           const cN = vis[vis.length - 1];
-          if (cfg.main && off <= 0) {
+          if (cfg.main && off <= 0 && !ypan) {
             const pv = zfbPiv(arr),
               n = pv.length;
             let a = cN.c,
@@ -7232,7 +7233,10 @@
             } else {
               /* drag pans; touch: hold still 0.4 s for the
                  crosshair, then the finger moves it */
-              if (!lock && fit) lock = fit;
+              /* lock what is shown, so a drag only moves it */
+              if (fit)
+                (lock = { hi: view.hi, lo: view.lo }),
+                  (ysc = 1), (ypan = 0);
               /* w: the window being dragged, b0 its offset */
               const px = e.clientX - cv.getBoundingClientRect().left,
                 w = view.win(px);
