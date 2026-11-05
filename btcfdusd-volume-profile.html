@@ -5230,7 +5230,8 @@
                  out of the channel), a blank */
               /* sell: in a down excursion, a column starting 3+
                  bricks above the row with the most bricks since it
-                 began (closed columns only); again once back to it */
+                 began (closed columns only); again once back to it.
+                 Buy: the mirror, in an up excursion */
               let hi, lo, pv = null, bs = 0, xm = null, ar = true;
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
@@ -5246,18 +5247,21 @@
                   f = b && b !== bs && !exc ? b : 0;
                 bs = exc ? 0 : b;
                 let sd = 0;
-                if (c.p0 < lo) {
-                  if (xm && xm.st !== c.st) xm = null;
+                const xd = c.p0 < lo ? 1 : c.p0 > hi ? -1 : 0;
+                if (xd) {
+                  if (xm && (xm.st !== c.st || xm.d !== xd))
+                    xm = null;
                   if (xm) {
                     let br = 0, bc = 0;
                     xm.forEach((n, r) =>
                       n > bc && ((bc = n), (br = r)));
-                    const cp = (br + 0.5) * c.st;
-                    if (c.p0 <= cp) ar = true;
-                    else if (ar && c.p0 >= cp + 3 * c.st)
-                      (sd = 1), (ar = false);
-                  } else
-                    (xm = new Map()), (xm.st = c.st), (ar = true);
+                    const cp = (br + 0.5) * c.st,
+                      u = (c.p0 - cp) * xd;
+                    if (u <= 0) ar = true;
+                    else if (ar && u >= 3 * c.st)
+                      (sd = -xd), (ar = false);
+                  } else (xm = new Map()), (xm.st = c.st),
+                    (xm.d = xd), (ar = true);
                   for (let r = c.lo; r <= c.hi; r++)
                     xm.set(r, (xm.get(r) || 0) + 1);
                 } else xm = null;
@@ -5350,15 +5354,16 @@
                 g.stroke();
                 g.fill();
               });
-              /* little sell arrows: tip at the price, from above */
+              /* little sell / buy arrows: tip at the price */
               if (pfBs) pts.forEach((q, k) => {
                 if (!q || !q[5]) return;
-                const y = Y(cv2[k].p0), w = Math.max(4, sl / 2);
-                g.fillStyle = "#e53935";
+                const d = q[5], y = Y(cv2[k].p0),
+                  w = Math.max(4, sl / 2);
+                g.fillStyle = d < 0 ? "#e53935" : "#089981";
                 g.beginPath();
-                g.moveTo(q[0], y - 2);
-                g.lineTo(q[0] - w, y - 10);
-                g.lineTo(q[0] + w, y - 10);
+                g.moveTo(q[0], y + 2 * d);
+                g.lineTo(q[0] - w, y + 10 * d);
+                g.lineTo(q[0] + w, y + 10 * d);
                 g.fill();
               });
               g.lineWidth = 1;
