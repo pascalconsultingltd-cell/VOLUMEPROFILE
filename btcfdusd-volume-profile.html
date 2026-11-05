@@ -5512,6 +5512,8 @@
             zp,
             Y,
             pc: cw / slots,
+            /* HA: the magnet's big candles and zigzag pivots */
+            ha: ha ? { b: bigs, z: [] } : null,
           };
           /*
            * l.lo = first point, l.hi = second point: the
@@ -5868,6 +5870,8 @@
               const a = piv[i - 1],
                 xa = xOf(a),
                 xb = xOf(z);
+              if (view.ha)
+                view.ha.z.push({ x: xb, p: z.p, o: where.get(z.c) });
               if (xb < x0 || xa > px0 || xa === xb) return;
               g.strokeStyle = z.low
                 ? "rgb(230,159,0)"
@@ -6900,15 +6904,21 @@
             return { p, o, left: Math.max(4, x) };
           }
           let best = null,
+            bo = o,
             bd = 14;
-          [o.c.o, o.c.h, o.c.l, o.c.c].forEach((v) => {
-            const d = Math.abs(view.Y(v) - y);
-            if (d < bd) {
-              bd = d;
-              best = v;
-            }
-          });
-          return { p: best != null ? best : free, o };
+          /* HA: only the big candles and the zigzag pivots */
+          const H = view.ha;
+          if (!H || H.b.get(o.c))
+            [o.c.o, o.c.h, o.c.l, o.c.c].forEach((v) => {
+              const d = Math.abs(view.Y(v) - y);
+              if (d < bd) (bd = d), (best = v);
+            });
+          if (H)
+            H.z.forEach((z) => {
+              const d = Math.hypot(z.x - x, view.Y(z.p) - y);
+              if (z.o && d < bd) (bd = d), (best = z.p), (bo = z.o);
+            });
+          return { p: best != null ? best : free, o: bo };
         }
         function mouseAt() {
           if (
