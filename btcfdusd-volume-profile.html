@@ -1493,6 +1493,7 @@
           seq = [],
           ad = [],
           sq2 = [],
+          dd = [],
           av = [],
           at = [],
           hot = new Set(),
@@ -1518,32 +1519,46 @@
             ad.push(Math.abs(v));
           }),
         );
-        /* USDT: each second to the column trading then */
-        if (useUsdt && all.length) {
-          let k = 0;
-          ud.forEach((dS, i) => {
-            const v = uv[i],
-              a = v && usdtK.get(dS).k;
-            if (v) for (let n = 0; n < v.n; n++) {
-              const t = a[n][0],
-                p = v.px[n];
-              if (p == null || t < all[0].t0) continue;
-              while (k + 1 < all.length && all[k + 1].t0 <= t) k++;
-              const r = Math.floor(p / all[k].st),
-                b = bx[k].get(r) || [0, 0];
-              bx[k].set(r,
-                [b[0] + a[n][4], b[1] + 2 * a[n][5] - a[n][4]]);
-            }
-          });
-        }
+        /* FDUSD: a box = a column's row. USDT: a minute's row
+           (FDUSD's column length would skew it), shown on the
+           column trading at that minute's start */
         bx.forEach((m, k) =>
           m.forEach(([v, d], row) => {
             sq2.push(k + "|" + row);
             av.push(v);
             at.push(all[k].t0);
-            vd.set(k + "|" + row, d);
+            dd.push(d);
           }),
         );
+        if (useUsdt && all.length) {
+          let k = 0;
+          ud.forEach((dS, i) => {
+            const v = uv[i],
+              a = v && usdtK.get(dS).k;
+            if (!v) return;
+            for (let n = 0; n < v.n; ) {
+              const m0 = Math.floor(a[n][0] / 6e4) * 6e4,
+                mb = new Map();
+              for (; n < v.n && a[n][0] < m0 + 6e4; n++) {
+                const p = v.px[n];
+                if (p == null) continue;
+                const r = Math.floor(p / pfStep(dS)),
+                  b = mb.get(r) || [0, 0];
+                mb.set(r,
+                  [b[0] + a[n][4], b[1] + 2 * a[n][5] - a[n][4]]);
+              }
+              if (m0 < all[0].t0) continue;
+              while (k + 1 < all.length && all[k + 1].t0 <= m0) k++;
+              mb.forEach(([q, d], r) => {
+                const key = k + "|" + r;
+                sq2.push(key);
+                av.push(q);
+                at.push(m0);
+                dd.push(d);
+              });
+            }
+          });
+        }
         for (let k = BIG_WIN - 1; k < ad.length; k++)
           if (ad[k] > top(ad, k)) hot.add(seq[k]);
         /* sorted window kept as it slides */
@@ -1562,7 +1577,7 @@
           const n = Math.ceil((1 - BIG_PERC) * BIG_WIN);
           if (at[k] - at[0] >= VH_MS && w.length > n &&
             av[k] >= w[w.length - n])
-            vh.add(sq2[k]);
+            vh.add(sq2[k]), vd.set(sq2[k], dd[k]);
         }
         for (let k = BIG_WIN - 1; k < cv.length; k++)
           if (cv[k] > top(cv, k)) dot.add(k);
