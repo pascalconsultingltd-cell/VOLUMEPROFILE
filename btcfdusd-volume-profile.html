@@ -6622,6 +6622,13 @@
           }
           if (pan && view) {
             const dx = t.clientX - pan.x;
+            /* touch: the crosshair stays until the finger moves */
+            if (pan.tc && !pan.mv) {
+              if (Math.hypot(dx, t.clientY - pan.y) < 8) return;
+              pan.mv = true;
+              if (xh && xh.from === api) xh = null;
+              charts.forEach((h) => h !== api && h.sched());
+            }
             /* dragging right shows older, as on the chart */
             /* fractional, so the windows slide smoothly */
             if (pan.w === "pc")
@@ -6643,6 +6650,7 @@
             if (Math.abs(dy) > 4) pan.vy = true;
             if (pan.vy) ypan = pan.yp + (dy / view.ch) * pan.rng;
             hover = -1;
+            if (pan.tc) mouse = null;
             draw();
             return;
           }
@@ -7194,8 +7202,9 @@
             ) {
               sc = { y: e.clientY, v: ysc };
               cv.style.cursor = "ns-resize";
-            } else if (e.pointerType !== "touch") {
-              /* one finger is the crosshair, two fingers pan */
+            } else {
+              /* drag pans; touch: hold still 0.4 s for the
+                 crosshair, then the finger moves it */
               if (!lock && fit) lock = fit;
               /* w: the window being dragged, b0 its offset */
               const px = e.clientX - cv.getBoundingClientRect().left,
@@ -7210,7 +7219,13 @@
                 yp: ypan,
                 rng: view.hi - view.lo,
                 vy: false,
+                tc: e.pointerType === "touch",
               };
+              const p = pan;
+              if (p.tc)
+                setTimeout(() => {
+                  if (pan === p && !p.mv) pan = null;
+                }, 400);
               cv.style.cursor = "grabbing";
             }
             e.preventDefault();
