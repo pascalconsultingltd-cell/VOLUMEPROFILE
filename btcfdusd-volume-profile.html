@@ -3641,8 +3641,8 @@
               }
               if (gw) m.gl = [gm > g2 ? (gr + 0.5) * step : gs / gw,
                 1.5 * step];
-              /* bias: extra bricks above vs below the ipoc */
-              m.sk = (up - dn) / (up + dn || 1);
+              /* bias: extra bricks above vs below the ipoc, 3+ */
+              m.sk = up + dn >= 3 ? (up - dn) / (up + dn) : 0;
             }
             /* kept once its candles are all loaded */
             if (k15.length && k15[0].t <= dS &&
@@ -5236,8 +5236,11 @@
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
                 if (!m.ic) return (pv = null), (bs = 0);
+                /* 3+ extra bricks, the zone on the same side */
                 const [p, h, l, v] = m.ic,
-                  b = Math.abs(m.sk) > 0.2 ? Math.sign(m.sk) : 0;
+                  s = Math.sign(m.sk),
+                  b = Math.abs(m.sk) > 0.2 && m.gl &&
+                    Math.sign(m.gl[0] - p) === s ? s : 0;
                 if (pv === null || Math.abs(p - pv) >= v - p)
                   (hi = h), (lo = l), (bs = 0);
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
