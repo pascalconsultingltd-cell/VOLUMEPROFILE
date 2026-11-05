@@ -441,6 +441,13 @@
                 VAP
               </button>
               <button
+                id="usdtTog"
+                class=""
+                title="VAP and V95 from BTCUSDT (1s), FDUSD prices"
+              >
+                USDT
+              </button>
+              <button
                 id="soTog"
                 class=""
                 title="SPoc candles over the volume profiles"
@@ -1185,7 +1192,15 @@
         schedule();
       }
       /* VAP button: volume at price instead of the profiles */
-      let showVap = false;
+      let showVap = false,
+        /* USDT button: VAP and V95 from BTCUSDT */
+        useUsdt = false;
+      function setUseUsdt(v) {
+        useUsdt = !!v;
+        $("usdtTog").className = useUsdt ? "a" : "";
+        pfHotC = null;
+        schedule();
+      }
       function setShowVap(v) {
         showVap = !!v;
         $("vapTog").className = showVap ? "a" : "";
@@ -1274,6 +1289,88 @@
           v.rows.set(r, u);
           v.dl.set(r, (v.dl.get(r) || 0) + (sold ? -q : q));
           if (u > v.mx) (v.mx = u), (v.poc = r);
+        }
+        return v;
+      }
+      /* USDT button: VAP and V95 from BTCUSDT 1s candles (the
+         real market), moved onto FDUSD prices. usdtK: day ->
+         { k: [time, high, low, close, vol, taker buy vol], end,
+         at }; today topped up every 5s, about 87 requests a
+         day */
+      const usdtK = new Map(),
+        usdtBusy = new Set();
+      async function loadUsdt(dS) {
+        const d0 = usdtK.get(dS);
+        if (usdtBusy.has(dS) || (d0 && d0.end)) return;
+        if (d0 && Date.now() - d0.at < 5000) return;
+        usdtBusy.add(dS);
+        const d = d0 || { k: [], end: false, at: 0 },
+          dE = nextDay(dS);
+        try {
+          for (let n = 0; n < 120 && !d.end; n++) {
+            const z = d.k[d.k.length - 1],
+              u = "/api/v3/klines?symbol=BTCUSDT&interval=1s" +
+                "&limit=1000&startTime=" + (z ? z[0] + 1000 : dS);
+            let j = null;
+            for (const h of REST) {
+              try {
+                j = await fj(h + u);
+                if (Array.isArray(j)) break;
+              } catch (e) {}
+            }
+            if (!Array.isArray(j)) break;
+            for (const a of j) {
+              if (a[0] >= dE) {
+                d.end = true;
+                break;
+              }
+              d.k.push([a[0], +a[2], +a[3], +a[4], +a[5], +a[9]]);
+            }
+            const y = d.k[d.k.length - 1];
+            if (y && y[0] >= dE - 1000) d.end = true;
+            if (j.length < 1000) break;
+          }
+        } finally {
+          d.at = Date.now();
+          usdtK.set(dS, d);
+          usdtBusy.delete(dS);
+          schedule();
+        }
+      }
+      /* a day's USDT seconds on FDUSD prices: each second's mid
+         x the FDUSD / USDT ratio (last FDUSD trade over its
+         close, smoothed over ~60s); px per second, and VAP rows
+         as vapOf. Null until both pairs are loaded */
+      const usdtV = new Map();
+      function usdtOf(dS) {
+        const u = usdtK.get(dS),
+          f = aggrT.get(dS),
+          st = pfStep(dS);
+        if (!u || !u.k.length || !f || !f.tr.length) return null;
+        let v = usdtV.get(dS);
+        if (!v || v.st !== st)
+          usdtV.set(dS, (v = { st, n: 0, j: 0, pf: null, e: null,
+            px: [], rows: new Map(), dl: new Map(), mx: 0 }));
+        const a = u.k,
+          tr = f.tr;
+        for (; v.n < a.length; v.n++) {
+          const [t, h, l, c, q, tb] = a[v.n];
+          if (!f.end && tr[tr.length - 1][0] < t) break;
+          for (; v.j < tr.length && tr[v.j][0] < t + 1000; v.j++)
+            v.pf = tr[v.j][1];
+          if (v.pf == null) {
+            v.px.push(null);
+            continue;
+          }
+          const ra = v.pf / c;
+          v.e = v.e == null ? ra : v.e + (ra - v.e) / 60;
+          const p = ((h + l) / 2) * v.e,
+            r = Math.floor(p / st),
+            w = (v.rows.get(r) || 0) + q;
+          v.px.push(p);
+          v.rows.set(r, w);
+          v.dl.set(r, (v.dl.get(r) || 0) + 2 * tb - q);
+          if (w > v.mx) (v.mx = w), (v.poc = r);
         }
         return v;
       }
@@ -1383,18 +1480,32 @@
       function pfHot(all) {
         const z = all[all.length - 1],
           zv = z ? [...z.v.values()].reduce((a, b) => a + b, 0) : 0,
+          ud = useUsdt ?
+            [...new Set(all.map((c) => dayOf(c.t0)))] : [],
+          uv = ud.map(usdtOf),
           key = [all[0] && all[0].st, z && z.st, all.length,
-            z && z.d.size, z && z.lo, zv].join();
+            z && z.d.size, z && z.lo, zv, useUsdt,
+            uv.map((v) => v && v.n).join("/")].join();
         if (pfHotC && pfHotC.key === key) return pfHotC;
         const r = Math.ceil(BIG_PERC * BIG_WIN) - 1,
           top = (xs, k) =>
             xs.slice(k - BIG_WIN + 1, k + 1).sort((p, q) => p - q)[r],
           seq = [],
           ad = [],
+          sq2 = [],
           av = [],
           at = [],
           hot = new Set(),
           vh = new Set(),
+          /* vd: a V95 box's delta; bx: each column's boxes
+             [volume, delta] by row, from FDUSD or USDT */
+          vd = new Map(),
+          bx = all.map((c) => {
+            const m = new Map();
+            if (!useUsdt)
+              c.v.forEach((v, r) => m.set(r, [v, c.d.get(r) || 0]));
+            return m;
+          }),
           dot = new Set(),
           cv = all.map((c) => {
             let s = 0;
@@ -1405,8 +1516,32 @@
           c.d.forEach((v, row) => {
             seq.push(k + "|" + row);
             ad.push(Math.abs(v));
-            av.push(c.v.get(row) || 0);
-            at.push(c.t0);
+          }),
+        );
+        /* USDT: each second to the column trading then */
+        if (useUsdt && all.length) {
+          let k = 0;
+          ud.forEach((dS, i) => {
+            const v = uv[i],
+              a = v && usdtK.get(dS).k;
+            if (v) for (let n = 0; n < v.n; n++) {
+              const t = a[n][0],
+                p = v.px[n];
+              if (p == null || t < all[0].t0) continue;
+              while (k + 1 < all.length && all[k + 1].t0 <= t) k++;
+              const r = Math.floor(p / all[k].st),
+                b = bx[k].get(r) || [0, 0];
+              bx[k].set(r,
+                [b[0] + a[n][4], b[1] + 2 * a[n][5] - a[n][4]]);
+            }
+          });
+        }
+        bx.forEach((m, k) =>
+          m.forEach(([v, d], row) => {
+            sq2.push(k + "|" + row);
+            av.push(v);
+            at.push(all[k].t0);
+            vd.set(k + "|" + row, d);
           }),
         );
         for (let k = BIG_WIN - 1; k < ad.length; k++)
@@ -1427,7 +1562,7 @@
           const n = Math.ceil((1 - BIG_PERC) * BIG_WIN);
           if (at[k] - at[0] >= VH_MS && w.length > n &&
             av[k] >= w[w.length - n])
-            vh.add(seq[k]);
+            vh.add(sq2[k]);
         }
         for (let k = BIG_WIN - 1; k < cv.length; k++)
           if (cv[k] > top(cv, k)) dot.add(k);
@@ -1465,7 +1600,8 @@
           gTop[k] = gt;
           bBot[k] = bb;
         });
-        return (pfHotC = { key, hot, vh, dot, exc, gTop, bBot });
+        return (pfHotC =
+          { key, hot, vh, vd, dot, exc, gTop, bBot });
       }
       /*
        * LH: a column trading under the latest green dot's low
@@ -3802,7 +3938,8 @@
                by delta (written), the top row darker; trades
                loaded on demand */
             if (showVap) {
-              const v = vapOf(P.dS);
+              if (useUsdt) loadUsdt(P.dS);
+              const v = (useUsdt ? usdtOf : vapOf)(P.dS);
               if (!v) loadAggr(P.dS);
               else {
                 const t5 = new Set([...v.rows]
@@ -5034,15 +5171,20 @@
               g.font = "9px ui-monospace,Menlo,monospace";
               g.textAlign = "left";
               g.textBaseline = "middle";
+              const vb = new Map();
+              hs.vh.forEach((key) => {
+                const [k, r] = key.split("|").map(Number);
+                if (!vb.has(k)) vb.set(k, []);
+                vb.get(k).push([r, hs.vd.get(key) || 0]);
+              });
               shown.forEach((c) => {
-                const k = ci.get(c);
-                c.v.forEach((v, r) => {
-                  if (!hs.vh.has(k + "|" + r)) return;
-                  const dl = c.d.get(r) || 0,
-                    x = xs.get(c),
+                (vb.get(ci.get(c)) || []).forEach(([r, dl]) => {
+                  const x = xs.get(c),
                     y = Y((r + 0.5) * c.st);
-                  /* size by |delta|: 3px, +2px a BTC, 12px at most */
-                  const rd = Math.min(12, 3 + 2 * Math.abs(dl));
+                  /* size by |delta|: 3px, +2px a BTC (USDT: per
+                     10 BTC), 12px at most */
+                  const rd = Math.min(12,
+                    3 + (2 * Math.abs(dl)) / (useUsdt ? 10 : 1));
                   g.fillStyle = dl >= 0 ? "#089981" : "#e53935";
                   g.strokeStyle = "#000";
                   g.lineWidth = 1.5;
@@ -5366,6 +5508,7 @@
               s1 = pfStep(d1);
             loadAggr(d1 - DAY);
             loadAggr(d1);
+            if (useUsdt && pfVa) loadUsdt(d1 - DAY), loadUsdt(d1);
             const pfc = pfCols([d1 - DAY, d1]);
             const nFit = pfN,
               sl = pcW / nFit;
@@ -7968,6 +8111,7 @@
           showBZ,
           showYB,
           showVap,
+          useUsdt,
           showSO,
           showDO,
           showCZ,
@@ -8088,6 +8232,7 @@
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
         if (st.dv >= 27 && typeof st.showVap === "boolean")
           setShowVap(st.showVap);
+        if (typeof st.useUsdt === "boolean") setUseUsdt(st.useUsdt);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
         if (typeof st.showDO === "boolean") setShowDO(st.showDO);
         if (typeof st.showCZ === "boolean") setShowCZ(st.showCZ);
@@ -8308,6 +8453,7 @@
       $("bzTog").onclick = () => setShowBZ(!showBZ);
       $("ybTog").onclick = () => setShowYB(!showYB);
       $("vapTog").onclick = () => setShowVap(!showVap);
+      $("usdtTog").onclick = () => setUseUsdt(!useUsdt);
       $("soTog").onclick = () => setShowSO(!showSO);
       $("doTog").onclick = () => setShowDO(!showDO);
       $("czTog").onclick = () => setShowCZ(!showCZ);
