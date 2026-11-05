@@ -512,7 +512,7 @@
               </button
               ><button
                 id="pfSgTog"
-                class="a"
+                class=""
                 title="Bricks past the last green / black signal"
               >
                 Colour
@@ -524,26 +524,11 @@
                 Sw
               </button
               ><button
-                id="pfLhTog"
-                class="a"
-                title="Columns blue / orange once one trades past
-                  the latest black / green volume dot"
-              >
-                LH
-              </button
-              ><button
                 id="pfHlTog"
                 class=""
                 title="P&amp;F signal bricks and volume dots"
               >
                 Alrt
-              </button
-              ><button
-                id="pfVcTog"
-                class="a"
-                title="P&amp;F bricks in the profile's St colours"
-              >
-                PocStpCol
               </button
               ><button
                 id="pfByTog"
@@ -1890,10 +1875,6 @@
       /* Hl button: show the P&F signal bricks and volume
          dots (off: only the Sg colours) */
       let pfHl = false;
-      /* Vc button: P&F bricks in the volume profile's latest
-         known St colour at their price, green or red; others
-         a thin neutral line (wins over Sg) */
-      let pfVc = true;
       /* Buy button: a seller dot (black) while the latest
          PocStpCol brick is green = buy, a buyer dot while it
          is red = sell */
@@ -1938,31 +1919,19 @@
         $("pfByTog").className = pfBy ? "a" : "";
         schedule();
       }
-      function setPfVc(v) {
-        pfVc = !!v;
-        $("pfVcTog").className = pfVc ? "a" : "";
-        schedule();
-      }
       function setPfHl(v) {
         pfHl = !!v;
         $("pfHlTog").className = pfHl ? "a" : "";
         schedule();
       }
       /* Sw button: the swing triangles (they need Colour) */
-      /* LH button: hot bricks coloured by place in the range */
-      let pfLh = true;
-      function setPfLh(v) {
-        pfLh = !!v;
-        $("pfLhTog").className = pfLh ? "a" : "";
-        schedule();
-      }
       let pfSw = false;
       function setPfSw(v) {
         pfSw = !!v;
         $("pfSwTog").className = pfSw ? "a" : "";
         schedule();
       }
-      let pfSg = true;
+      let pfSg = false;
       function setPfSg(v) {
         pfSg = !!v;
         $("pfSgTog").className = pfSg ? "a" : "";
@@ -4784,20 +4753,7 @@
               hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
               /* hot box dot: blue buyers, orange sellers */
               hotCol = (c, r) =>
-                (c.d.get(r) || 0) < 0 ? "#ff6d00" : "#2962ff",
-              lhM = pfLh ? pfLhSw(all, hs) : [];
-            /* LH: what trades after a switch takes its colour,
-               till the next */
-            const lhAt = (t) => {
-              let a = 0,
-                z = lhM.length;
-              while (a < z) {
-                const m = (a + z) >> 1;
-                if (lhM[m][0] < t) a = m + 1;
-                else z = m;
-              }
-              return a ? lhM[a - 1][1] : null;
-            };
+                (c.d.get(r) || 0) < 0 ? "#ff6d00" : "#2962ff";
             /* Buy: the latest PocStpCol green (g) / red (r)
                brick in time as at each column's end */
             const by = new Map();
@@ -4853,24 +4809,11 @@
                   const k = ci.get(c),
                     gT = hs.gTop[k],
                     bB = hs.bBot[k],
-                    vc = pfVc ? vcAt(t, r, st) : null,
-                    vcOn =
-                      vc != null &&
-                      (vc.startsWith("rgba(8,153,129") ||
-                        vc.startsWith("rgba(229,57,53")),
-                    lh = vc == null ? lhAt(t) : null,
-                    sg = pfSg && vc == null && !lh,
-                    up = sg && gT != null && r * st >= gT,
-                    dn = sg && bB != null && (r + 1) * st <= bB,
-                    thin =
-                      (sg && !up && !dn) || (vc != null && !vcOn),
+                    up = pfSg && gT != null && r * st >= gT,
+                    dn = pfSg && bB != null && (r + 1) * st <= bB,
+                    thin = pfSg && !up && !dn,
                     w = thin ? 1.5 : bw;
-                  /* Vc: the profile's green / red at this price */
-                  g.fillStyle = vcOn
-                    ? vc
-                    : lh
-                    ? lh
-                    : up
+                  g.fillStyle = up
                     ? "#089981"
                     : dn
                       ? "#000"
@@ -4891,8 +4834,7 @@
               /* the column as one line, buyers green / sellers
                  black, then a small dot on the strongest boxes */
               if (!pfBr) {
-                g.strokeStyle =
-                  lhAt(c.t0) || (c.up ? "#089981" : "#000");
+                g.strokeStyle = c.up ? "#089981" : "#000";
                 g.lineWidth = 1;
                 g.beginPath();
                 g.moveTo(xm, Y(c.ph));
@@ -7735,7 +7677,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 25;
+      const DEFAULTS_VER = 26;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7787,8 +7729,6 @@
           pfSg,
           pfHl,
           pfSw,
-          pfLh,
-          pfVc,
           pfBy,
           pfXb,
           pfIc,
@@ -7859,12 +7799,12 @@
            Alrt, Buy off in version 22, Act in 23 */
         if (st.dv >= 19 && typeof st.pfBr === "boolean")
           setPfBr(st.pfBr);
-        if (typeof st.pfSg === "boolean") setPfSg(st.pfSg);
+        if (st.dv >= 26 && typeof st.pfSg === "boolean")
+          setPfSg(st.pfSg);
         if (st.dv >= 22 && typeof st.pfHl === "boolean")
           setPfHl(st.pfHl);
         if (st.dv >= 15 && typeof st.pfSw === "boolean")
           setPfSw(st.pfSw);
-        if (typeof st.pfLh === "boolean") setPfLh(st.pfLh);
         if (st.dv >= 22 && typeof st.pfBy === "boolean")
           setPfBy(st.pfBy);
         if (st.dv >= 23 && typeof st.pfXb === "boolean")
@@ -7874,8 +7814,6 @@
           setPfIq(st.pfIq);
         if (typeof st.pfRl === "boolean") setPfRl(st.pfRl);
         if (typeof st.pfBs === "boolean") setPfBs(st.pfBs);
-        if (st.dv >= 21 && typeof st.pfVc === "boolean")
-          setPfVc(st.pfVc);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         if (typeof st.stCol === "boolean") setStCol(st.stCol);
@@ -8120,8 +8058,6 @@
       $("pfSgTog").onclick = () => setPfSg(!pfSg);
       $("pfHlTog").onclick = () => setPfHl(!pfHl);
       $("pfSwTog").onclick = () => setPfSw(!pfSw);
-      $("pfLhTog").onclick = () => setPfLh(!pfLh);
-      $("pfVcTog").onclick = () => setPfVc(!pfVc);
       $("pfByTog").onclick = () => setPfBy(!pfBy);
       $("pfXbTog").onclick = () => setPfXb(!pfXb);
       $("pfIcTog").onclick = () => setPfIc(!pfIc);
