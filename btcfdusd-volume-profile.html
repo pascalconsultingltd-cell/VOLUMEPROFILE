@@ -5306,11 +5306,10 @@
                 if (l > u) g.fillRect(q[0] - sl / 2, Y(l), sl + 0.5,
                   Y(u) - Y(l));
               });
-              g.strokeStyle = "#2962ff";
               (pfIq ? [0, 1, 2, 3, 4] : [0, 1, 2]).forEach((j) => {
-                /* ipoc: thin dash */
+                /* ipoc: solid, faint; no dash to mix with grid */
+                g.strokeStyle = j ? "#2962ff" : "rgba(41,98,255,.5)";
                 g.lineWidth = j > 2 ? 0.5 : 1;
-                g.setLineDash(j ? [] : [4, 3]);
                 g.beginPath();
                 let on = false;
                 pts.forEach((q) => {
@@ -5322,7 +5321,6 @@
                 });
                 g.stroke();
               });
-              g.setLineDash([]);
               /* green zone, 3 bricks: green above the ipoc, red
                  below */
               pts.forEach((q) => {
