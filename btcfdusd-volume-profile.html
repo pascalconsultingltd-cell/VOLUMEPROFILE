@@ -5221,7 +5221,7 @@
               jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
             drawPfCols(pfc, cv2, jOf, pa, sl);
             /* IC: ipoc channel, each column as at its start (no
-               repaint): ipoc dashed, edges thin */
+               repaint): ipoc fat navy, edges thin */
             if (pfIc) {
               /* edges per ipoc (a new one: a move of 1 vol or more):
                  they only widen, on a new high or low */
@@ -5308,9 +5308,9 @@
                   Y(u) - Y(l));
               });
               (pfIq ? [0, 1, 2, 3, 4] : [0, 1, 2]).forEach((j) => {
-                /* ipoc: solid, faint; no dash to mix with grid */
-                g.strokeStyle = j ? "#2962ff" : "rgba(41,98,255,.5)";
-                g.lineWidth = j > 2 ? 0.5 : 1;
+                /* ipoc: fat, the VP POC's navy */
+                g.strokeStyle = j ? "#2962ff" : "#003366";
+                g.lineWidth = j ? (j > 2 ? 0.5 : 1) : 3;
                 g.beginPath();
                 let on = false;
                 pts.forEach((q) => {
