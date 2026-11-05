@@ -566,6 +566,13 @@
                 Gap
               </button
               ><button
+                id="pfVaTog"
+                class="a"
+                title="Volume at price: each day's volume per row"
+              >
+                VAP
+              </button
+              ><button
                 id="pfBsTog"
                 class="a"
                 title="IC: arrow when the extra bricks lean one way"
@@ -1228,6 +1235,25 @@
           schedule();
         }
       }
+      /* VAP: a day's volume per row of its P&F box, from its
+         trades, topped up as they come; poc = the top row */
+      const vapC = new Map();
+      function vapOf(dS) {
+        const d = aggrT.get(dS),
+          st = pfStep(dS);
+        if (!d || !d.tr.length) return null;
+        let v = vapC.get(dS);
+        if (!v || v.st !== st)
+          vapC.set(dS, (v = { st, n: 0, rows: new Map(), mx: 0 }));
+        for (; v.n < d.tr.length; v.n++) {
+          const [, p, q] = d.tr[v.n],
+            r = Math.floor(p / st),
+            u = (v.rows.get(r) || 0) + q;
+          v.rows.set(r, u);
+          if (u > v.mx) (v.mx = u), (v.poc = r);
+        }
+        return v;
+      }
       /*
        * Aggression point & figure (P&F button, in the DPoc
        * panel).
@@ -1888,7 +1914,14 @@
         /* Gap button: the IC's red line */
         pfRl = false,
         /* Bias button: the IC's bias arrows */
-        pfBs = true;
+        pfBs = true,
+        /* VAP button: volume at price on the P&F */
+        pfVa = true;
+      function setPfVa(v) {
+        pfVa = !!v;
+        $("pfVaTog").className = pfVa ? "a" : "";
+        schedule();
+      }
       function setPfBs(v) {
         pfBs = !!v;
         $("pfBsTog").className = pfBs ? "a" : "";
@@ -4796,6 +4829,27 @@
                   });
                 by.set(c, last);
               }
+            }
+            /* VAP: each day's bars from its first column, under
+               the bricks; its top row darker */
+            if (pfVa) {
+              const dx = new Map();
+              shown.forEach((c, i) => {
+                const d = dayOf(c.t0),
+                  x = pa + sl * jOf(i);
+                if (!dx.has(d)) dx.set(d, [x, x]);
+                else dx.get(d)[1] = x;
+              });
+              dx.forEach(([xa, xb], d) => {
+                const v = vapOf(d),
+                  w = Math.max(40, xb - xa) * 0.6;
+                if (v) v.rows.forEach((u, r) => {
+                  g.fillStyle = r === v.poc ?
+                    "rgba(103,58,183,.45)" : "rgba(103,58,183,.15)";
+                  g.fillRect(xa, Y((r + 1) * v.st), (w * u) / v.mx,
+                    Y(r * v.st) - Y((r + 1) * v.st) - 0.5);
+                });
+              });
             }
             /* Br: bw = brick width, bricks touch (+.5 hides
                seams); hotB = highlighted boxes,
@@ -7838,6 +7892,7 @@
           pfIq,
           pfRl,
           pfBs,
+          pfVa,
           showOrders,
           showLines,
           showGr,
@@ -7917,6 +7972,7 @@
           setPfIq(st.pfIq);
         if (typeof st.pfRl === "boolean") setPfRl(st.pfRl);
         if (typeof st.pfBs === "boolean") setPfBs(st.pfBs);
+        if (typeof st.pfVa === "boolean") setPfVa(st.pfVa);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         if (typeof st.stCol === "boolean") setStCol(st.stCol);
@@ -8167,6 +8223,7 @@
       $("pfIqTog").onclick = () => setPfIq(!pfIq);
       $("pfRlTog").onclick = () => setPfRl(!pfRl);
       $("pfBsTog").onclick = () => setPfBs(!pfBs);
+      $("pfVaTog").onclick = () => setPfVa(!pfVa);
       $("pocTog").onclick = () => setShowPOC(!showPOC);
       $("stTog").onclick = () => setStCol(!stCol);
       $("massTog").onclick = () => setShowMass(!showMass);
