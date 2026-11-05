@@ -435,8 +435,8 @@
               </button>
               <button
                 id="vapTog"
-                class="a"
-                title="Volume at price: each day's volume per row"
+                class=""
+                title="Volume at price instead of the profiles"
               >
                 VAP
               </button>
@@ -750,7 +750,7 @@
        * and percentile (nearest-rank, as in the Pine
        * script)
        */
-      /* V95's window: 750 min, as 150 bars of 5m */
+      /* V95's window: 750 min, as 150 bars of 5m; its top 8 */
       const VH_MS = 750 * 60000;
       const BIG_WIN = 150,
         BIG_PERC = 0.95;
@@ -1181,8 +1181,8 @@
         $("soTog").className = showSO ? "a" : "";
         schedule();
       }
-      /* VAP button: volume at price over the profiles */
-      let showVap = true;
+      /* VAP button: volume at price instead of the profiles */
+      let showVap = false;
       function setShowVap(v) {
         showVap = !!v;
         $("vapTog").className = showVap ? "a" : "";
@@ -1371,8 +1371,9 @@
        * boxes before it (in the order they printed, itself
        * included); a column gets a dot when its volume beats
        * that of the BIG_WIN columns before it; vh: a box whose
-       * volume beats the 95th percentile of the boxes of the
-       * VH_MS before (its column's start). Cached until a
+       * volume ranks in the top 5% of BIG_WIN slots (8) among
+       * the boxes of the VH_MS before (its column's start), as
+       * a 5m bar in 150. Cached until a
        * trade changes the columns.
        */
       let pfHotC = null;
@@ -1420,8 +1421,9 @@
           };
           w.splice(ins(av[k]), 0, av[k]);
           for (; at[j] <= at[k] - VH_MS; j++) w.splice(ins(av[j]), 1);
-          if (at[k] - at[0] >= VH_MS &&
-            av[k] > w[Math.ceil(BIG_PERC * w.length) - 1])
+          const n = Math.ceil((1 - BIG_PERC) * BIG_WIN);
+          if (at[k] - at[0] >= VH_MS && w.length > n &&
+            av[k] >= w[w.length - n])
             vh.add(seq[k]);
         }
         for (let k = BIG_WIN - 1; k < cv.length; k++)
@@ -3792,6 +3794,39 @@
                 Q,
               );
             profs.push(P);
+            /* VAP on: the day's volume per row instead of its
+               profile, from its left edge, 5 biggest green / red
+               by delta (written), the top row darker; trades
+               loaded on demand */
+            if (showVap) {
+              const v = vapOf(P.dS);
+              if (!v) loadAggr(P.dS);
+              else {
+                const t5 = new Set([...v.rows]
+                  .sort((a, b) => b[1] - a[1]).slice(0, 5)
+                  .map(([r]) => r));
+                g.save();
+                g.font = "9px ui-monospace,Menlo,monospace";
+                g.textAlign = "left";
+                v.rows.forEach((u, r) => {
+                  const dl = v.dl.get(r) || 0,
+                    a = r === v.poc ? ".8" : ".5",
+                    y = Y((r + 1) * v.st),
+                    h = Y(r * v.st) - y - 0.5,
+                    bw = (colW * u) / v.mx;
+                  g.fillStyle = !t5.has(r) ? "rgba(103,58,183,.3)"
+                    : dl >= 0 ? "rgba(8,153,129," + a + ")"
+                    : "rgba(229,57,53," + a + ")";
+                  g.fillRect(cx0, y, bw, h);
+                  if (!t5.has(r)) return;
+                  g.fillStyle = dl >= 0 ? "#089981" : "#e53935";
+                  g.fillText((dl >= 0 ? "+" : "") + dl.toFixed(2),
+                    cx0 + bw + 3, y + h / 2);
+                });
+                g.restore();
+              }
+              continue;
+            }
             if (P.poc == null) continue;
             /* UD: the whole day black when its last ipoc in time
                is under its first (one ipoc: under the day
@@ -4062,37 +4097,6 @@
                   g.fillRect(cx0, y0, colW, h);
                 }
                 g.strokeRect(cx0, y0, colW, h);
-                g.restore();
-              }
-            }
-            /* VAP: the day's volume per row from the profile's
-               left edge, 5 biggest green / red by delta (written),
-               the top row darker; trades loaded on demand */
-            if (showVap) {
-              const v = vapOf(P.dS);
-              if (!v) loadAggr(P.dS);
-              else {
-                const t5 = new Set([...v.rows]
-                  .sort((a, b) => b[1] - a[1]).slice(0, 5)
-                  .map(([r]) => r));
-                g.save();
-                g.font = "9px ui-monospace,Menlo,monospace";
-                g.textAlign = "left";
-                v.rows.forEach((u, r) => {
-                  const dl = v.dl.get(r) || 0,
-                    a = r === v.poc ? ".8" : ".5",
-                    y = Y((r + 1) * v.st),
-                    h = Y(r * v.st) - y - 0.5,
-                    bw = (colW * u) / v.mx;
-                  g.fillStyle = !t5.has(r) ? "rgba(103,58,183,.3)"
-                    : dl >= 0 ? "rgba(8,153,129," + a + ")"
-                    : "rgba(229,57,53," + a + ")";
-                  g.fillRect(cx0, y, bw, h);
-                  if (!t5.has(r)) return;
-                  g.fillStyle = dl >= 0 ? "#089981" : "#e53935";
-                  g.fillText((dl >= 0 ? "+" : "") + dl.toFixed(2),
-                    cx0 + bw + 3, y + h / 2);
-                });
                 g.restore();
               }
             }
@@ -7922,7 +7926,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 26;
+      const DEFAULTS_VER = 27;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -8078,7 +8082,8 @@
         if (st.dv >= 13 && typeof st.showBZ === "boolean")
           setShowBZ(st.showBZ);
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
-        if (typeof st.showVap === "boolean") setShowVap(st.showVap);
+        if (st.dv >= 27 && typeof st.showVap === "boolean")
+          setShowVap(st.showVap);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
         if (typeof st.showDO === "boolean") setShowDO(st.showDO);
         if (typeof st.showCZ === "boolean") setShowCZ(st.showCZ);
