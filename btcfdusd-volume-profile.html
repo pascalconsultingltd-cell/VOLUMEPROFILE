@@ -750,6 +750,9 @@
        * and percentile (nearest-rank, as in the Pine
        * script)
        */
+      /* P&F zoom out: up to this many columns (2 days hold
+         about 4400) */
+      const PF_MAX = 5000;
       /* V95's window: 750 min, as 150 bars of 5m; its top 8 */
       const VH_MS = 750 * 60000;
       const BIG_WIN = 150,
@@ -6757,7 +6760,7 @@
               q.y = m.y;
               q.ty += dy;
               if (q.w === "pc") {
-                pfN = cl(5, 600, Math.round(q.n * f));
+                pfN = cl(5, PF_MAX, Math.round(q.n * f));
                 pcBack = Math.max(
                   1 - view.pcN,
                   pcBack + dx / view.pcSl,
@@ -7553,7 +7556,7 @@
               const f2 = sg > 0 ? 1.15 : 1 / 1.15;
               pfN = Math.max(
                 5,
-                Math.min(600, Math.round(view.pcN * f2)),
+                Math.min(PF_MAX, Math.round(view.pcN * f2)),
               );
               draw();
               return;
