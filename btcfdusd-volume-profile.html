@@ -3610,18 +3610,17 @@
               m.ic = [S.px, (b + 1) * step, a * step, S.px + vf,
                 S.px - vf];
               m.d = dS;
-              /* green line: the row with the most extra bricks vs
-                 all sub POCs' perfect mass (Mass' green delta); no
-                 clear max: their weighted average */
-              let gm = 0, g2 = 0, gr = 0, gs = 0, gw = 0;
+              /* green zone: the biggest chunk of adjacent rows with
+                 extra bricks vs all sub POCs' perfect mass (Mass'
+                 green delta), at its weighted middle; isolated rows
+                 far away are noise */
+              let cs = 0, cw = 0, gs = 0, gw = 0;
               /* and the row missing the biggest share of what it
                  expects, 3+ bricks (red); ties: the middle of the
                  tallest run of them */
               let top = 0,
                 run = 0,
-                best = 0,
-                up = 0,
-                dn = 0;
+                best = 0;
               for (let r = a; r <= b; r++) {
                 const e = sps.reduce((x, Q) => x + VOL_MASS * (
                     ncdf(((r + 1) * step - Q.px) / sg) -
@@ -3629,20 +3628,16 @@
                   E = Math.round(e),
                   d = (rows.get(r) || []).length - E,
                   g = E >= 3 ? -d / E : 0;
-                if (d > 0) (gs += d * (r + 0.5) * step), (gw += d);
-                if (d > gm) (g2 = gm), (gm = d), (gr = r);
-                else if (d > g2) g2 = d;
-                if (d > 0 && (r + 0.5) * step > S.px) up += d;
-                else if (d > 0) dn += d;
+                if (d > 0) (cs += d * (r + 0.5) * step), (cw += d);
+                else cs = cw = 0;
+                if (cw > gw) (gs = cs), (gw = cw);
                 if (g > top) (top = g), (best = run = 0);
                 run = g === top && top > 0 ? run + 1 : 0;
                 if (run > best)
                   (best = run), (m.rl = (r + 1 - run / 2) * step);
               }
-              if (gw) m.gl = [gm > g2 ? (gr + 0.5) * step : gs / gw,
-                1.5 * step];
-              /* bias: extra bricks above vs below the ipoc, 3+ */
-              m.sk = up + dn >= 3 ? (up - dn) / (up + dn) : 0;
+              /* middle, half height, its extra bricks */
+              if (gw) m.gl = [gs / gw, 1.5 * step, gw];
             }
             /* kept once its candles are all loaded */
             if (k15.length && k15[0].t <= dS &&
@@ -5229,18 +5224,16 @@
             if (pfIc) {
               /* edges per ipoc (a new one: a move of 1 vol or more):
                  they only widen, on a new high or low */
-              /* bias arrow: the green over 60 / 40 on one side of
-                 the ipoc, first time since the other side, a blank
+              /* bias arrow: the zone's side of the ipoc, 3+ extra
+                 bricks, first time since the other side, a blank
                  or a new ipoc */
               let hi, lo, pv = null, bs = 0;
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
                 if (!m.ic) return (pv = null), (bs = 0);
-                /* 3+ extra bricks, the zone on the same side */
                 const [p, h, l, v] = m.ic,
-                  s = Math.sign(m.sk),
-                  b = Math.abs(m.sk) > 0.2 && m.gl &&
-                    Math.sign(m.gl[0] - p) === s ? s : 0;
+                  b = m.gl && m.gl[2] >= 3 ?
+                    Math.sign(m.gl[0] - p) : 0;
                 if (pv === null || Math.abs(p - pv) >= v - p)
                   (hi = h), (lo = l), (bs = 0);
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
