@@ -5789,19 +5789,18 @@
             g.beginPath();
             g.rect(x0, top, px0 - x0, bot - top);
             g.clip();
-            g.lineWidth = 1.5;
-            g.setLineDash([]);
+            /* a see-through zone 3 bricks tall, not a line */
             segs.forEach(([L, t0, t1]) => {
               const xa = xAt(t0),
                 xb = t1 === Infinity ? px0 : xAt(t1);
               if (xb <= xa) return;
               const y = Y(L.b),
+                h = 1.5 * dayProf(L.d).step,
                 col = L.by > 0 ? "#089981" : "#000";
-              g.strokeStyle = col;
-              g.beginPath();
-              g.moveTo(xa, y);
-              g.lineTo(xb, y);
-              g.stroke();
+              g.fillStyle = L.by > 0 ?
+                "rgba(8,153,129,.3)" : "rgba(0,0,0,.2)";
+              g.fillRect(xa, Y(L.b + h), xb - xa,
+                Y(L.b - h) - Y(L.b + h));
               if (t1 === Infinity && y >= top && y <= bot)
                 ptag(y, L.b.toFixed(DP), col);
             });
