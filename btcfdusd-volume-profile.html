@@ -5225,24 +5225,25 @@
               jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
             drawPfCols(pfc, cv2, jOf, pa, sl);
             /* IC: ipoc channel, each column as at its start (no
-               repaint): ipoc thick, edges thin */
+               repaint): ipoc dashed, edges thin */
             if (pfIc) {
               /* edges per ipoc (a new one: a move of 1 vol or more):
                  they only widen, on a new high or low */
               /* bias arrow: the green over 60 / 40 on one side of
-                 the ipoc, first time since the other side */
+                 the ipoc, first time since the other side, a blank
+                 or a new ipoc */
               let hi, lo, pv = null, bs = 0;
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
-                if (!m.ic) return (pv = null);
-                const b = Math.abs(m.sk) > 0.2 ? Math.sign(m.sk) : 0,
-                  f = b && b !== bs ? b : 0;
-                if (b) bs = b;
-                const [p, h, l, v] = m.ic;
+                if (!m.ic) return (pv = null), (bs = 0);
+                const [p, h, l, v] = m.ic,
+                  b = Math.abs(m.sk) > 0.2 ? Math.sign(m.sk) : 0;
                 if (pv === null || Math.abs(p - pv) >= v - p)
-                  (hi = h), (lo = l);
+                  (hi = h), (lo = l), (bs = 0);
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
                 pv = p;
+                const f = b && b !== bs ? b : 0;
+                bs = b;
                 return [hi, lo, f];
               });
               const pts = cv2.map((c, k) => {
@@ -5266,7 +5267,9 @@
               });
               g.strokeStyle = "#2962ff";
               (pfIq ? [0, 1, 2, 3, 4] : [0, 1, 2]).forEach((j) => {
-                g.lineWidth = j > 2 ? 0.5 : j ? 1 : 1.5;
+                /* ipoc: thin dash */
+                g.lineWidth = j > 2 ? 0.5 : 1;
+                g.setLineDash(j ? [] : [4, 3]);
                 g.beginPath();
                 let on = false;
                 pts.forEach((q) => {
@@ -5278,6 +5281,7 @@
                 });
                 g.stroke();
               });
+              g.setLineDash([]);
               /* green zone, 3 bricks: green above the ipoc, red
                  below */
               pts.forEach((q) => {
@@ -5306,14 +5310,24 @@
               /* bias: at the last price as the column starts */
               if (pfBs) pts.forEach((q, k) => {
                 if (!q || !q[4]) return;
+                /* tip at the price, white rim to stand out */
                 const u = q[4] > 0,
-                  y = Y(cv2[k].p0) + (u ? 9 : -9),
-                  w = Math.max(4, sl / 2);
+                  y = Y(cv2[k].p0),
+                  d = u ? 1 : -1,
+                  w = Math.max(7, sl);
                 g.fillStyle = u ? "#089981" : "#e53935";
+                g.strokeStyle = "#fff";
+                g.lineWidth = 2;
                 g.beginPath();
-                g.moveTo(q[0], u ? y - 7 : y + 7);
-                g.lineTo(q[0] - w, u ? y + 3 : y - 3);
-                g.lineTo(q[0] + w, u ? y + 3 : y - 3);
+                g.moveTo(q[0], y + 2 * d);
+                g.lineTo(q[0] - w, y + 16 * d);
+                g.lineTo(q[0] - w / 3, y + 16 * d);
+                g.lineTo(q[0] - w / 3, y + 24 * d);
+                g.lineTo(q[0] + w / 3, y + 24 * d);
+                g.lineTo(q[0] + w / 3, y + 16 * d);
+                g.lineTo(q[0] + w, y + 16 * d);
+                g.closePath();
+                g.stroke();
                 g.fill();
               });
               g.lineWidth = 1;
