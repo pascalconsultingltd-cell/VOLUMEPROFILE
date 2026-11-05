@@ -5244,7 +5244,8 @@
                 const [p, h, l, v] = m.ic,
                   b = m.gl && m.gl[2] >= 3 ?
                     Math.sign(m.gl[0] - p) : 0;
-                if (pv === null || Math.abs(p - pv) >= v - p)
+                const rs = pv === null || Math.abs(p - pv) >= v - p;
+                if (rs)
                   (hi = h), (lo = l), (bs = 0), (xm = null),
                     (tz = null);
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
@@ -5282,7 +5283,7 @@
                   if (z && c.pl <= z[0] + z[1] && c.ph >= z[0] - z[1])
                     tz = z;
                 }
-                return [hi, lo, f, exc, sd];
+                return [hi, lo, f, exc, sd, rs];
               });
               const pts = cv2.map((c, k) => {
                 const m = icFor(c.t0);
@@ -5291,7 +5292,7 @@
                     ...m.ic.slice(3)],
                   /* no zone in an excursion */
                   !bd[k0 + k][3] && m.gl, m.rl, bd[k0 + k][2],
-                  bd[k0 + k][4]];
+                  bd[k0 + k][4], bd[k0 + k][5]];
               });
               g.fillStyle = "rgba(41,98,255,.07)";
               pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
@@ -5313,7 +5314,9 @@
                 g.beginPath();
                 let on = false;
                 pts.forEach((q) => {
-                  if (!q) return (on = false);
+                  /* new channel: no vertical join */
+                  if (!q || q[6]) on = false;
+                  if (!q) return;
                   const y = Y(q[1][j]);
                   g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
                   g.lineTo(q[0] + sl / 2, y);
