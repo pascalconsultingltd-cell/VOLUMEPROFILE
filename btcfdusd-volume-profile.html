@@ -581,7 +581,7 @@
               </button
               ><button
                 id="pfBsTog"
-                class="a"
+                class=""
                 title="IC: arrow when the extra bricks lean one way"
               >
                 Bias
@@ -1959,8 +1959,8 @@
         pfIq = false,
         /* Gap button: the IC's red line */
         pfRl = false,
-        /* Bias button: the IC's bias arrows */
-        pfBs = true,
+        /* Bias button: the IC's bias arrows, big and small */
+        pfBs = false,
         /* V95 button: the P&F's volume-hot boxes */
         pfVa = true;
       function setPfVa(v) {
@@ -7926,7 +7926,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 27;
+      const DEFAULTS_VER = 28;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -8064,7 +8064,8 @@
         if (st.dv >= 25 && typeof st.pfIq === "boolean")
           setPfIq(st.pfIq);
         if (typeof st.pfRl === "boolean") setPfRl(st.pfRl);
-        if (typeof st.pfBs === "boolean") setPfBs(st.pfBs);
+        if (st.dv >= 28 && typeof st.pfBs === "boolean")
+          setPfBs(st.pfBs);
         if (typeof st.pfVa === "boolean") setPfVa(st.pfVa);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
