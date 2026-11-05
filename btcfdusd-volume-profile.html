@@ -3670,7 +3670,8 @@
                 if (run > best)
                   (best = run), (m.rl = (r + 1 - run / 2) * step);
               }
-              if (gw) m.gl = gm > g2 ? (gr + 0.5) * step : gs / gw;
+              if (gw) m.gl = [gm > g2 ? (gr + 0.5) * step : gs / gw,
+                1.5 * step];
               /* bias: extra bricks above vs below the ipoc */
               m.sk = (up - dn) / (up + dn || 1);
             }
@@ -5335,19 +5336,15 @@
                 });
                 g.stroke();
               });
-              /* green line: green above the ipoc, red below */
-              g.lineWidth = 1.5;
-              pts.forEach((q, k) => {
-                if (!q || q[2] == null) return;
-                const y = Y(q[2]), p = pts[k - 1],
-                  x = q[0] - sl / 2;
-                g.strokeStyle =
-                  q[2] > q[1][0] ? "#089981" : "#e53935";
-                g.beginPath();
-                g.moveTo(x, p && p[2] != null ? Y(p[2]) : y);
-                g.lineTo(x, y);
-                g.lineTo(x + sl, y);
-                g.stroke();
+              /* green zone, 3 bricks: green above the ipoc, red
+                 below */
+              pts.forEach((q) => {
+                if (!q || !q[2]) return;
+                const [c, h] = q[2];
+                g.fillStyle = c > q[1][0] ? "rgba(8,153,129,.3)"
+                  : "rgba(229,57,53,.3)";
+                g.fillRect(q[0] - sl / 2, Y(c + h), sl + 0.5,
+                  Y(c - h) - Y(c + h));
               });
               /* red: the biggest missing zone's middle */
               if (pfRl) {
