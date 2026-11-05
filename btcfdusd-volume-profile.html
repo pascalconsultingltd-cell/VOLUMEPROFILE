@@ -3560,19 +3560,37 @@
             }
             return m;
           };
+          /* the forming 15m candle's high / low from the P&F
+             trades before t, or null */
+          const liveHL = (cut, t) => {
+            const d = aggrT.get(dayOf(cut)),
+              a = d ? d.tr : [];
+            let i = 0, j = a.length, h = -Infinity, l = Infinity;
+            while (i < j) {
+              const k = (i + j) >> 1;
+              if (a[k][0] < cut) i = k + 1;
+              else j = k;
+            }
+            for (; i < a.length && a[i][0] < t; i++)
+              (h = Math.max(h, a[i][1])), (l = Math.min(l, a[i][1]));
+            return h < l ? null : [h, l];
+          };
           /*
            * IC at time t, never repainted: the day's 15m candles
-           * closed by t only (none yet: the day before, whole)
+           * closed by t, plus the forming one up to t (as the
+           * live VP saw it); none yet: the day before, whole
            */
           const icFor = (t) => {
             let dS = dayOf(t),
-              cut = Math.floor(t / 9e5) * 9e5;
+              cut = Math.floor(t / 9e5) * 9e5,
+              x = null;
             if (cut <= dS) (cut = dS), (dS = prevDay(dS));
+            else x = liveHL(cut, t);
             const vC = volFor(dS),
               step = vC ? Math.max(1, Math.ceil(vC / 10))
                 : dayProf(dS).step,
               vf = vC || step * 10,
-              key = ["ic", dS, cut, vf, step].join();
+              key = ["ic", dS, cut, vf, step, x].join();
             if (stFz.has(key)) return stFz.get(key);
             const per = new Map(),
               rows = new Map(),
@@ -3587,6 +3605,13 @@
                 q.l = Math.min(q.l, c.l);
               }
             });
+            if (x) {
+              const i = Math.floor((cut - dS) / TPO_MS),
+                q = per.get(i);
+              if (!q) per.set(i, { i, h: x[0], l: x[1] });
+              else (q.h = Math.max(q.h, x[0])),
+                (q.l = Math.min(q.l, x[1]));
+            }
             const ps = [...per.values()].sort((x, y) => x.i - y.i);
             ps.forEach((q) => {
               for (let r = Math.floor(q.l / step);
