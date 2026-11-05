@@ -5228,7 +5228,10 @@
                  bricks, first time since the other side, a blank
                  or a new ipoc; none in an excursion (a jump: price
                  out of the channel), a blank */
-              let hi, lo, pv = null, bs = 0;
+              /* sell: in a down excursion, a column starting 3+
+                 bricks above the row with the most bricks since it
+                 began (closed columns only); again once back to it */
+              let hi, lo, pv = null, bs = 0, xm = null, ar = true;
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
                 if (!m.ic) return (pv = null), (bs = 0);
@@ -5236,13 +5239,29 @@
                   b = m.gl && m.gl[2] >= 3 ?
                     Math.sign(m.gl[0] - p) : 0;
                 if (pv === null || Math.abs(p - pv) >= v - p)
-                  (hi = h), (lo = l), (bs = 0);
+                  (hi = h), (lo = l), (bs = 0), (xm = null);
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
                 pv = p;
                 const exc = c.p0 > hi || c.p0 < lo,
                   f = b && b !== bs && !exc ? b : 0;
                 bs = exc ? 0 : b;
-                return [hi, lo, f, exc];
+                let sd = 0;
+                if (c.p0 < lo) {
+                  if (xm && xm.st !== c.st) xm = null;
+                  if (xm) {
+                    let br = 0, bc = 0;
+                    xm.forEach((n, r) =>
+                      n > bc && ((bc = n), (br = r)));
+                    const cp = (br + 0.5) * c.st;
+                    if (c.p0 <= cp) ar = true;
+                    else if (ar && c.p0 >= cp + 3 * c.st)
+                      (sd = 1), (ar = false);
+                  } else
+                    (xm = new Map()), (xm.st = c.st), (ar = true);
+                  for (let r = c.lo; r <= c.hi; r++)
+                    xm.set(r, (xm.get(r) || 0) + 1);
+                } else xm = null;
+                return [hi, lo, f, exc, sd];
               });
               const pts = cv2.map((c, k) => {
                 const m = icFor(c.t0);
@@ -5250,7 +5269,8 @@
                   [m.ic[0], ...bd[k0 + k].slice(0, 2),
                     ...m.ic.slice(3)],
                   /* no zone in an excursion */
-                  !bd[k0 + k][3] && m.gl, m.rl, bd[k0 + k][2]];
+                  !bd[k0 + k][3] && m.gl, m.rl, bd[k0 + k][2],
+                  bd[k0 + k][4]];
               });
               g.fillStyle = "rgba(41,98,255,.07)";
               pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
@@ -5328,6 +5348,17 @@
                 g.lineTo(q[0] + w, y + 16 * d);
                 g.closePath();
                 g.stroke();
+                g.fill();
+              });
+              /* little sell arrows: tip at the price, from above */
+              if (pfBs) pts.forEach((q, k) => {
+                if (!q || !q[5]) return;
+                const y = Y(cv2[k].p0), w = Math.max(4, sl / 2);
+                g.fillStyle = "#e53935";
+                g.beginPath();
+                g.moveTo(q[0], y - 2);
+                g.lineTo(q[0] - w, y - 10);
+                g.lineTo(q[0] + w, y - 10);
                 g.fill();
               });
               g.lineWidth = 1;
