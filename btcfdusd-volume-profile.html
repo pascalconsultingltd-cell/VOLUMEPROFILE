@@ -1254,6 +1254,26 @@
         }
         return v;
       }
+      /* VAP top row's price from a day's trades before t, or
+         null; one cursor a day, rebuilt when t goes back */
+      const vapCur = new Map();
+      function vapAt(dS, t) {
+        const d = aggrT.get(dS),
+          st = pfStep(dS);
+        if (!d || !d.tr.length) return null;
+        let v = vapCur.get(dS);
+        if (!v || v.st !== st || v.t > t)
+          vapCur.set(dS,
+            (v = { st, n: 0, t, rows: new Map(), mx: 0 }));
+        for (const a = d.tr; v.n < a.length && a[v.n][0] < t; v.n++) {
+          const r = Math.floor(a[v.n][1] / st),
+            u = (v.rows.get(r) || 0) + a[v.n][2];
+          v.rows.set(r, u);
+          if (u > v.mx) (v.mx = u), (v.poc = r);
+        }
+        v.t = t;
+        return v.poc == null ? null : (v.poc + 0.5) * st;
+      }
       /*
        * Aggression point & figure (P&F button, in the DPoc
        * panel).
@@ -3611,19 +3631,22 @@
           /*
            * IC at time t, never repainted: the day's 15m candles
            * closed by t, plus the forming one up to t (as the
-           * live VP saw it); none yet: the day before, whole
+           * live VP saw it); none yet: the day before, whole.
+           * The ipoc: the VAP top row as at t (TPO's if none)
            */
           const icFor = (t) => {
             let dS = dayOf(t),
               cut = Math.floor(t / 9e5) * 9e5,
-              x = null;
-            if (cut <= dS) (cut = dS), (dS = prevDay(dS));
+              x = null,
+              te = t;
+            if (cut <= dS) (te = cut = dS), (dS = prevDay(dS));
             else x = liveHL(cut, t);
+            const vp = vapAt(dS, te);
             const vC = volFor(dS),
               step = vC ? Math.max(1, Math.ceil(vC / 10))
                 : dayProf(dS).step,
               vf = vC || step * 10,
-              key = ["ic", dS, cut, vf, step, x].join();
+              key = ["ic", dS, cut, vf, step, x, vp].join();
             if (stFz.has(key)) return stFz.get(key);
             const per = new Map(),
               rows = new Map(),
@@ -3656,7 +3679,8 @@
             const sps = ps.length ? subPocs(dS, ps, vf, step) : [];
             /* IC: the latest ipoc, its normal curve's edges (rows
                where its vol mass still gives a brick) */
-            const S = byAge({ rows, step }, sps).pop();
+            const S = vp != null ? { px: vp }
+              : byAge({ rows, step }, sps).pop();
             if (S) {
               const sg = vf / 1.2816,
                 z = (r) => ncdf((r * step - S.px) / sg),
@@ -4845,7 +4869,7 @@
                   w = Math.max(40, xb - xa) * 0.6;
                 if (v) v.rows.forEach((u, r) => {
                   g.fillStyle = r === v.poc ?
-                    "rgba(103,58,183,.45)" : "rgba(103,58,183,.15)";
+                    "rgba(103,58,183,.7)" : "rgba(103,58,183,.3)";
                   g.fillRect(xa, Y((r + 1) * v.st), (w * u) / v.mx,
                     Y(r * v.st) - Y((r + 1) * v.st) - 0.5);
                 });
