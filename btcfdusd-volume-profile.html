@@ -5818,17 +5818,15 @@
               g.beginPath();
               g.rect(pL, top, pcW, bot - top);
               g.clip();
-              g.lineWidth = 1.5;
-              g.setLineDash([]);
               segs.forEach(([L, t0, t1]) => {
                 const xa = pxAt(t0),
-                  xb = pxAt(t1);
+                  xb = pxAt(t1),
+                  h = 1.5 * dayProf(L.d).step;
                 if (xb <= xa) return;
-                g.strokeStyle = L.by > 0 ? "#089981" : "#000";
-                g.beginPath();
-                g.moveTo(xa, Y(L.b));
-                g.lineTo(xb, Y(L.b));
-                g.stroke();
+                g.fillStyle = L.by > 0 ?
+                  "rgba(8,153,129,.3)" : "rgba(0,0,0,.2)";
+                g.fillRect(xa, Y(L.b + h), xb - xa,
+                  Y(L.b - h) - Y(L.b + h));
               });
               g.restore();
             }
