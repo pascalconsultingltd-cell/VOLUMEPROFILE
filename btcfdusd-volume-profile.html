@@ -434,6 +434,13 @@
                 YB
               </button>
               <button
+                id="vapTog"
+                class="a"
+                title="Volume at price: each day's volume per row"
+              >
+                VAP
+              </button>
+              <button
                 id="soTog"
                 class=""
                 title="SPoc candles over the volume profiles"
@@ -568,9 +575,9 @@
               ><button
                 id="pfVaTog"
                 class="a"
-                title="Volume at price: each day's volume per row"
+                title="Boxes with volume over 95% of the 150 before"
               >
-                VAP
+                V95
               </button
               ><button
                 id="pfBsTog"
@@ -743,6 +750,8 @@
        * and percentile (nearest-rank, as in the Pine
        * script)
        */
+      /* V95's window: 750 min, as 150 bars of 5m */
+      const VH_MS = 750 * 60000;
       const BIG_WIN = 150,
         BIG_PERC = 0.95;
       const LET =
@@ -1172,6 +1181,13 @@
         $("soTog").className = showSO ? "a" : "";
         schedule();
       }
+      /* VAP button: volume at price over the profiles */
+      let showVap = true;
+      function setShowVap(v) {
+        showVap = !!v;
+        $("vapTog").className = showVap ? "a" : "";
+        schedule();
+      }
       let showYB = true;
       function setShowYB(v) {
         showYB = !!v;
@@ -1257,26 +1273,6 @@
           if (u > v.mx) (v.mx = u), (v.poc = r);
         }
         return v;
-      }
-      /* VAP top row's price from a day's trades before t, or
-         null; one cursor a day, rebuilt when t goes back */
-      const vapCur = new Map();
-      function vapAt(dS, t) {
-        const d = aggrT.get(dS),
-          st = pfStep(dS);
-        if (!d || !d.tr.length) return null;
-        let v = vapCur.get(dS);
-        if (!v || v.st !== st || v.t > t)
-          vapCur.set(dS,
-            (v = { st, n: 0, t, rows: new Map(), mx: 0 }));
-        for (const a = d.tr; v.n < a.length && a[v.n][0] < t; v.n++) {
-          const r = Math.floor(a[v.n][1] / st),
-            u = (v.rows.get(r) || 0) + a[v.n][2];
-          v.rows.set(r, u);
-          if (u > v.mx) (v.mx = u), (v.poc = r);
-        }
-        v.t = t;
-        return v.poc == null ? null : (v.poc + 0.5) * st;
       }
       /*
        * Aggression point & figure (P&F button, in the DPoc
@@ -1374,7 +1370,9 @@
        * its |delta| beats the 95th percentile of the BIG_WIN
        * boxes before it (in the order they printed, itself
        * included); a column gets a dot when its volume beats
-       * that of the BIG_WIN columns before it. Cached until a
+       * that of the BIG_WIN columns before it; vh: a box whose
+       * volume beats the 95th percentile of the boxes of the
+       * VH_MS before (its column's start). Cached until a
        * trade changes the columns.
        */
       let pfHotC = null;
@@ -1389,7 +1387,10 @@
             xs.slice(k - BIG_WIN + 1, k + 1).sort((p, q) => p - q)[r],
           seq = [],
           ad = [],
+          av = [],
+          at = [],
           hot = new Set(),
+          vh = new Set(),
           dot = new Set(),
           cv = all.map((c) => {
             let s = 0;
@@ -1400,10 +1401,29 @@
           c.d.forEach((v, row) => {
             seq.push(k + "|" + row);
             ad.push(Math.abs(v));
+            av.push(c.v.get(row) || 0);
+            at.push(c.t0);
           }),
         );
         for (let k = BIG_WIN - 1; k < ad.length; k++)
           if (ad[k] > top(ad, k)) hot.add(seq[k]);
+        /* sorted window kept as it slides */
+        for (let k = 0, j = 0, w = []; k < av.length; k++) {
+          const ins = (x) => {
+            let a = 0, b = w.length;
+            while (a < b) {
+              const m = (a + b) >> 1;
+              if (w[m] < x) a = m + 1;
+              else b = m;
+            }
+            return a;
+          };
+          w.splice(ins(av[k]), 0, av[k]);
+          for (; at[j] <= at[k] - VH_MS; j++) w.splice(ins(av[j]), 1);
+          if (at[k] - at[0] >= VH_MS &&
+            av[k] > w[Math.ceil(BIG_PERC * w.length) - 1])
+            vh.add(seq[k]);
+        }
         for (let k = BIG_WIN - 1; k < cv.length; k++)
           if (cv[k] > top(cv, k)) dot.add(k);
         /* exc: excitement, each flip adds 1 and it halves every
@@ -1440,7 +1460,7 @@
           gTop[k] = gt;
           bBot[k] = bb;
         });
-        return (pfHotC = { key, hot, dot, exc, gTop, bBot });
+        return (pfHotC = { key, hot, vh, dot, exc, gTop, bBot });
       }
       /*
        * LH: a column trading under the latest green dot's low
@@ -1939,7 +1959,7 @@
         pfRl = false,
         /* Bias button: the IC's bias arrows */
         pfBs = true,
-        /* VAP button: volume at price on the P&F */
+        /* V95 button: the P&F's volume-hot boxes */
         pfVa = true;
       function setPfVa(v) {
         pfVa = !!v;
@@ -2934,6 +2954,11 @@
             charts.forEach((h) => h.size()),
           );
         }
+        /* phone: opens (and resets) on the chart full screen */
+        const fs0 = cfg.main && matchMedia("(pointer: coarse)")
+          .matches && Math.min(screen.width, screen.height) < 600
+          ? "main" : null;
+        if (fs0) setFull(fs0);
         function size() {
           const r = cv.getBoundingClientRect(),
             d = devicePixelRatio || 1;
@@ -3635,22 +3660,19 @@
           /*
            * IC at time t, never repainted: the day's 15m candles
            * closed by t, plus the forming one up to t (as the
-           * live VP saw it); none yet: the day before, whole.
-           * The ipoc: the VAP top row as at t (TPO's if none)
+           * live VP saw it); none yet: the day before, whole
            */
           const icFor = (t) => {
             let dS = dayOf(t),
               cut = Math.floor(t / 9e5) * 9e5,
-              x = null,
-              te = t;
-            if (cut <= dS) (te = cut = dS), (dS = prevDay(dS));
+              x = null;
+            if (cut <= dS) (cut = dS), (dS = prevDay(dS));
             else x = liveHL(cut, t);
-            const vp = vapAt(dS, te);
             const vC = volFor(dS),
               step = vC ? Math.max(1, Math.ceil(vC / 10))
                 : dayProf(dS).step,
               vf = vC || step * 10,
-              key = ["ic", dS, cut, vf, step, x, vp].join();
+              key = ["ic", dS, cut, vf, step, x].join();
             if (stFz.has(key)) return stFz.get(key);
             const per = new Map(),
               rows = new Map(),
@@ -3683,8 +3705,7 @@
             const sps = ps.length ? subPocs(dS, ps, vf, step) : [];
             /* IC: the latest ipoc, its normal curve's edges (rows
                where its vol mass still gives a brick) */
-            const S = vp != null ? { px: vp }
-              : byAge({ rows, step }, sps).pop();
+            const S = byAge({ rows, step }, sps).pop();
             if (S) {
               const sg = vf / 1.2816,
                 z = (r) => ncdf((r * step - S.px) / sg),
@@ -4041,6 +4062,37 @@
                   g.fillRect(cx0, y0, colW, h);
                 }
                 g.strokeRect(cx0, y0, colW, h);
+                g.restore();
+              }
+            }
+            /* VAP: the day's volume per row from the profile's
+               left edge, 5 biggest green / red by delta (written),
+               the top row darker; trades loaded on demand */
+            if (showVap) {
+              const v = vapOf(P.dS);
+              if (!v) loadAggr(P.dS);
+              else {
+                const t5 = new Set([...v.rows]
+                  .sort((a, b) => b[1] - a[1]).slice(0, 5)
+                  .map(([r]) => r));
+                g.save();
+                g.font = "9px ui-monospace,Menlo,monospace";
+                g.textAlign = "left";
+                v.rows.forEach((u, r) => {
+                  const dl = v.dl.get(r) || 0,
+                    a = r === v.poc ? ".8" : ".5",
+                    y = Y((r + 1) * v.st),
+                    h = Y(r * v.st) - y - 0.5,
+                    bw = (colW * u) / v.mx;
+                  g.fillStyle = !t5.has(r) ? "rgba(103,58,183,.3)"
+                    : dl >= 0 ? "rgba(8,153,129," + a + ")"
+                    : "rgba(229,57,53," + a + ")";
+                  g.fillRect(cx0, y, bw, h);
+                  if (!t5.has(r)) return;
+                  g.fillStyle = dl >= 0 ? "#089981" : "#e53935";
+                  g.fillText((dl >= 0 ? "+" : "") + dl.toFixed(2),
+                    cx0 + bw + 3, y + h / 2);
+                });
                 g.restore();
               }
             }
@@ -4858,45 +4910,6 @@
                 by.set(c, last);
               }
             }
-            /* VAP: each day's bars from its first column, under
-               the bricks; its 5 biggest green / red by delta,
-               the delta written, the top row darker */
-            if (pfVa) {
-              const dx = new Map();
-              shown.forEach((c, i) => {
-                const d = dayOf(c.t0),
-                  x = pa + sl * jOf(i);
-                if (!dx.has(d)) dx.set(d, [x, x]);
-                else dx.get(d)[1] = x;
-              });
-              dx.forEach(([xa, xb], d) => {
-                const v = vapOf(d),
-                  w = Math.max(40, xb - xa) * 0.6;
-                if (!v) return;
-                const t5 = new Set([...v.rows]
-                  .sort((a, b) => b[1] - a[1]).slice(0, 5)
-                  .map(([r]) => r));
-                g.font = "9px ui-monospace,Menlo,monospace";
-                g.textAlign = "left";
-                g.textBaseline = "middle";
-                v.rows.forEach((u, r) => {
-                  const dl = v.dl.get(r) || 0,
-                    a = r === v.poc ? ".8" : ".5",
-                    y = Y((r + 1) * v.st),
-                    h = Y(r * v.st) - y - 0.5,
-                    bw = (w * u) / v.mx;
-                  g.fillStyle = !t5.has(r) ? "rgba(103,58,183,.3)"
-                    : dl >= 0 ? "rgba(8,153,129," + a + ")"
-                    : "rgba(229,57,53," + a + ")";
-                  g.fillRect(xa, y, bw, h);
-                  if (!t5.has(r)) return;
-                  g.fillStyle = dl >= 0 ? "#089981" : "#e53935";
-                  g.fillText((dl >= 0 ? "+" : "") + dl.toFixed(2),
-                    xa + bw + 3, y + h / 2);
-                });
-                g.textBaseline = "alphabetic";
-              });
-            }
             /* Br: bw = brick width, bricks touch (+.5 hides
                seams); hotB = highlighted boxes,
                drawn last with a brick each side */
@@ -5008,6 +5021,35 @@
               g.arc(xm, Y((r + 0.5) * st), 2, 0, 7);
               g.fill();
             });
+            /* V95: a box whose volume tops 95% of the 150 before,
+               a dot green / red by its delta, the delta written */
+            if (pfVa) {
+              g.font = "9px ui-monospace,Menlo,monospace";
+              g.textAlign = "left";
+              g.textBaseline = "middle";
+              shown.forEach((c) => {
+                const k = ci.get(c);
+                c.v.forEach((v, r) => {
+                  if (!hs.vh.has(k + "|" + r)) return;
+                  const dl = c.d.get(r) || 0,
+                    x = xs.get(c),
+                    y = Y((r + 0.5) * c.st);
+                  /* size by |delta|: 3px, +2px a BTC, 12px at most */
+                  const rd = Math.min(12, 3 + 2 * Math.abs(dl));
+                  g.fillStyle = dl >= 0 ? "#089981" : "#e53935";
+                  g.strokeStyle = "#000";
+                  g.lineWidth = 1.5;
+                  g.beginPath();
+                  g.arc(x, y, rd, 0, 7);
+                  g.fill();
+                  g.stroke();
+                  g.fillText((dl >= 0 ? "+" : "") + dl.toFixed(2),
+                    x + rd + 2, y);
+                });
+              });
+              g.textBaseline = "alphabetic";
+              g.lineWidth = 1;
+            }
             /* excitement clusters: a box round each run of columns
                whose smoothed rank is 0.8+ (red) or 0.25- (grey,
                quiet), over its range (Act button) */
@@ -7730,7 +7772,7 @@
             tpoFrac = null;
             pfN = 200;
             pcPx = null;
-            if (full) setFull(null);
+            if (full !== fs0) setFull(fs0);
             pcBack = 0;
             subX = 0;
             tpoBack = 0;
@@ -7918,6 +7960,7 @@
           showIZ,
           showBZ,
           showYB,
+          showVap,
           showSO,
           showDO,
           showCZ,
@@ -8035,6 +8078,7 @@
         if (st.dv >= 13 && typeof st.showBZ === "boolean")
           setShowBZ(st.showBZ);
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
+        if (typeof st.showVap === "boolean") setShowVap(st.showVap);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
         if (typeof st.showDO === "boolean") setShowDO(st.showDO);
         if (typeof st.showCZ === "boolean") setShowCZ(st.showCZ);
@@ -8254,6 +8298,7 @@
       $("izTog").onclick = () => setShowIZ(!showIZ);
       $("bzTog").onclick = () => setShowBZ(!showBZ);
       $("ybTog").onclick = () => setShowYB(!showYB);
+      $("vapTog").onclick = () => setShowVap(!showVap);
       $("soTog").onclick = () => setShowSO(!showSO);
       $("doTog").onclick = () => setShowDO(!showDO);
       $("czTog").onclick = () => setShowCZ(!showCZ);
