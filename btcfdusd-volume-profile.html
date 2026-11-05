@@ -5242,13 +5242,15 @@
                 const o = c.p0 > hi || c.p0 < lo,
                   f = b && b !== bs && !o ? b : 0;
                 bs = o ? 0 : b;
-                return [hi, lo, f];
+                return [hi, lo, f, o];
               });
               const pts = cv2.map((c, k) => {
                 const m = icFor(c.t0);
                 return m.ic && [pa + sl * jOf(k),
-                  [m.ic[0], ...bd[k0 + k], ...m.ic.slice(3)],
-                  m.gl, m.rl, bd[k0 + k][2]];
+                  [m.ic[0], ...bd[k0 + k].slice(0, 2),
+                    ...m.ic.slice(3)],
+                  /* no zone while price is out of the channel */
+                  !bd[k0 + k][3] && m.gl, m.rl, bd[k0 + k][2]];
               });
               g.fillStyle = "rgba(41,98,255,.07)";
               pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
