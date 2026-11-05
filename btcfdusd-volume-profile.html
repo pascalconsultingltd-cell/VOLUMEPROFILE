@@ -3610,8 +3610,7 @@
               /* 4th, 5th: the curve's 90% / 10% points, 1 vol out */
               m.ic = [S.px, (b + 1) * step, a * step, S.px + vf,
                 S.px - vf];
-              /* which P it is (P1..P3), for the channel */
-              (m.d = dS), (m.id = dS + "|" + sps.indexOf(S));
+              m.d = dS;
               /* green zone: the biggest chunk of adjacent rows with
                  extra bricks vs all sub POCs' perfect mass (Mass'
                  green delta), at its weighted middle; isolated rows
@@ -5224,8 +5223,7 @@
             /* IC: ipoc channel, each column as at its start (no
                repaint): ipoc fat navy, edges thin */
             if (pfIc) {
-              /* edges per ipoc (a new one: another P or day, as the
-                 shrinking brick finds them; a P drifting keeps it):
+              /* edges per ipoc (a new one: a move of 1 vol or more):
                  they only widen, on a new high or low */
               /* bias arrow: the zone's side of the ipoc, 3+ extra
                  bricks, first time since the other side, a blank
@@ -5243,15 +5241,15 @@
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
                 if (!m.ic) return (pv = null), (bs = 0);
-                const [p, h, l] = m.ic,
+                const [p, h, l, v] = m.ic,
                   b = m.gl && m.gl[2] >= 3 ?
                     Math.sign(m.gl[0] - p) : 0;
-                const rs = pv !== m.id;
+                const rs = pv === null || Math.abs(p - pv) >= v - p;
                 if (rs)
                   (hi = h), (lo = l), (bs = 0), (xm = null),
                     (tz = null);
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
-                pv = m.id;
+                pv = p;
                 const exc = c.p0 > hi || c.p0 < lo,
                   f = b && b !== bs && !exc ? b : 0;
                 bs = exc ? 0 : b;
