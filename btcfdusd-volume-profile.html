@@ -442,7 +442,7 @@
               </button>
               <button
                 id="vbTog"
-                class=""
+                class="a"
                 title="Profile bricks as wide as their traded volume"
               >
                 VB
@@ -1203,7 +1203,7 @@
         /* USDT button: VAP, V95 and VB from BTCUSDT */
         useUsdt = false,
         /* VB button: profile bricks by volume */
-        showVw = false;
+        showVw = true;
       function setShowVw(v) {
         showVw = !!v;
         $("vbTog").className = showVw ? "a" : "";
@@ -4982,7 +4982,11 @@
            * when that window is the full one. xl = the
            * window's left edge. icons = their boxes, for clicks.
            */
-          const icons = [];
+          const icons = [],
+            /* phone: the full-screen icon 3x, easier to tap */
+            IZ = matchMedia("(pointer: coarse)").matches &&
+              Math.min(screen.width, screen.height) < 600 ? 3 : 1,
+            izo = (IZ - 1) * 16;
           /* alert toggles left of it: up / down triangles,
              filled green / black while armed; row = 0 or 1
              (under), lb = a name on their left */
@@ -4992,10 +4996,10 @@
               g.fillStyle = "#6b7684";
               g.textAlign = "right";
               g.textBaseline = "middle";
-              g.fillText(lb, xr - 58, top + 9.5 + row * 18);
+              g.fillText(lb, xr - 58 - izo, top + 9.5 + row * 18);
             }
             ["dn", "up"].forEach((dir, i) => {
-              const x = xr - 36 - i * 18,
+              const x = xr - 36 - izo - i * 18,
                 y = top + 3 + row * 18,
                 up = dir === "up",
                 on = alerts[w + "|" + dir];
@@ -5043,7 +5047,7 @@
             g.restore();
           };
           const icon = (k, xl, xr) => {
-            const x = xr - 16,
+            const x = xr - 16 * IZ,
               y = top + 3,
               on = full === k,
               over =
@@ -5053,11 +5057,13 @@
                 mouse.y >= top &&
                 mouse.y <= bot;
             /* click area a little larger than the drawing */
-            icons.push({ k, x: x - 3, y: y - 3, w: 19, h: 19 });
+            icons.push({ k, x: x - 3, y: y - 3, w: 19 * IZ,
+              h: 19 * IZ });
             g.save();
             g.setLineDash([]);
-            g.lineWidth = 1.5;
-            g.strokeStyle = over || on ? "#5b6470" : "#b4bdc8";
+            g.lineWidth = 1.5 * IZ;
+            g.strokeStyle = over || on || IZ > 1 ? "#5b6470"
+              : "#b4bdc8";
             g.beginPath();
             (on
               ? [
@@ -5073,9 +5079,9 @@
                   [6, 10, 3, 10, 3, 7],
                 ]
             ).forEach(([a, b, c, d, e2, f2]) => {
-              g.moveTo(x + a, y + b);
-              g.lineTo(x + c, y + d);
-              g.lineTo(x + e2, y + f2);
+              g.moveTo(x + a * IZ, y + b * IZ);
+              g.lineTo(x + c * IZ, y + d * IZ);
+              g.lineTo(x + e2 * IZ, y + f2 * IZ);
             });
             g.stroke();
             g.restore();
@@ -8152,7 +8158,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 28;
+      const DEFAULTS_VER = 29;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -8314,7 +8320,8 @@
         if (st.dv >= 27 && typeof st.showVap === "boolean")
           setShowVap(st.showVap);
         if (typeof st.useUsdt === "boolean") setUseUsdt(st.useUsdt);
-        if (typeof st.showVw === "boolean") setShowVw(st.showVw);
+        if (st.dv >= 29 && typeof st.showVw === "boolean")
+          setShowVw(st.showVw);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
         if (typeof st.showDO === "boolean") setShowDO(st.showDO);
         if (typeof st.showCZ === "boolean") setShowCZ(st.showCZ);
