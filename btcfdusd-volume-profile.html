@@ -443,7 +443,7 @@
               <button
                 id="ncTog"
                 class="a"
-                title="VBT: the VP's normal curve (time) over it"
+                title="VBT: the TPO profile (time) over it, in volume"
               >
                 NC
               </button>
@@ -1251,7 +1251,7 @@
         $("vbTog").className = showVw ? "a" : "";
         schedule();
       }
-      /* NC button: the VP's normal curves on VBT, orange */
+      /* NC button: the TPO profile over the VBT, orange */
       let showNc = true;
       function setShowNc(v) {
         showNc = !!v;
@@ -4548,8 +4548,8 @@
                 (mid != null ? mid : k15[k15.length - 1].c) / P.step,
               );
             }
-            const exp = showMass || showPerf || showNc
-              ? expOf(P, sp, vf) : new Map();
+            const exp = showMass || showPerf ? expOf(P, sp, vf)
+              : new Map();
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
@@ -4615,10 +4615,14 @@
               }
               if (showPerf)
                 perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
-              /* NC: the VP's own normal curve (time, in bricks)
-                 over it, orange: time against real volume */
-              if (showNc)
-                perfLine(P, exp, cx0, (e) => e * lw, "#ff6d00");
+              /* NC: the real TPO profile (time: periods per row)
+                 in volume, a brick = kv, orange: bricks past it
+                 got more volume than their time, short less */
+              if (showNc) {
+                const tp = new Map();
+                P.rows.forEach((l, r) => tp.set(r, l.length));
+                perfLine(P, tp, cx0, (e) => e * kv * vs, "#ff6d00");
+              }
               /* VBT too: its vipocs and YB (they went with it) */
               drawPs(P, sp, cx0);
               drawYB(P, cx0, rowH);
