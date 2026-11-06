@@ -442,7 +442,7 @@
               </button>
               <button
                 id="vbTog"
-                class="a"
+                class=""
                 title="Profile bricks as wide as their traded volume"
               >
                 VB
@@ -1203,7 +1203,7 @@
         /* USDT button: VAP, V95 and VB from BTCUSDT */
         useUsdt = false,
         /* VB button: profile bricks by volume */
-        showVw = true;
+        showVw = false;
       function setShowVw(v) {
         showVw = !!v;
         $("vbTog").className = showVw ? "a" : "";
@@ -4065,7 +4065,17 @@
                 ud = o[o.length - 1] < ref ? "#000" : "#089981";
             }
             P.ud = ud;
-            for (let r = P.a; r <= P.b; r++) {
+            /* VB on: each brick as wide as the volume traded in
+               it (its row, its period), the widest row filling
+               the column, nothing else of the profile; classic
+               until trades load */
+            if (showVw) {
+              loadAggr(P.dS);
+              if (useUsdt) loadUsdt(P.dS);
+            }
+            const vw = showVw ? vwOf(P.dS, P.step) : null,
+              vs = vw && vw.mx ? (colW - 2) / vw.mx : 0;
+            for (let r = P.a; r <= P.b && !vs; r++) {
               if (!showVA && r !== P.poc) continue;
               g.fillStyle =
                 r === P.poc
@@ -4157,15 +4167,6 @@
                     ncdf((r * P.step - S.px) / sg)));
               });
             }
-            /* VB on: each brick as wide as the volume traded in
-               it (its row, its period), the widest row filling
-               the column; classic widths until trades load */
-            if (showVw) {
-              loadAggr(P.dS);
-              if (useUsdt) loadUsdt(P.dS);
-            }
-            const vw = showVw ? vwOf(P.dS, P.step) : null,
-              vs = vw && vw.mx ? (colW - 2) / vw.mx : 0;
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
@@ -4193,12 +4194,14 @@
                 g.fillRect(bx, yT + 0.5, bw, bh);
                 /* Mass: a brick the perfect mass has, faded; the
                    extra ones keep their colour */
-                if (!showMass || k >= Math.round(exp.get(r) || 0))
+                if (vs || !showMass ||
+                  k >= Math.round(exp.get(r) || 0))
                   return;
                 g.fillStyle = "rgba(255,255,255,.7)";
                 g.fillRect(bx, yT + 0.5, bw, bh);
               });
             });
+            if (vs) continue;
             /* Mass: the perfect bricks the profile lacks, empty
                black squares; per row real - perfect as a strip
                left of the profile, green extra, red missing */
@@ -8158,7 +8161,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 29;
+      const DEFAULTS_VER = 30;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -8320,7 +8323,7 @@
         if (st.dv >= 27 && typeof st.showVap === "boolean")
           setShowVap(st.showVap);
         if (typeof st.useUsdt === "boolean") setUseUsdt(st.useUsdt);
-        if (st.dv >= 29 && typeof st.showVw === "boolean")
+        if (st.dv >= 30 && typeof st.showVw === "boolean")
           setShowVw(st.showVw);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
         if (typeof st.showDO === "boolean") setShowDO(st.showDO);
