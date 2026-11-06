@@ -837,8 +837,7 @@
       const SUB_K = 5;
       function subPocs(dS, ps, vol, fine) {
         if (!ps.length) return [];
-        const start = SUB_K * vol,
-          z = ps[ps.length - 1],
+        const z = ps[ps.length - 1],
           key = [dS, ps.length, z.h, z.l, vol, fine];
         if (subCache.has(key.join())) return subCache.get(key.join());
         let lo = Infinity,
@@ -847,16 +846,27 @@
           lo = Math.min(lo, q.l);
           hi = Math.max(hi, q.h);
         });
-        const rg = hi - lo,
-          pocs = [];
-        for (let s = start; s >= fine; s *= 0.95) {
-          /* TPO count per row, rows anchored on the day low */
+        /* TPO count per row, rows anchored on the day low */
+        const pocs = pocsBy(lo, hi, vol, fine, (s) => {
           const c = [];
           ps.forEach((q) => {
             const a = Math.floor((q.l - lo) / s),
               b = Math.floor((q.h - lo) / s);
             for (let r = a; r <= b; r++) c[r] = (c[r] || 0) + 1;
           });
+          return c;
+        });
+        if (subCache.size > 300) subCache.clear();
+        subCache.set(key.join(), pocs);
+        return pocs;
+      }
+      /* the shrinking brick, from SUB_K x vol down to fine:
+         cnt(s) = the count per row of size s from lo */
+      function pocsBy(lo, hi, vol, fine, cnt) {
+        const rg = hi - lo,
+          pocs = [];
+        for (let s = SUB_K * vol; s >= fine; s *= 0.95) {
+          const c = cnt(s);
           for (let r = 0; r < c.length; r++) c[r] = c[r] || 0;
           const pk = peaks(c),
             top = Math.max(...pk.map((p) => p[1])),
@@ -895,8 +905,6 @@
           });
           if (s >= vol) pocs.forEach((P) => (P.at = P.px));
         }
-        if (subCache.size > 300) subCache.clear();
-        subCache.set(key.join(), pocs);
         return pocs;
       }
       /*
@@ -1418,9 +1426,14 @@
          size st from its seconds before t (on FDUSD prices,
          split by overlap); one cursor a day, rebuilt when t
          goes back; null until those seconds are loaded */
-      const zCur = new Map(),
+      /* the IC's last volume ipoc per day, for its hysteresis */
+      const volHys = new Map(),
+        zCur = new Map(),
+        /* the P's own cursor: volume up to the last 30m close */
+        pCur = new Map(),
+        vpC = new Map(),
         kvC = new Map();
-      function zoneVol(dS, t, st) {
+      function zoneVol(dS, t, st, cur = zCur) {
         const u = usdtOf(dS),
           d = usdtK.get(dS);
         if (!u || !d) return null;
@@ -1428,15 +1441,18 @@
           last = u.n ? a[u.n - 1][0] : -Infinity;
         if (last < Math.min(t, nextDay(dS)) - 2000 && !d.end)
           return null;
-        let v = zCur.get(dS);
+        let v = cur.get(dS);
         if (!v || v.st !== st || v.t > t)
-          zCur.set(dS, (v = { st, n: 0, t, rows: new Map() }));
+          cur.set(dS,
+            (v = { st, n: 0, t, rows: new Map(), tw: new Map() }));
         for (; v.n < u.n && a[v.n][0] < t; v.n++) {
           const e = u.rt[v.n],
-            [, h, l, , q] = a[v.n];
+            [tt, h, l, , q] = a[v.n];
           if (e != null)
-            spread(l * e, h * e, st, (r, k) =>
-              v.rows.set(r, (v.rows.get(r) || 0) + q * k));
+            spread(l * e, h * e, st, (r, k) => {
+              v.rows.set(r, (v.rows.get(r) || 0) + q * k);
+              v.tw.set(r, (v.tw.get(r) || 0) + q * k * tt);
+            });
         }
         v.t = t;
         return v;
@@ -4021,6 +4037,41 @@
             kvC.set(kk, kn ? ksum / kn : 0);
             return kvC.get(kk);
           };
+          /* the ipoc on volume: the shrinking brick on the
+             day's USDT volume so far (rows of step), its latest
+             P by age (volume-weighted time of the trades within
+             half a vol), on its row's middle; the P nearest
+             the last ipoc (within vol) stays unless another is
+             30 min newer */
+          const volPoc = (zv, vf, step, pv) => {
+            const rs = [...zv.rows.keys()];
+            if (!rs.length) return null;
+            const lo = Math.min(...rs) * step,
+              hi = (Math.max(...rs) + 1) * step,
+              h = Math.round(vf / step / 2),
+              ps = pocsBy(lo, hi, vf, step, (s) => {
+                const c = [];
+                zv.rows.forEach((q, r) => {
+                  const i = Math.floor(((r + 0.5) * step - lo) / s);
+                  c[i] = (c[i] || 0) + q;
+                });
+                return c;
+              }),
+              age = (P) => {
+                const r0 = Math.floor(P.px / step);
+                let q = 0, qt = 0;
+                for (let r = r0 - h; r <= r0 + h; r++)
+                  (q += zv.rows.get(r) || 0), (qt += zv.tw.get(r) || 0);
+                return q ? qt / q : -Infinity;
+              };
+            if (!ps.length) return null;
+            const B = ps.reduce((a, b) => (age(b) >= age(a) ? b : a)),
+              C = pv == null ? null : ps.reduce((a, b) =>
+                Math.abs(b.px - pv) < Math.abs(a.px - pv) ? b : a),
+              P = C && Math.abs(C.px - pv) < vf &&
+                age(B) - age(C) < 18e5 ? C : B;
+            return { px: (Math.floor(P.px / step) + 0.5) * step };
+          };
           const icFor = (t) => {
             let dS = dayOf(t),
               cut = Math.floor(t / 9e5) * 9e5,
@@ -4035,8 +4086,11 @@
               /* zone from USDT volume (TPO bricks while loading) */
               kv = kvFor(dS, "BTCUSDT"),
               zv = kv ? zoneVol(dS, te, step) : null,
-              key = ["ic", dS, cut, vf, step, x, zv ? te : 0, kv]
-                .join();
+              /* P's on volume only at each 30m close (as TPO) */
+              tp = Math.floor(te / TPO_MS) * TPO_MS,
+              pz = zv && tp > dS ? zoneVol(dS, tp, step, pCur) : null,
+              key = ["ic", dS, cut, vf, step, x, zv ? te : 0, kv,
+                pz ? tp : 0].join();
             if (stFz.has(key)) return stFz.get(key);
             const per = new Map(),
               rows = new Map(),
@@ -4069,7 +4123,18 @@
             const sps = ps.length ? subPocs(dS, ps, vf, step) : [];
             /* IC: the latest ipoc, its normal curve's edges (rows
                where its vol mass still gives a brick) */
-            const S = byAge({ rows, step }, sps).pop();
+            const hp = volHys.get(dS),
+              pp = hp && hp.t < tp ? hp.px : null,
+              pk = [dS, tp, step, vf, pp].join();
+            /* one search per 30m close */
+            if (pz && pz.rows.size && !vpC.has(pk)) {
+              if (vpC.size > 500) vpC.clear();
+              vpC.set(pk, volPoc(pz, vf, step, pp));
+            }
+            const S = (pz && vpC.get(pk)) ||
+              byAge({ rows, step }, sps).pop();
+            if (pz && S && (!hp || hp.t < tp))
+              volHys.set(dS, { t: tp, px: S.px });
             if (S) {
               const sg = vf / 1.2816,
                 z = (r) => ncdf((r * step - S.px) / sg),
