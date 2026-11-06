@@ -443,7 +443,7 @@
               <button
                 id="ncTog"
                 class="a"
-                title="VBT: the TPO profile (time) over it, in volume"
+                title="VBT: the normal curves from the TPO, in volume"
               >
                 NC
               </button>
@@ -1251,7 +1251,7 @@
         $("vbTog").className = showVw ? "a" : "";
         schedule();
       }
-      /* NC button: the TPO profile over the VBT, orange */
+      /* NC button: the TPO normal curves over the VBT */
       let showNc = true;
       function setShowNc(v) {
         showNc = !!v;
@@ -4615,14 +4615,11 @@
               }
               if (showPerf)
                 perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
-              /* NC: the real TPO profile (time: periods per row)
-                 in volume, a brick = kv, orange: bricks past it
-                 got more volume than their time, short less */
-              if (showNc) {
-                const tp = new Map();
-                P.rows.forEach((l, r) => tp.set(r, l.length));
-                perfLine(P, tp, cx0, (e) => e * kv * vs, "#ff6d00");
-              }
+              /* NC: the same normal curves round the TPO sub POCs
+                 (time) instead of the vipocs, in volume, orange */
+              if (showNc)
+                perfLine(P, expOf(P, subPocs(P.dS, P.ps, vf, P.step,
+                  1), vf), cx0, (e) => e * kv * vs, "#ff6d00");
               /* VBT too: its vipocs and YB (they went with it) */
               drawPs(P, sp, cx0);
               drawYB(P, cx0, rowH);
