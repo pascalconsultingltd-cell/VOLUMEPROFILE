@@ -441,9 +441,16 @@
                 VAP
               </button>
               <button
+                id="vbTog"
+                class=""
+                title="Profile bricks as wide as their traded volume"
+              >
+                VB
+              </button>
+              <button
                 id="usdtTog"
                 class=""
-                title="VAP and V95 from BTCUSDT (1s), FDUSD prices"
+                title="VAP, V95, VB from BTCUSDT (1s), FDUSD prices"
               >
                 USDT
               </button>
@@ -1193,8 +1200,15 @@
       }
       /* VAP button: volume at price instead of the profiles */
       let showVap = false,
-        /* USDT button: VAP and V95 from BTCUSDT */
-        useUsdt = false;
+        /* USDT button: VAP, V95 and VB from BTCUSDT */
+        useUsdt = false,
+        /* VB button: profile bricks by volume */
+        showVw = false;
+      function setShowVw(v) {
+        showVw = !!v;
+        $("vbTog").className = showVw ? "a" : "";
+        schedule();
+      }
       function setUseUsdt(v) {
         useUsdt = !!v;
         $("usdtTog").className = useUsdt ? "a" : "";
@@ -1373,6 +1387,43 @@
           if (w > v.mx) (v.mx = w), (v.poc = r);
         }
         return v;
+      }
+      /* VB: a day's volume per profile brick, "row|period" ->
+         volume, from FDUSD trades or USDT seconds (USDT
+         button); null until loaded */
+      const vwC = new Map();
+      function vwOf(dS, st) {
+        const u = useUsdt ? usdtOf(dS) : null,
+          d = aggrT.get(dS);
+        if (useUsdt ? !u : !d || !d.tr.length) return null;
+        const n = useUsdt ? u.n : d.tr.length,
+          key = [dS, st, useUsdt, n].join();
+        if (vwC.has(key)) return vwC.get(key);
+        const m = new Map();
+        let mx = 0;
+        const add = (t, p, q) => {
+          const k = Math.floor(p / st) + "|" +
+              Math.floor((t - dS) / TPO_MS),
+            w = (m.get(k) || 0) + q;
+          m.set(k, w);
+        };
+        if (useUsdt) {
+          const a = usdtK.get(dS).k;
+          for (let i = 0; i < n; i++)
+            if (u.px[i] != null) add(a[i][0], u.px[i], a[i][4]);
+        } else d.tr.forEach(([t, p, q]) => add(t, p, q));
+        /* the widest row's volume, for the scale */
+        const rw = new Map();
+        m.forEach((w, k) => {
+          const r = k.split("|")[0],
+            x = (rw.get(r) || 0) + w;
+          rw.set(r, x);
+          if (x > mx) mx = x;
+        });
+        m.mx = mx;
+        if (vwC.size > 50) vwC.clear();
+        vwC.set(key, m);
+        return m;
       }
       /*
        * Aggression point & figure (P&F button, in the DPoc
@@ -4106,14 +4157,27 @@
                     ncdf((r * P.step - S.px) / sg)));
               });
             }
+            /* VB on: each brick as wide as the volume traded in
+               it (its row, its period), the widest row filling
+               the column; classic widths until trades load */
+            if (showVw) {
+              loadAggr(P.dS);
+              if (useUsdt) loadUsdt(P.dS);
+            }
+            const vw = showVw ? vwOf(P.dS, P.step) : null,
+              vs = vw && vw.mx ? (colW - 2) / vw.mx : 0;
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
+              let xv = cx0;
               lst.forEach((idx, k) => {
+                const wv = vs ? (vw.get(r + "|" + idx) || 0) * vs : 0,
+                  bx = vs ? xv : cx0 + k * lw;
+                xv += wv;
                 /* today's latest brick (current period, price
                    row): marked once every brick is drawn */
                 if (r === rNow && idx === iNow)
-                  curB = [cx0 + k * lw + lw / 2, yT + rowH / 2];
+                  curB = [bx + (vs ? wv : lw) / 2, yT + rowH / 2];
                 g.fillStyle = showUD && ud
                   ? ud
                   : stCol && shut(idx)
@@ -4123,15 +4187,16 @@
                         ),
                       ) || SGREY
                     : tpoColor(idx, 0.72);
-                const bw = Math.max(1, lw - 1),
+                const bw = vs ? Math.max(0.5, wv - 0.5)
+                    : Math.max(1, lw - 1),
                   bh = Math.max(1, rowH - 1);
-                g.fillRect(cx0 + k * lw, yT + 0.5, bw, bh);
+                g.fillRect(bx, yT + 0.5, bw, bh);
                 /* Mass: a brick the perfect mass has, faded; the
                    extra ones keep their colour */
                 if (!showMass || k >= Math.round(exp.get(r) || 0))
                   return;
                 g.fillStyle = "rgba(255,255,255,.7)";
-                g.fillRect(cx0 + k * lw, yT + 0.5, bw, bh);
+                g.fillRect(bx, yT + 0.5, bw, bh);
               });
             });
             /* Mass: the perfect bricks the profile lacks, empty
@@ -8127,6 +8192,7 @@
           showYB,
           showVap,
           useUsdt,
+          showVw,
           showSO,
           showDO,
           showCZ,
@@ -8248,6 +8314,7 @@
         if (st.dv >= 27 && typeof st.showVap === "boolean")
           setShowVap(st.showVap);
         if (typeof st.useUsdt === "boolean") setUseUsdt(st.useUsdt);
+        if (typeof st.showVw === "boolean") setShowVw(st.showVw);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
         if (typeof st.showDO === "boolean") setShowDO(st.showDO);
         if (typeof st.showCZ === "boolean") setShowCZ(st.showCZ);
@@ -8469,6 +8536,7 @@
       $("ybTog").onclick = () => setShowYB(!showYB);
       $("vapTog").onclick = () => setShowVap(!showVap);
       $("usdtTog").onclick = () => setUseUsdt(!useUsdt);
+      $("vbTog").onclick = () => setShowVw(!showVw);
       $("soTog").onclick = () => setShowSO(!showSO);
       $("doTog").onclick = () => setShowDO(!showDO);
       $("czTog").onclick = () => setShowCZ(!showCZ);
