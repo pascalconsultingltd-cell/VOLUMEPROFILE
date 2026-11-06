@@ -1744,10 +1744,44 @@
           if (cv[k] > top(cv, k)) dot.add(k);
         /* exc: excitement, each flip adds 1 and it halves every
            30s; kept as its rank (0..1) in the BIG_WIN before it,
-           smoothed over about 7 columns */
+           smoothed over about 7 columns. USDT: its own flips
+           (seconds grouped into visits to a box, side by taker
+           volume, as pfCols), read at each column's start */
+        let uf = null;
+        if (useUsdt && uv.length && uv.every(Boolean)) {
+          uf = [];
+          let b = null, up = null, buy = 0, vo = 0, t1 = 0;
+          const fin = () => {
+            if (b == null || 2 * buy >= vo === up) return;
+            up = 2 * buy >= vo;
+            uf.push(t1);
+          };
+          ud.forEach((dS, i) => {
+            const v = uv[i],
+              a = usdtK.get(dS).k,
+              s2 = pfStep(dS);
+            for (let n = 0; n < v.n; n++) {
+              if (v.px[n] == null) continue;
+              const r = Math.floor(v.px[n] / s2);
+              if (r !== b)
+                fin(), (b = r), (t1 = a[n][0]), (buy = vo = 0);
+              buy += a[n][5];
+              vo += a[n][4];
+            }
+          });
+          fin();
+        }
         let e = 0,
-          s = 0;
+          s = 0,
+          j = 0,
+          tl = -Infinity;
         const ex = all.map((c, k) => {
+            if (uf) {
+              for (; j < uf.length && uf[j] <= c.t0; j++)
+                (e = 1 + e * 0.5 ** ((uf[j] - tl) / 3e4)),
+                  (tl = uf[j]);
+              return e * 0.5 ** ((c.t0 - tl) / 3e4);
+            }
             const h = k ? (c.t0 - all[k - 1].t0) / 3e4 : 1 / 0;
             return (e = 1 + e * 0.5 ** h);
           }),
