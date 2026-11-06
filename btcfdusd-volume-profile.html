@@ -582,7 +582,7 @@
               ><button
                 id="pfRlTog"
                 class=""
-                title="IC: the row missing most of its bricks"
+                title="IC: each wing's red shoulder (volume)"
               >
                 Gap
               </button
@@ -4243,28 +4243,39 @@
                  loads), at its weighted middle; isolated rows far
                  away are noise */
               let cs = 0, cw = 0, gs = 0, gw = 0;
-              /* and the row missing the biggest share of what it
-                 expects, 3+ bricks (red); ties: the middle of the
-                 tallest run of them */
-              let top = 0,
-                run = 0,
-                best = 0;
+              const dzs = [];
               for (let r = a; r <= b; r++) {
                 const e = sps.reduce((x, Q) => x + VOL_MASS * (
                     ncdf(((r + 1) * step - Q.px) / sg) -
                     ncdf((r * step - Q.px) / sg)), 0),
                   E = Math.round(e),
-                  d = (rows.get(r) || []).length - E,
-                  g = E >= 3 ? -d / E : 0;
+                  d = (rows.get(r) || []).length - E;
                 const dz = zv ? (zv.rows.get(r) || 0) / kv - e : d;
+                dzs.push(dz);
                 if (dz > 0) (cs += dz * (r + 0.5) * step), (cw += dz);
                 else cs = cw = 0;
                 if (cw > gw) (gs = cs), (gw = cw);
-                if (g > top) (top = g), (best = run = 0);
-                run = g === top && top > 0 ? run + 1 : 0;
-                if (run > best)
-                  (best = run), (m.rl = (r + 1 - run / 2) * step);
               }
+              /* red shoulders: per wing (above / below the ipoc
+                 row), the run of 2+ rows missing the most vs the
+                 perfect mass; [bottom, top, missing] */
+              const ip = Math.floor(S.px / step),
+                sh = [];
+              let ds = 0,
+                r0 = a;
+              for (let r = a; r <= b + 1; r++) {
+                const dz = r <= b && r !== ip ? dzs[r - a] : 0;
+                if (dz < 0) {
+                  if (!ds) r0 = r;
+                  ds -= dz;
+                  continue;
+                }
+                const k = +(r0 < ip);
+                if (ds && r - r0 >= 2 && ds > (sh[k] ? sh[k][2] : 0))
+                  sh[k] = [r0 * step, r * step, ds];
+                ds = 0;
+              }
+              if (sh[0] || sh[1]) m.sh = sh;
               /* middle, half height, its extra bricks */
               if (gw) m.gl = [gs / gw, 1.5 * step, gw];
             }
@@ -6077,7 +6088,7 @@
                   [m.ic[0], ...bd[k0 + k].slice(0, 2),
                     ...m.ic.slice(3)],
                   /* no zone in an excursion */
-                  !bd[k0 + k][3] && m.gl, m.rl, bd[k0 + k][2],
+                  !bd[k0 + k][3] && m.gl, m.sh, bd[k0 + k][2],
                   bd[k0 + k][4], bd[k0 + k][5]];
               });
               g.fillStyle = "rgba(41,98,255,.07)";
@@ -6120,20 +6131,23 @@
                 g.fillRect(q[0] - sl / 2, Y(c + h), sl + 0.5,
                   Y(c - h) - Y(c + h));
               });
-              /* red: the biggest missing zone's middle */
+              /* Gap: each wing's red shoulder (volume), its edges */
               if (pfRl) {
                 g.strokeStyle = "#e53935";
-                g.lineWidth = 1.5;
-                g.beginPath();
-                let on = false;
-                pts.forEach((q) => {
-                  if (!q || q[3] == null) return (on = false);
-                  const y = Y(q[3]);
-                  g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
-                  g.lineTo(q[0] + sl / 2, y);
-                  on = true;
-                });
-                g.stroke();
+                g.lineWidth = 1;
+                [0, 1].forEach((w) => [0, 1].forEach((j) => {
+                  g.beginPath();
+                  let on = false;
+                  pts.forEach((q) => {
+                    const v = q && q[3] && q[3][w];
+                    if (!v) return (on = false);
+                    const y = Y(v[j]);
+                    g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
+                    g.lineTo(q[0] + sl / 2, y);
+                    on = true;
+                  });
+                  g.stroke();
+                }));
               }
               /* bias: at the last price as the column starts */
               if (pfBs) pts.forEach((q, k) => {
