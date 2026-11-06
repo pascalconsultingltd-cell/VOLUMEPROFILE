@@ -3411,12 +3411,22 @@
           draw();
         }
         addEventListener("resize", size);
+        /* a slow draw (loading, nothing cached yet) waits as
+           long as it took, so the page keeps half its time */
+        let dEnd = 0, dDur = 0;
         function sched() {
-          if (!raf)
-            raf = requestAnimationFrame(() => {
-              raf = 0;
-              draw();
-            });
+          if (raf) return;
+          const w = dDur > 100 ? dEnd + dDur - performance.now() : 0;
+          raf = w > 0 ? setTimeout(() =>
+            (raf = requestAnimationFrame(go)), w)
+            : requestAnimationFrame(go);
+        }
+        function go() {
+          raf = 0;
+          const t = performance.now();
+          draw();
+          dEnd = performance.now();
+          dDur = dEnd - t;
         }
         function nice(x) {
           const e = Math.pow(10, Math.floor(Math.log10(x))),
