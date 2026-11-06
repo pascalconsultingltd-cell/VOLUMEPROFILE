@@ -442,14 +442,14 @@
               </button>
               <button
                 id="vbTog"
-                class=""
+                class="a"
                 title="Profile bricks as wide as their traded volume"
               >
                 VBT
               </button>
               <button
                 id="usdtTog"
-                class=""
+                class="a"
                 title="VAP, V95, VBT from BTCUSDT (1s), FDUSD prices"
               >
                 USDT
@@ -1201,9 +1201,9 @@
       /* VAP button: volume at price instead of the profiles */
       let showVap = false,
         /* USDT button: VAP, V95 and VBT from BTCUSDT */
-        useUsdt = false,
+        useUsdt = true,
         /* VBT button (volume brick time): bricks by volume */
-        showVw = false;
+        showVw = true;
       function setShowVw(v) {
         showVw = !!v;
         $("vbTog").className = showVw ? "a" : "";
@@ -8361,7 +8361,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 30;
+      const DEFAULTS_VER = 31;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -8522,8 +8522,9 @@
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
         if (st.dv >= 27 && typeof st.showVap === "boolean")
           setShowVap(st.showVap);
-        if (typeof st.useUsdt === "boolean") setUseUsdt(st.useUsdt);
-        if (st.dv >= 30 && typeof st.showVw === "boolean")
+        if (st.dv >= 31 && typeof st.useUsdt === "boolean")
+          setUseUsdt(st.useUsdt);
+        if (st.dv >= 31 && typeof st.showVw === "boolean")
           setShowVw(st.showVw);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
         if (typeof st.showDO === "boolean") setShowDO(st.showDO);
