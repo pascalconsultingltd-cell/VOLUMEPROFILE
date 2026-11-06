@@ -4487,6 +4487,8 @@
             if (vs) {
               const kv = kvFor(P.dS, useUsdt ? "BTCUSDT" : SYM);
               if (showMass) {
+                g.strokeStyle = "#000";
+                g.lineWidth = 1;
                 const rs = new Set([...exp.keys(), ...vw.rw.keys()]);
                 rs.forEach((r) => {
                   const d = (vw.rw.get(r) || 0) -
@@ -4498,6 +4500,12 @@
                   const dw = (Math.abs(d) * vs) / 2;
                   g.fillRect(cx0 - 2 - dw, yT + 0.5, dw,
                     Math.max(1, rowH - 1));
+                  /* the volume the row lacks: an empty black box
+                     from its bricks to the curve */
+                  if (d < 0)
+                    g.strokeRect(cx0 + (vw.rw.get(r) || 0) * vs + 0.5,
+                      yT + 1, Math.max(1, -d * vs - 1),
+                      Math.max(1, rowH - 2));
                 });
               }
               const ks = [...exp.keys()]
