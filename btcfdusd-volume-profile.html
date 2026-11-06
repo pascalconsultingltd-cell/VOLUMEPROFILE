@@ -1425,15 +1425,17 @@
           }
         } else
           d.tr.forEach(([t, p, q]) => add(t, Math.floor(p / st), q));
-        /* the widest row's volume, for the scale */
+        /* each row's volume, the widest (scale), the total */
         const rw = new Map();
+        let tot = 0;
         m.forEach((w, k) => {
-          const r = k.split("|")[0],
+          const r = +k.split("|")[0],
             x = (rw.get(r) || 0) + w;
           rw.set(r, x);
+          tot += w;
           if (x > mx) mx = x;
         });
-        m.mx = mx;
+        Object.assign(m, { mx, rw, tot });
         if (vwC.size > 50) vwC.clear();
         vwC.set(key, m);
         return m;
@@ -4214,7 +4216,48 @@
                 g.fillRect(bx, yT + 0.5, bw, bh);
               });
             });
-            if (vs) continue;
+            /* VBT: the perfect curve in volume, a brick's worth =
+               the day's volume / its bricks; Perf: its step line,
+               Mass: real - perfect per row, a strip on the left,
+               green extra, red missing */
+            if (vs) {
+              let nb = 0;
+              P.rows.forEach((l) => (nb += l.length));
+              const kv = nb ? vw.tot / nb : 0;
+              if (showMass) {
+                const rs = new Set([...exp.keys(), ...vw.rw.keys()]);
+                rs.forEach((r) => {
+                  const d = (vw.rw.get(r) || 0) -
+                      (exp.get(r) || 0) * kv,
+                    yT = Y((r + 1) * P.step);
+                  if (Math.abs(d * vs) < 0.5 || yT > bot ||
+                    yT + rowH < top) return;
+                  g.fillStyle = d > 0 ? "#089981" : "#e53935";
+                  const dw = (Math.abs(d) * vs) / 2;
+                  g.fillRect(cx0 - 2 - dw, yT + 0.5, dw,
+                    Math.max(1, rowH - 1));
+                });
+              }
+              const ks = [...exp.keys()]
+                .filter((r) => Math.round(exp.get(r)) >= 1)
+                .sort((a, b) => b - a);
+              if (showPerf && ks.length) {
+                g.save();
+                g.strokeStyle = "#000";
+                g.lineWidth = 1.5;
+                g.beginPath();
+                g.moveTo(cx0, Y((ks[0] + 1) * P.step));
+                ks.forEach((r) => {
+                  const x = cx0 + exp.get(r) * kv * vs;
+                  g.lineTo(x, Y((r + 1) * P.step));
+                  g.lineTo(x, Y(r * P.step));
+                });
+                g.lineTo(cx0, Y(ks[ks.length - 1] * P.step));
+                g.stroke();
+                g.restore();
+              }
+              continue;
+            }
             /* Mass: the perfect bricks the profile lacks, empty
                black squares; per row real - perfect as a strip
                left of the profile, green extra, red missing */
