@@ -1781,11 +1781,35 @@
       /*
        * A day's vol, as vol() in imports.py / 2: the height of
        * the last 5 clean slow regimes of the 20 finished days
-       * before it, from its 30m bars { h, l }; NaN when none.
-       * Past candles do not change, so it is kept per day.
+       * before it. Regimes from its 30m bars { i, h, l } (i =
+       * half hours from a0), their profiles from BTCUSDT 1m
+       * volume (usdtM), each minute split over its rows by
+       * overlap, on USDT's own prices (only the height counts);
+       * fit and bump checked on the profile smoothed over 5
+       * rows. NaN when none. Kept per day (past data).
        */
-      function volFromBars(b) {
+      const conv = (a, w) => {
+        /* numpy convolve(a, ones(w) / w, "same") */
+        const f = new Array(a.length + w - 1).fill(0);
+        a.forEach((v, r) => {
+          for (let k = 0; k < w; k++) f[r + k] += v / w;
+        });
+        const n = Math.max(a.length, w),
+          s = (f.length - n) >> 1;
+        return f.slice(s, s + n);
+      };
+      function volFromBars(b, a0) {
         const ROW = 50,
+          M = usdtM,
+          lb = (t) => {
+            let x = 0, y = M.length;
+            while (x < y) {
+              const m = (x + y) >> 1;
+              if (M[m][0] < t) x = m + 1;
+              else y = m;
+            }
+            return x;
+          },
           sz = b.map((q) => q.h - q.l),
           so = [...sz].sort((x, y) => x - y),
           m = so.length >> 1,
@@ -1798,22 +1822,35 @@
           }),
           hs = [];
         const regime = (g) => {
-          const lo = Math.min(
-              ...g.map((q) => Math.floor(q.l / ROW)),
-            ),
-            hi = Math.max(
-              ...g.map((q) => Math.floor(q.h / ROW)),
-            ),
-            n = hi - lo + 1,
-            c = new Array(n).fill(0);
-          g.forEach((q) => {
-            const a = Math.floor(q.l / ROW) - lo,
-              z = Math.floor(q.h / ROW) - lo;
-            for (let r = a; r <= z; r++) c[r]++;
-          });
+          /* time squares only drop the short regimes */
+          let sq = 0;
+          g.forEach((q) => (sq += Math.floor(q.h / ROW) -
+            Math.floor(q.l / ROW) + 1));
+          if (sq < 80) return;
+          const i0 = lb(a0 + g[0].i * 18e5),
+            i1 = lb(a0 + (g[g.length - 1].i + 1) * 18e5);
+          if (i1 <= i0) return;
+          let lo = Infinity, hi = -Infinity;
+          for (let k = i0; k < i1; k++)
+            (lo = Math.min(lo, Math.floor(M[k][2] / ROW))),
+              (hi = Math.max(hi, Math.floor(M[k][1] / ROW)));
+          const c = new Array(hi - lo + 1).fill(0),
+            n = c.length;
+          for (let k = i0; k < i1; k++) {
+            const [, h, l, q] = M[k],
+              a = Math.floor(l / ROW) - lo,
+              z = Math.floor(h / ROW) - lo;
+            if (h - l < 1e-9 || a === z) {
+              c[a] += q;
+              continue;
+            }
+            for (let r = a; r <= z; r++)
+              c[r] += (q * (Math.min(h, (r + lo + 1) * ROW) -
+                Math.max(l, (r + lo) * ROW))) / (h - l);
+          }
           const sum = c.reduce((x, y) => x + y, 0);
-          if (sum < 80) return;
-          /* band: the fewest rows holding 80% of the squares */
+          if (!sum) return;
+          /* band: the fewest rows holding 80% of the volume */
           const tot = [0];
           c.forEach((v) => tot.push(tot[tot.length - 1] + v));
           let rows = n + 1;
@@ -1823,14 +1860,16 @@
             while (j <= n && tot[j] < want) j++;
             if (j <= n) rows = Math.min(rows, j - i);
           }
-          /* fit: the squares where a normal curve puts them */
-          const sh = c.map((v) => v / sum),
+          /* fit: the volume where a normal curve puts it */
+          const c5 = conv(c, 5),
+            s5 = c5.reduce((x, y) => x + y, 0),
+            sh = c5.map((v) => v / s5),
             mean = sh.reduce((x, v, r) => x + v * r, 0),
             vr = sh.reduce(
               (x, v, r) => x + v * (r - mean) ** 2,
               0,
             ),
-            nm = c.map((_, r) =>
+            nm = sh.map((_, r) =>
               Math.exp(-((r - mean) ** 2) / (2 * vr)),
             ),
             nt = nm.reduce((x, y) => x + y, 0),
@@ -1839,20 +1878,15 @@
               0,
             );
           /* dip: the deepest valley, as a share of the peak */
-          const full = new Array(n + 2).fill(0);
-          c.forEach((v, r) => {
-            for (let k = 0; k < 3; k++) full[r + k] += v / 3;
-          });
-          const m3 = Math.max(n, 3),
-            st0 = (n + 2 - m3) >> 1,
-            sm = full.slice(st0, st0 + m3),
+          const sm = conv(c5, 3),
             lf = [],
-            rt = [];
+            rt = [],
+            L = sm.length;
           sm.forEach((v, i) => {
             lf[i] = Math.max(v, i ? lf[i - 1] : v);
           });
-          for (let i = m3 - 1; i >= 0; i--)
-            rt[i] = Math.max(sm[i], i < m3 - 1 ? rt[i + 1] : sm[i]);
+          for (let i = L - 1; i >= 0; i--)
+            rt[i] = Math.max(sm[i], i < L - 1 ? rt[i + 1] : sm[i]);
           const dip =
             Math.max(
               ...sm.map((v, i) => Math.min(lf[i], rt[i]) - v),
@@ -1873,12 +1907,51 @@
           ? l.reduce((x, y) => x + y, 0) / l.length / 2
           : NaN;
       }
+      /* BTCUSDT 1m candles [time, high, low, volume] from the
+         first 15m candle loaded, for the vol; topped up each
+         minute */
+      let usdtM = [],
+        usdtMBusy = false,
+        usdtMAt = 0;
+      async function loadUsdtM() {
+        if (usdtMBusy || !k15.length) return;
+        if (usdtM.length && k15[0].t < usdtM[0][0]) usdtM = [];
+        if (Date.now() - usdtMAt < 60000 && usdtM.length) return;
+        usdtMBusy = true;
+        try {
+          for (let n = 0; n < 150; n++) {
+            const z = usdtM[usdtM.length - 1],
+              from = z ? z[0] + 60000 : k15[0].t;
+            if (from > Date.now() - 60000) break;
+            const u = "/api/v3/klines?symbol=BTCUSDT&interval=1m" +
+              "&limit=1000&startTime=" + from;
+            let j = null;
+            for (const h of REST) {
+              try {
+                j = await fj(h + u);
+                if (Array.isArray(j)) break;
+              } catch (e) {}
+            }
+            if (!Array.isArray(j) || !j.length) break;
+            j.forEach((a) => usdtM.push([a[0], +a[2], +a[3], +a[5]]));
+            if (j.length < 1000) break;
+          }
+        } finally {
+          usdtMAt = Date.now();
+          usdtMBusy = false;
+          schedule();
+        }
+      }
       const volDays = new Map();
-      /* 0 until the 20 days before it are loaded, or if none */
+      /* 0 until the 20 days before it are loaded (15m and USDT
+         1m), or if none */
       function volOfDay(dS) {
         if (volDays.has(dS)) return volDays.get(dS);
         const a = dS - 20 * 86400000;
         if (!k15.length || k15[0].t > a) return 0;
+        const z = usdtM[usdtM.length - 1];
+        if (!usdtM.length || usdtM[0][0] > a || z[0] < dS - 60000)
+          return loadUsdtM(), 0;
         const per = new Map();
         k15.forEach((c) => {
           if (c.t < a || c.t >= dS) return;
@@ -1891,7 +1964,7 @@
           }
         });
         const v = volFromBars(
-          [...per.values()].sort((x, y) => x.i - y.i),
+          [...per.values()].sort((x, y) => x.i - y.i), a,
         );
         const r = Number.isFinite(v) ? Math.round(v) : 0;
         volDays.set(dS, r);
