@@ -443,7 +443,7 @@
               <button
                 id="ncTog"
                 class="a"
-                title="VAP: the VP's normal curves (time) as volume"
+                title="VBT: the VP's normal curve (time) over it"
               >
                 NC
               </button>
@@ -1251,7 +1251,7 @@
         $("vbTog").className = showVw ? "a" : "";
         schedule();
       }
-      /* NC button: the VP's normal curves over the VAP */
+      /* NC button: the VP's normal curves on VBT, orange */
       let showNc = true;
       function setShowNc(v) {
         showNc = !!v;
@@ -4448,20 +4448,6 @@
                 });
                 g.restore();
               }
-              /* its vipocs, as on the VP; NC: the VP's normal
-                 curves (time) in USDT volume, orange, to set
-                 time against real volume */
-              const vf = volFor(P.dS) > 0 ? volFor(P.dS)
-                  : P.step * 10,
-                sp = P.ps.length ?
-                  byAge(P, subPocs(P.dS, P.ps, vf, P.step)) : [],
-                kv = kvFor(P.dS, "BTCUSDT");
-              if (showNc && v && kv)
-                perfLine(P, expOf(P, sp, vf), cx0,
-                  (e) => (colW * e * kv * v.st) / (P.step * v.mx),
-                  "#ff6d00");
-              drawPs(P, sp, cx0);
-              drawYB(P, cx0, rowH);
               continue;
             }
             if (P.poc == null) continue;
@@ -4562,8 +4548,8 @@
                 (mid != null ? mid : k15[k15.length - 1].c) / P.step,
               );
             }
-            const exp = showMass || showPerf ? expOf(P, sp, vf)
-              : new Map();
+            const exp = showMass || showPerf || showNc
+              ? expOf(P, sp, vf) : new Map();
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
@@ -4629,6 +4615,10 @@
               }
               if (showPerf)
                 perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
+              /* NC: the VP's own normal curve (time, in bricks)
+                 over it, orange: time against real volume */
+              if (showNc)
+                perfLine(P, exp, cx0, (e) => e * lw, "#ff6d00");
               /* VBT too: its vipocs and YB (they went with it) */
               drawPs(P, sp, cx0);
               drawYB(P, cx0, rowH);
