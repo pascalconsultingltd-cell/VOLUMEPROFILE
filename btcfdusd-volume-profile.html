@@ -441,6 +441,13 @@
                 VAP
               </button>
               <button
+                id="ncTog"
+                class="a"
+                title="VAP: the VP's normal curves (time) as volume"
+              >
+                NC
+              </button>
+              <button
                 id="vbTog"
                 class="a"
                 title="Profile bricks as wide as their traded volume"
@@ -1242,6 +1249,13 @@
       function setShowVw(v) {
         showVw = !!v;
         $("vbTog").className = showVw ? "a" : "";
+        schedule();
+      }
+      /* NC button: the VP's normal curves over the VAP */
+      let showNc = true;
+      function setShowNc(v) {
+        showNc = !!v;
+        $("ncTog").className = showNc ? "a" : "";
         schedule();
       }
       function setShowVap(v) {
@@ -4319,6 +4333,45 @@
                   .sort((x, y) => x[0] - y[0])
                   .map((x) => x[1])
               : [];
+          /* Mass: each vipoc's vol mass as a normal curve round
+             it, sigma = vol / 1.2816 (its 80% band two vols
+             tall, as the regimes behind the vol): the perfect
+             bricks per row, all vipocs added */
+          const expOf = (P, sp, vf) => {
+            const exp = new Map(),
+              sg = vf / 1.2816,
+              R = Math.ceil((4 * sg) / P.step);
+            sp.forEach((S) => {
+              const p = Math.floor(S.px / P.step);
+              for (let r = p - R; r <= p + R; r++)
+                exp.set(r, (exp.get(r) || 0) + VOL_MASS * (
+                  ncdf(((r + 1) * P.step - S.px) / sg) -
+                  ncdf((r * P.step - S.px) / sg)));
+            });
+            return exp;
+          };
+          /* Perf: the curve's edge row by row, a step line from
+             the profile's left edge, over its rows of a brick or
+             more; w(e) = the width of e bricks */
+          const perfLine = (P, exp, cx0, w, col) => {
+            const ks = [...exp.keys()]
+              .filter((r) => Math.round(exp.get(r)) >= 1)
+              .sort((a, b) => b - a);
+            if (!ks.length) return;
+            g.save();
+            g.strokeStyle = col;
+            g.lineWidth = 1.5;
+            g.beginPath();
+            g.moveTo(cx0, Y((ks[0] + 1) * P.step));
+            ks.forEach((r) => {
+              const x = cx0 + w(exp.get(r));
+              g.lineTo(x, Y((r + 1) * P.step));
+              g.lineTo(x, Y(r * P.step));
+            });
+            g.lineTo(cx0, Y(ks[ks.length - 1] * P.step));
+            g.stroke();
+            g.restore();
+          };
           /* YB: the yellow bricks' (21:00 UTC on) barycentre,
              green above the day's latest vipoc, black below */
           const drawYB = (P, cx0, rowH) => {
@@ -4395,10 +4448,19 @@
                 });
                 g.restore();
               }
-              /* its vipocs, as on the VP */
-              if (P.ps.length) drawPs(P, byAge(P, subPocs(P.dS,
-                P.ps, volFor(P.dS) > 0 ? volFor(P.dS) : P.step * 10,
-                P.step)), cx0);
+              /* its vipocs, as on the VP; NC: the VP's normal
+                 curves (time) in USDT volume, orange, to set
+                 time against real volume */
+              const vf = volFor(P.dS) > 0 ? volFor(P.dS)
+                  : P.step * 10,
+                sp = P.ps.length ?
+                  byAge(P, subPocs(P.dS, P.ps, vf, P.step)) : [],
+                kv = kvFor(P.dS, "BTCUSDT");
+              if (showNc && v && kv)
+                perfLine(P, expOf(P, sp, vf), cx0,
+                  (e) => (colW * e * kv * v.st) / (P.step * v.mx),
+                  "#ff6d00");
+              drawPs(P, sp, cx0);
               drawYB(P, cx0, rowH);
               continue;
             }
@@ -4500,22 +4562,8 @@
                 (mid != null ? mid : k15[k15.length - 1].c) / P.step,
               );
             }
-            /* Mass: each sub POC's vol mass as a normal curve
-               round it, sigma = vol / 1.2816 (its 80% band two
-               vols tall, as the regimes behind the vol); exp =
-               the perfect bricks per row, all sub POCs added */
-            const exp = new Map();
-            if (showMass || showPerf) {
-              const sg = vf / 1.2816,
-                R = Math.ceil((4 * sg) / P.step);
-              sp.forEach((S) => {
-                const p = Math.floor(S.px / P.step);
-                for (let r = p - R; r <= p + R; r++)
-                  exp.set(r, (exp.get(r) || 0) + VOL_MASS * (
-                    ncdf(((r + 1) * P.step - S.px) / sg) -
-                    ncdf((r * P.step - S.px) / sg)));
-              });
-            }
+            const exp = showMass || showPerf ? expOf(P, sp, vf)
+              : new Map();
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
@@ -4579,24 +4627,8 @@
                       Math.max(1, rowH - 2));
                 });
               }
-              const ks = [...exp.keys()]
-                .filter((r) => Math.round(exp.get(r)) >= 1)
-                .sort((a, b) => b - a);
-              if (showPerf && ks.length) {
-                g.save();
-                g.strokeStyle = "#000";
-                g.lineWidth = 1.5;
-                g.beginPath();
-                g.moveTo(cx0, Y((ks[0] + 1) * P.step));
-                ks.forEach((r) => {
-                  const x = cx0 + exp.get(r) * kv * vs;
-                  g.lineTo(x, Y((r + 1) * P.step));
-                  g.lineTo(x, Y(r * P.step));
-                });
-                g.lineTo(cx0, Y(ks[ks.length - 1] * P.step));
-                g.stroke();
-                g.restore();
-              }
+              if (showPerf)
+                perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
               continue;
             }
             /* Mass: the perfect bricks the profile lacks, empty
@@ -4625,28 +4657,9 @@
                   (Math.abs(v) * lw) / 2, Math.max(1, rowH - 1));
               });
             }
-            /* Perf: the perfect profile's edge, row by row, a
-               black step line from the profile's left edge; only
-               over its rows of a brick or more */
-            const pk = [...exp.keys()]
-              .filter((r) => Math.round(exp.get(r)) >= 1)
-              .sort((a, b) => b - a);
-            if (showPerf && pk.length) {
-              const ks = pk;
-              g.save();
-              g.strokeStyle = "#000";
-              g.lineWidth = 1.5;
-              g.beginPath();
-              g.moveTo(cx0, Y((ks[0] + 1) * P.step));
-              ks.forEach((r) => {
-                const x = cx0 + exp.get(r) * lw;
-                g.lineTo(x, Y((r + 1) * P.step));
-                g.lineTo(x, Y(r * P.step));
-              });
-              g.lineTo(cx0, Y(ks[ks.length - 1] * P.step));
-              g.stroke();
-              g.restore();
-            }
+            /* Perf: the perfect profile's edge, black */
+            if (showPerf)
+              perfLine(P, exp, cx0, (e) => e * lw, "#000");
             /* around it, an empty 15px square in the last price
                blue, never tighter than the brick */
             if (curB) {
@@ -8511,6 +8524,7 @@
           showBZ,
           showYB,
           showVap,
+          showNc,
           showVw,
           showSO,
           showDO,
@@ -8619,6 +8633,7 @@
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
         if (st.dv >= 27 && typeof st.showVap === "boolean")
           setShowVap(st.showVap);
+        if (typeof st.showNc === "boolean") setShowNc(st.showNc);
         if (st.dv >= 31 && typeof st.showVw === "boolean")
           setShowVw(st.showVw);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
@@ -8840,6 +8855,7 @@
       $("izTog").onclick = () => setShowIZ(!showIZ);
       $("bzTog").onclick = () => setShowBZ(!showBZ);
       $("ybTog").onclick = () => setShowYB(!showYB);
+      $("ncTog").onclick = () => setShowNc(!showNc);
       $("vapTog").onclick = () => setShowVap(!showVap);
       /* VBT on: USDT by default (the real market) */
       $("vbTog").onclick = () => {
