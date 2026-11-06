@@ -4080,7 +4080,7 @@
             m.step = P.step;
             if (dS + (i + 1) * TPO_MS <= Date.now() &&
               (!ps.length || sps.vol)) {
-              if (stFz.size > 3000) stFz.clear();
+              if (stFz.size > 3e4) stFz.clear();
               stFz.set(key, m);
             }
             return m;
@@ -4175,13 +4175,13 @@
               vf = vC || step * 10,
               /* zone from USDT volume (TPO bricks while loading) */
               kv = kvFor(dS, "BTCUSDT"),
-              zv = kv ? zoneVol(dS, te, step) : null,
               /* P's on volume only at each 30m close (as TPO) */
               tp = Math.floor(te / TPO_MS) * TPO_MS,
-              pz = zv && tp > dS ? zoneVol(dS, tp, step, pCur) : null,
-              key = ["ic", dS, cut, vf, step, x, zv ? te : 0, kv,
-                pz ? tp : 0].join();
+              key = ["ic", dS, cut, vf, step, x, te, kv].join();
+            /* volume only on a miss: it rebuilds out of order */
             if (stFz.has(key)) return stFz.get(key);
+            const zv = kv ? zoneVol(dS, te, step) : null,
+              pz = zv && tp > dS ? zoneVol(dS, tp, step, pCur) : null;
             const per = new Map(),
               rows = new Map(),
               m = {};
@@ -4282,7 +4282,7 @@
             /* kept once its candles (and volume) are all loaded */
             if (zv && k15.length && k15[0].t <= dS &&
               k15[k15.length - 1].t >= cut - 9e5) {
-              if (stFz.size > 3000) stFz.clear();
+              if (stFz.size > 3e4) stFz.clear();
               stFz.set(key, m);
             }
             return m;
