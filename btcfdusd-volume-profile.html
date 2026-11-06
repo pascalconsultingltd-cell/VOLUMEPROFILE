@@ -445,12 +445,12 @@
                 class=""
                 title="Profile bricks as wide as their traded volume"
               >
-                VB
+                VBT
               </button>
               <button
                 id="usdtTog"
                 class=""
-                title="VAP, V95, VB from BTCUSDT (1s), FDUSD prices"
+                title="VAP, V95, VBT from BTCUSDT (1s), FDUSD prices"
               >
                 USDT
               </button>
@@ -1200,9 +1200,9 @@
       }
       /* VAP button: volume at price instead of the profiles */
       let showVap = false,
-        /* USDT button: VAP, V95 and VB from BTCUSDT */
+        /* USDT button: VAP, V95 and VBT from BTCUSDT */
         useUsdt = false,
-        /* VB button: profile bricks by volume */
+        /* VBT button (volume brick time): bricks by volume */
         showVw = false;
       function setShowVw(v) {
         showVw = !!v;
@@ -1356,6 +1356,16 @@
          close, smoothed over ~60s); px per second, and VAP rows
          as vapOf. Null until both pairs are loaded */
       const usdtV = new Map();
+      /* a second's volume over the rows its range spans, each
+         by the share of the range inside it */
+      function spread(lo, hi, st, fn) {
+        const a = Math.floor(lo / st),
+          b = Math.floor(hi / st);
+        if (a === b || hi - lo < 1e-9) return fn(a, 1);
+        for (let r = a; r <= b; r++)
+          fn(r, (Math.min(hi, (r + 1) * st) - Math.max(lo, r * st)) /
+            (hi - lo));
+      }
       function usdtOf(dS) {
         const u = usdtK.get(dS),
           f = aggrT.get(dS),
@@ -1364,7 +1374,7 @@
         let v = usdtV.get(dS);
         if (!v || v.st !== st)
           usdtV.set(dS, (v = { st, n: 0, j: 0, pf: null, e: null,
-            px: [], rows: new Map(), dl: new Map(), mx: 0 }));
+            px: [], rt: [], rows: new Map(), dl: new Map(), mx: 0 }));
         const a = u.k,
           tr = f.tr;
         for (; v.n < a.length; v.n++) {
@@ -1373,22 +1383,22 @@
           for (; v.j < tr.length && tr[v.j][0] < t + 1000; v.j++)
             v.pf = tr[v.j][1];
           if (v.pf == null) {
-            v.px.push(null);
+            v.px.push(null), v.rt.push(null);
             continue;
           }
           const ra = v.pf / c;
           v.e = v.e == null ? ra : v.e + (ra - v.e) / 60;
-          const p = ((h + l) / 2) * v.e,
-            r = Math.floor(p / st),
-            w = (v.rows.get(r) || 0) + q;
-          v.px.push(p);
-          v.rows.set(r, w);
-          v.dl.set(r, (v.dl.get(r) || 0) + 2 * tb - q);
-          if (w > v.mx) (v.mx = w), (v.poc = r);
+          v.px.push(((h + l) / 2) * v.e), v.rt.push(v.e);
+          spread(l * v.e, h * v.e, st, (r, k) => {
+            const w = (v.rows.get(r) || 0) + q * k;
+            v.rows.set(r, w);
+            v.dl.set(r, (v.dl.get(r) || 0) + (2 * tb - q) * k);
+            if (w > v.mx) (v.mx = w), (v.poc = r);
+          });
         }
         return v;
       }
-      /* VB: a day's volume per profile brick, "row|period" ->
+      /* VBT: a day's volume per profile brick, "row|period" ->
          volume, from FDUSD trades or USDT seconds (USDT
          button); null until loaded */
       const vwC = new Map();
@@ -1401,17 +1411,20 @@
         if (vwC.has(key)) return vwC.get(key);
         const m = new Map();
         let mx = 0;
-        const add = (t, p, q) => {
-          const k = Math.floor(p / st) + "|" +
-              Math.floor((t - dS) / TPO_MS),
-            w = (m.get(k) || 0) + q;
-          m.set(k, w);
+        const add = (t, r, q) => {
+          const k = r + "|" + Math.floor((t - dS) / TPO_MS);
+          m.set(k, (m.get(k) || 0) + q);
         };
         if (useUsdt) {
           const a = usdtK.get(dS).k;
-          for (let i = 0; i < n; i++)
-            if (u.px[i] != null) add(a[i][0], u.px[i], a[i][4]);
-        } else d.tr.forEach(([t, p, q]) => add(t, p, q));
+          for (let i = 0; i < n; i++) {
+            const [t, h, l, , q] = a[i],
+              e = u.rt[i];
+            if (e != null)
+              spread(l * e, h * e, st, (r, k) => add(t, r, q * k));
+          }
+        } else
+          d.tr.forEach(([t, p, q]) => add(t, Math.floor(p / st), q));
         /* the widest row's volume, for the scale */
         const rw = new Map();
         m.forEach((w, k) => {
@@ -4065,7 +4078,7 @@
                 ud = o[o.length - 1] < ref ? "#000" : "#089981";
             }
             P.ud = ud;
-            /* VB on: each brick as wide as the volume traded in
+            /* VBT on: each brick as wide as the volume traded in
                it (its row, its period), the widest row filling
                the column, nothing else of the profile; classic
                until trades load */
@@ -8546,7 +8559,11 @@
       $("ybTog").onclick = () => setShowYB(!showYB);
       $("vapTog").onclick = () => setShowVap(!showVap);
       $("usdtTog").onclick = () => setUseUsdt(!useUsdt);
-      $("vbTog").onclick = () => setShowVw(!showVw);
+      /* VBT on: USDT by default (the real market) */
+      $("vbTog").onclick = () => {
+        setShowVw(!showVw);
+        if (showVw) setUseUsdt(true);
+      };
       $("soTog").onclick = () => setShowSO(!showSO);
       $("doTog").onclick = () => setShowDO(!showDO);
       $("czTog").onclick = () => setShowCZ(!showCZ);
