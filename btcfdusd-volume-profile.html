@@ -4300,6 +4300,60 @@
             g.fillStyle = c;
             g.fillText(tx, cx0, y - 9);
           });
+          /* a day's vipocs, earliest first (AG: by age) */
+          const vipocs = (q) =>
+            q.ps.length
+              ? subPocs(
+                  q.dS,
+                  q.ps,
+                  volFor(q.dS) > 0 ? volFor(q.dS) : q.step * 10,
+                  q.step,
+                )
+                  .map((S) => {
+                    const w = q.rows.get(Math.floor(S.px / q.step));
+                    return [
+                      !w ? 99 : ageOrd ? rowAge(w) : Math.min(...w),
+                      S.px,
+                    ];
+                  })
+                  .sort((x, y) => x[0] - y[0])
+                  .map((x) => x[1])
+              : [];
+          /* YB: the yellow bricks' (21:00 UTC on) barycentre,
+             green above the day's latest vipoc, black below */
+          const drawYB = (P, cx0, rowH) => {
+            if (!showYB) return;
+            const last = vipocs(P).pop();
+            let sum = 0,
+              n = 0;
+            P.rows.forEach((l, r) =>
+              l.forEach((i) => {
+                if (i < 42) return;
+                sum += (r + 0.5) * P.step;
+                n++;
+              }),
+            );
+            if (n && last != null) {
+              const b = sum / n,
+                y = Y(b),
+                c = b > last ? "#089981" : "#000",
+                dv = b - last,
+                tx = "B " + b.toFixed(DP) + " " +
+                  (dv > 0 ? "+" : "") + dv.toFixed(DP);
+              /* a plain circle about 4 bricks across */
+              const rd = Math.max(3, 2 * rowH);
+              g.fillStyle = c;
+              g.beginPath();
+              g.arc(cx0 + rd, y, rd, 0, 7);
+              g.fill();
+              g.font = "bold 11px ui-monospace,Menlo,monospace";
+              g.textAlign = "left";
+              g.strokeStyle = "#fff";
+              g.lineWidth = 3;
+              g.strokeText(tx, cx0, y + rd + 9);
+              g.fillText(tx, cx0, y + rd + 9);
+            }
+          };
           for (let d = 0; d < cnt + ex; d++) {
             const Q = dayProf(tpoDays[d]),
               cx0 = 6 + (d - ex + tf) * (colW + gap),
@@ -4345,30 +4399,13 @@
               if (P.ps.length) drawPs(P, byAge(P, subPocs(P.dS,
                 P.ps, volFor(P.dS) > 0 ? volFor(P.dS) : P.step * 10,
                 P.step)), cx0);
+              drawYB(P, cx0, rowH);
               continue;
             }
             if (P.poc == null) continue;
             /* UD: the whole day black when its last vipoc in time
                is under its first (one vipoc: under the day
                before's last), else green */
-            const vipocs = (q) =>
-              q.ps.length
-                ? subPocs(
-                    q.dS,
-                    q.ps,
-                    volFor(q.dS) > 0 ? volFor(q.dS) : q.step * 10,
-                    q.step,
-                  )
-                    .map((S) => {
-                      const w = q.rows.get(Math.floor(S.px / q.step));
-                      return [
-                        !w ? 99 : ageOrd ? rowAge(w) : Math.min(...w),
-                        S.px,
-                      ];
-                    })
-                    .sort((x, y) => x[0] - y[0])
-                    .map((x) => x[1])
-                : [];
             let ud = null;
             if (showUD || udZz) {
               const o = vipocs(P),
@@ -4646,38 +4683,7 @@
                 g.restore();
               }
             }
-            if (showYB) {
-              const last = vipocs(P).pop();
-              let sum = 0,
-                n = 0;
-              P.rows.forEach((l, r) =>
-                l.forEach((i) => {
-                  if (i < 42) return;
-                  sum += (r + 0.5) * P.step;
-                  n++;
-                }),
-              );
-              if (n && last != null) {
-                const b = sum / n,
-                  y = Y(b),
-                  c = b > last ? "#089981" : "#000",
-                  dv = b - last,
-                  tx = "B " + b.toFixed(DP) + " " +
-                    (dv > 0 ? "+" : "") + dv.toFixed(DP);
-                /* a plain circle about 4 bricks across */
-                const rd = Math.max(3, 2 * rowH);
-                g.fillStyle = c;
-                g.beginPath();
-                g.arc(cx0 + rd, y, rd, 0, 7);
-                g.fill();
-                g.font = "bold 11px ui-monospace,Menlo,monospace";
-                g.textAlign = "left";
-                g.strokeStyle = "#fff";
-                g.lineWidth = 3;
-                g.strokeText(tx, cx0, y + rd + 9);
-                g.fillText(tx, cx0, y + rd + 9);
-              }
-            }
+            drawYB(P, cx0, rowH);
           }
           /*
            * UD zigzag (ZZ on): the shown days' colours set the
