@@ -6025,8 +6025,9 @@
               /* bias arrow: the ipoc's last move up (down), a down
                  (up) column whose low (high) came within a brick
                  of a shoulder's bottom (top) edge, as that column
-                 began: at the next column's start; none in an
-                 excursion (a jump: price out of the channel) */
+                 began: at the edge, next column, once per edge
+                 until a column starts 3+ bricks from it; none in
+                 an excursion (a jump: price out of the channel) */
               /* sell: in a down excursion, a column starting 3+
                  bricks above the row with the most bricks since it
                  began (closed columns only); again once back to it.
@@ -6034,11 +6035,12 @@
                  Swing: a column touches its zone (closed columns
                  only), a later one starts 3+ bricks past the zone's
                  edge: an arrow that way, once per touch */
-              let hi, lo, pv = null, mg = 0, pq = null, xm = null,
-                ar = true, tz = null;
+              let hi, lo, pv = null, mg = 0, pq = null, fe = [],
+                xm = null, ar = true, tz = null;
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
-                if (!m.ic) return (pv = pq = null), (mg = 0);
+                if (!m.ic)
+                  return (pv = pq = null), (fe = []), (mg = 0);
                 const [p, h, l, v] = m.ic;
                 const rs = pv === null || Math.abs(p - pv) >= v - p;
                 if (rs)
@@ -6048,12 +6050,15 @@
                 pv = p;
                 const exc = c.p0 > hi || c.p0 < lo;
                 let f = 0;
+                fe = fe.filter((e) => Math.abs(c.p0 - e) < 3 * c.st);
                 if (pq && mg && !exc && pq[1].sh &&
                   pq[0].up !== mg > 0)
                   pq[1].sh.forEach((z) => {
                     const x = mg > 0 ? pq[0].pl : pq[0].ph;
-                    if (z && Math.abs(x - z[+(mg < 0)]) <= c.st)
-                      f = mg;
+                    const e = z && z[+(mg < 0)];
+                    if (z && Math.abs(x - e) <= c.st &&
+                      !fe.some((u) => Math.abs(e - u) <= c.st))
+                      (f = [mg, e]), fe.push(e);
                   });
                 pq = [c, m];
                 let sd = 0;
@@ -6155,12 +6160,12 @@
                   g.stroke();
                 }));
               }
-              /* bias: at the last price as the column starts */
-              if (pfBs) pts.forEach((q, k) => {
+              /* bias: at the shoulder edge, as the column starts */
+              if (pfBs) pts.forEach((q) => {
                 if (!q || !q[4]) return;
-                /* tip at the price, white rim to stand out */
-                const u = q[4] > 0,
-                  y = Y(cv2[k].p0),
+                /* tip at the edge, white rim to stand out */
+                const u = q[4][0] > 0,
+                  y = Y(q[4][1]),
                   d = u ? 1 : -1,
                   w = Math.max(7, sl);
                 g.fillStyle = u ? "#089981" : "#e53935";
