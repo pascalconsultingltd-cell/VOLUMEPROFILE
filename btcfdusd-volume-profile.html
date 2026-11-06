@@ -6183,16 +6183,21 @@
                 g.stroke();
                 g.fill();
               });
-              /* little sell / buy arrows: tip at the price */
+              /* little sell / buy arrows: tip at the price, white
+                 rim (green on green columns hides otherwise) */
+              g.strokeStyle = "#fff";
+              g.lineWidth = 1.5;
               if (pfBs) pts.forEach((q, k) => {
                 if (!q || !q[5]) return;
                 const d = q[5], y = Y(cv2[k].p0),
-                  w = Math.max(4, sl / 2);
+                  w = Math.max(5, sl / 2);
                 g.fillStyle = d < 0 ? "#e53935" : "#089981";
                 g.beginPath();
                 g.moveTo(q[0], y + 2 * d);
-                g.lineTo(q[0] - w, y + 10 * d);
-                g.lineTo(q[0] + w, y + 10 * d);
+                g.lineTo(q[0] - w, y + 12 * d);
+                g.lineTo(q[0] + w, y + 12 * d);
+                g.closePath();
+                g.stroke();
                 g.fill();
               });
               g.lineWidth = 1;
