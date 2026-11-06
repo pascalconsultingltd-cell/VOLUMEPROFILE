@@ -1313,6 +1313,22 @@
          day */
       const usdtK = new Map(),
         usdtBusy = new Set();
+      /* daily volume (1d candles) of BTCUSDT and BTCFDUSD, for
+         VBT's volume per brick; refreshed hourly */
+      const dVol = { BTCUSDT: new Map(), [SYM]: new Map() },
+        dVolAt = {};
+      async function loadDVol(sy) {
+        if (Date.now() - (dVolAt[sy] || 0) < 3600e3) return;
+        dVolAt[sy] = Date.now();
+        const u = "/api/v3/klines?interval=1d&limit=40&symbol=" + sy;
+        for (const h of REST)
+          try {
+            const j = await fj(h + u);
+            if (!Array.isArray(j)) continue;
+            j.forEach((a) => dVol[sy].set(a[0], +a[5]));
+            return schedule();
+          } catch (e) {}
+      }
       async function loadUsdt(dS) {
         const d0 = usdtK.get(dS);
         if (usdtBusy.has(dS) || (d0 && d0.end)) return;
@@ -4217,13 +4233,24 @@
               });
             });
             /* VBT: the perfect curve in volume, a brick's worth =
-               the day's volume / its bricks; Perf: its step line,
+               the mean volume / bricks of the 5 finished days
+               before (fixed all day: no repaint); Perf: its line,
                Mass: real - perfect per row, a strip on the left,
                green extra, red missing */
             if (vs) {
-              let nb = 0;
-              P.rows.forEach((l) => (nb += l.length));
-              const kv = nb ? vw.tot / nb : 0;
+              const sy = useUsdt ? "BTCUSDT" : SYM;
+              loadDVol(sy);
+              let ksum = 0,
+                kn = 0;
+              for (let i = 0, d0 = P.dS; i < 5; i++) {
+                d0 = prevDay(d0);
+                const Q = dayProf(d0),
+                  v = dVol[sy].get(d0);
+                let nb = 0;
+                Q.rows.forEach((l) => (nb += l.length));
+                if (v && nb && Q.full) (ksum += v / nb), kn++;
+              }
+              const kv = kn ? ksum / kn : 0;
               if (showMass) {
                 const rs = new Set([...exp.keys(), ...vw.rw.keys()]);
                 rs.forEach((r) => {
