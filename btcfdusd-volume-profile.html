@@ -1414,6 +1414,33 @@
         }
         return v;
       }
+      /* the IC zone's volume: a day's USDT volume per row of
+         size st from its seconds before t (on FDUSD prices,
+         split by overlap); one cursor a day, rebuilt when t
+         goes back; null until those seconds are loaded */
+      const zCur = new Map(),
+        kvC = new Map();
+      function zoneVol(dS, t, st) {
+        const u = usdtOf(dS),
+          d = usdtK.get(dS);
+        if (!u || !d) return null;
+        const a = d.k,
+          last = u.n ? a[u.n - 1][0] : -Infinity;
+        if (last < Math.min(t, nextDay(dS)) - 2000 && !d.end)
+          return null;
+        let v = zCur.get(dS);
+        if (!v || v.st !== st || v.t > t)
+          zCur.set(dS, (v = { st, n: 0, t, rows: new Map() }));
+        for (; v.n < u.n && a[v.n][0] < t; v.n++) {
+          const e = u.rt[v.n],
+            [, h, l, , q] = a[v.n];
+          if (e != null)
+            spread(l * e, h * e, st, (r, k) =>
+              v.rows.set(r, (v.rows.get(r) || 0) + q * k));
+        }
+        v.t = t;
+        return v;
+      }
       /* VBT: a day's volume per profile brick, "row|period" ->
          volume, from FDUSD trades or USDT seconds (USDT
          button); null until loaded */
@@ -3973,17 +4000,43 @@
            * closed by t, plus the forming one up to t (as the
            * live VP saw it); none yet: the day before, whole
            */
+          /* a brick's worth of volume for day dS: the mean
+             volume / bricks of the 5 finished days before it,
+             known at its start (no repaint); 0 until loaded */
+          const kvFor = (dS, sy) => {
+            loadDVol(sy);
+            const kk = [dS, sy, dVol[sy].size, k15.length].join();
+            if (kvC.has(kk)) return kvC.get(kk);
+            let ksum = 0,
+              kn = 0;
+            for (let i = 0, d0 = dS; i < 5; i++) {
+              d0 = prevDay(d0);
+              const Q = dayProf(d0),
+                v = dVol[sy].get(d0);
+              let nb = 0;
+              Q.rows.forEach((l) => (nb += l.length));
+              if (v && nb && Q.full) (ksum += v / nb), kn++;
+            }
+            if (kvC.size > 200) kvC.clear();
+            kvC.set(kk, kn ? ksum / kn : 0);
+            return kvC.get(kk);
+          };
           const icFor = (t) => {
             let dS = dayOf(t),
               cut = Math.floor(t / 9e5) * 9e5,
-              x = null;
-            if (cut <= dS) (cut = dS), (dS = prevDay(dS));
+              x = null,
+              te = t;
+            if (cut <= dS) (te = cut = dS), (dS = prevDay(dS));
             else x = liveHL(cut, t);
             const vC = volFor(dS),
               step = vC ? Math.max(1, Math.ceil(vC / 10))
                 : dayProf(dS).step,
               vf = vC || step * 10,
-              key = ["ic", dS, cut, vf, step, x].join();
+              /* zone from USDT volume (TPO bricks while loading) */
+              kv = kvFor(dS, "BTCUSDT"),
+              zv = kv ? zoneVol(dS, te, step) : null,
+              key = ["ic", dS, cut, vf, step, x, zv ? te : 0, kv]
+                .join();
             if (stFz.has(key)) return stFz.get(key);
             const per = new Map(),
               rows = new Map(),
@@ -4030,9 +4083,10 @@
                 S.px - vf];
               m.d = dS;
               /* green zone: the biggest chunk of adjacent rows with
-                 extra bricks vs all sub POCs' perfect mass (Mass'
-                 green delta), at its weighted middle; isolated rows
-                 far away are noise */
+                 extra volume vs all sub POCs' perfect mass (in
+                 bricks' worth of USDT volume; bricks while it
+                 loads), at its weighted middle; isolated rows far
+                 away are noise */
               let cs = 0, cw = 0, gs = 0, gw = 0;
               /* and the row missing the biggest share of what it
                  expects, 3+ bricks (red); ties: the middle of the
@@ -4047,7 +4101,8 @@
                   E = Math.round(e),
                   d = (rows.get(r) || []).length - E,
                   g = E >= 3 ? -d / E : 0;
-                if (d > 0) (cs += d * (r + 0.5) * step), (cw += d);
+                const dz = zv ? (zv.rows.get(r) || 0) / kv - e : d;
+                if (dz > 0) (cs += dz * (r + 0.5) * step), (cw += dz);
                 else cs = cw = 0;
                 if (cw > gw) (gs = cs), (gw = cw);
                 if (g > top) (top = g), (best = run = 0);
@@ -4058,8 +4113,8 @@
               /* middle, half height, its extra bricks */
               if (gw) m.gl = [gs / gw, 1.5 * step, gw];
             }
-            /* kept once its candles are all loaded */
-            if (k15.length && k15[0].t <= dS &&
+            /* kept once its candles (and volume) are all loaded */
+            if (zv && k15.length && k15[0].t <= dS &&
               k15[k15.length - 1].t >= cut - 9e5) {
               if (stFz.size > 3000) stFz.clear();
               stFz.set(key, m);
@@ -4311,19 +4366,7 @@
                Mass: real - perfect per row, a strip on the left,
                green extra, red missing */
             if (vs) {
-              const sy = useUsdt ? "BTCUSDT" : SYM;
-              loadDVol(sy);
-              let ksum = 0,
-                kn = 0;
-              for (let i = 0, d0 = P.dS; i < 5; i++) {
-                d0 = prevDay(d0);
-                const Q = dayProf(d0),
-                  v = dVol[sy].get(d0);
-                let nb = 0;
-                Q.rows.forEach((l) => (nb += l.length));
-                if (v && nb && Q.full) (ksum += v / nb), kn++;
-              }
-              const kv = kn ? ksum / kn : 0;
+              const kv = kvFor(P.dS, useUsdt ? "BTCUSDT" : SYM);
               if (showMass) {
                 const rs = new Set([...exp.keys(), ...vw.rw.keys()]);
                 rs.forEach((r) => {
@@ -5753,7 +5796,8 @@
               s1 = pfStep(d1);
             loadAggr(d1 - DAY);
             loadAggr(d1);
-            if (useUsdt && pfVa) loadUsdt(d1 - DAY), loadUsdt(d1);
+            if (pfIc || (useUsdt && pfVa))
+              loadUsdt(d1 - DAY), loadUsdt(d1);
             const pfc = pfCols([d1 - DAY, d1]);
             const nFit = pfN,
               sl = pcW / nFit;
