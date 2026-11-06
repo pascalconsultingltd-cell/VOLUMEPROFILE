@@ -4061,7 +4061,8 @@
                 const r0 = Math.floor(P.px / step);
                 let q = 0, qt = 0;
                 for (let r = r0 - h; r <= r0 + h; r++)
-                  (q += zv.rows.get(r) || 0), (qt += zv.tw.get(r) || 0);
+                  (q += zv.rows.get(r) || 0),
+                    (qt += zv.tw.get(r) || 0);
                 return q ? qt / q : -Infinity;
               };
             if (!ps.length) return null;
