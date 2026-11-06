@@ -596,7 +596,7 @@
               ><button
                 id="pfBsTog"
                 class="a"
-                title="IC: arrow at a shoulder edge, ipoc's way"
+                title="IC: arrow where price runs into a shoulder"
               >
                 Bias
               </button></span
@@ -6022,76 +6022,36 @@
             if (pfIc) {
               /* edges per ipoc (a new one: a move of 1 vol or more):
                  they only widen, on a new high or low */
-              /* bias arrow: the ipoc's last move up (down), a down
-                 (up) column whose low (high) came within a brick
-                 of a shoulder's bottom (top) edge, as that column
-                 began: at the edge, next column, once per edge
-                 until a column starts 3+ bricks from it; none in
-                 an excursion (a jump: price out of the channel) */
-              /* sell: in a down excursion, a column starting 3+
-                 bricks above the row with the most bricks since it
-                 began (closed columns only); again once back to it.
-                 Buy: the mirror, in an up excursion.
-                 Swing: a column touches its zone (closed columns
-                 only), a later one starts 3+ bricks past the zone's
-                 edge: an arrow that way, once per touch */
-              let hi, lo, pv = null, mg = 0, pq = null, fe = [],
-                xm = null, ar = true, tz = null;
+              /* run arrow: the ipoc above (below) the day before's
+                 last, an up (down) column crossing a shoulder's
+                 bottom (top) edge, shoulders as the column began:
+                 tip at the edge (entry), target the far edge, stop
+                 2 bricks back; once per edge until a column starts
+                 3+ bricks from it; none in an excursion (a jump:
+                 price out of the channel) */
+              let hi, lo, pv = null, fe = [];
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
-                if (!m.ic)
-                  return (pv = pq = null), (fe = []), (mg = 0);
+                if (!m.ic) return (pv = null), (fe = []);
                 const [p, h, l, v] = m.ic;
                 const rs = pv === null || Math.abs(p - pv) >= v - p;
-                if (rs)
-                  (hi = h), (lo = l), (xm = null), (tz = null);
+                if (rs) (hi = h), (lo = l);
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
-                if (pv !== null && p !== pv) mg = Math.sign(p - pv);
                 pv = p;
-                const exc = c.p0 > hi || c.p0 < lo;
+                const exc = c.p0 > hi || c.p0 < lo,
+                  y = icFor(dayOf(c.t0)).ic,
+                  d = y ? Math.sign(p - y[0]) : 0;
                 let f = 0;
                 fe = fe.filter((e) => Math.abs(c.p0 - e) < 3 * c.st);
-                if (pq && mg && !exc && pq[1].sh &&
-                  pq[0].up !== mg > 0)
-                  pq[1].sh.forEach((z) => {
-                    const x = mg > 0 ? pq[0].pl : pq[0].ph;
-                    const e = z && z[+(mg < 0)];
-                    if (z && Math.abs(x - e) <= c.st &&
+                if (d && !exc && m.sh && c.up === d > 0)
+                  m.sh.forEach((z) => {
+                    const e = z && z[+(d < 0)];
+                    if (z && (c.p0 - e) * d < 0 &&
+                      ((d > 0 ? c.ph : c.pl) - e) * d >= 0 &&
                       !fe.some((u) => Math.abs(e - u) <= c.st))
-                      (f = [mg, e]), fe.push(e);
+                      (f = [d, e]), fe.push(e);
                   });
-                pq = [c, m];
-                let sd = 0;
-                const xd = c.p0 < lo ? 1 : c.p0 > hi ? -1 : 0;
-                if (xd) {
-                  if (xm && (xm.st !== c.st || xm.d !== xd))
-                    xm = null;
-                  if (xm) {
-                    let br = 0, bc = 0;
-                    xm.forEach((n, r) =>
-                      n > bc && ((bc = n), (br = r)));
-                    const cp = (br + 0.5) * c.st,
-                      u = (c.p0 - cp) * xd;
-                    if (u <= 0) ar = true;
-                    else if (ar && u >= 3 * c.st)
-                      (sd = -xd), (ar = false);
-                  } else (xm = new Map()), (xm.st = c.st),
-                    (xm.d = xd), (ar = true);
-                  for (let r = c.lo; r <= c.hi; r++)
-                    xm.set(r, (xm.get(r) || 0) + 1);
-                } else xm = null;
-                if (exc) tz = null;
-                else {
-                  if (tz) {
-                    const u = c.p0 - tz[0], e = tz[1] + 3 * c.st;
-                    if (Math.abs(u) >= e)
-                      (sd = Math.sign(u)), (tz = null);
-                  }
-                  const z = m.gl;
-                  if (z && c.pl <= z[0] + z[1] && c.ph >= z[0] - z[1])
-                    tz = z;
-                }
-                return [hi, lo, f, exc, sd, rs];
+                return [hi, lo, f, exc, rs];
               });
               const pts = cv2.map((c, k) => {
                 const m = icFor(c.t0);
@@ -6100,7 +6060,7 @@
                     ...m.ic.slice(3)],
                   /* no zone in an excursion */
                   !bd[k0 + k][3] && m.gl, m.sh, bd[k0 + k][2],
-                  bd[k0 + k][4], bd[k0 + k][5]];
+                  bd[k0 + k][4]];
               });
               g.fillStyle = "rgba(41,98,255,.07)";
               pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
@@ -6123,7 +6083,7 @@
                 let on = false;
                 pts.forEach((q) => {
                   /* new channel: no vertical join */
-                  if (!q || q[6]) on = false;
+                  if (!q || q[5]) on = false;
                   if (!q) return;
                   const y = Y(q[1][j]);
                   g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
@@ -6160,7 +6120,7 @@
                   g.stroke();
                 }));
               }
-              /* bias: at the shoulder edge, as the column starts */
+              /* run: at the shoulder edge it crosses */
               if (pfBs) pts.forEach((q) => {
                 if (!q || !q[4]) return;
                 /* tip at the edge, white rim to stand out */
@@ -6179,23 +6139,6 @@
                 g.lineTo(q[0] + w / 3, y + 24 * d);
                 g.lineTo(q[0] + w / 3, y + 16 * d);
                 g.lineTo(q[0] + w, y + 16 * d);
-                g.closePath();
-                g.stroke();
-                g.fill();
-              });
-              /* little sell / buy arrows: tip at the price, white
-                 rim (green on green columns hides otherwise) */
-              g.strokeStyle = "#fff";
-              g.lineWidth = 1.5;
-              if (pfBs) pts.forEach((q, k) => {
-                if (!q || !q[5]) return;
-                const d = q[5], y = Y(cv2[k].p0),
-                  w = Math.max(5, sl / 2);
-                g.fillStyle = d < 0 ? "#e53935" : "#089981";
-                g.beginPath();
-                g.moveTo(q[0], y + 2 * d);
-                g.lineTo(q[0] - w, y + 12 * d);
-                g.lineTo(q[0] + w, y + 12 * d);
                 g.closePath();
                 g.stroke();
                 g.fill();
