@@ -835,10 +835,39 @@
       /* first brick of the sub POC search: SUB_K x the vol
          step, whatever the view, so every device agrees */
       const SUB_K = 5;
-      function subPocs(dS, ps, vol, fine) {
+      /* a day's USDT volume per 30m period and row of st (on
+         FDUSD prices, split by overlap); null until loaded */
+      const pvCur = new Map();
+      function perVol(dS, st) {
+        const u = usdtOf(dS),
+          d = usdtK.get(dS);
+        if (!u || !d) return null;
+        let v = pvCur.get(dS);
+        if (!v || v.st !== st || v.n > u.n)
+          pvCur.set(dS, (v = { st, n: 0, p: [] }));
+        for (const a = d.k; v.n < u.n; v.n++) {
+          const e = u.rt[v.n],
+            [t, h, l, , q] = a[v.n],
+            i = Math.floor((t - dS) / TPO_MS);
+          if (e == null) continue;
+          const m = v.p[i] || (v.p[i] = new Map());
+          spread(l * e, h * e, st, (r, k) =>
+            m.set(r, (m.get(r) || 0) + q * k));
+        }
+        v.end = d.end;
+        v.last = u.n ? d.k[u.n - 1][0] : -Infinity;
+        return v;
+      }
+      /* P's by the shrinking brick on the USDT volume of the
+         periods ps (live: the forming one so far); TPO counts
+         while it loads, or if tpo. .vol: on volume */
+      function subPocs(dS, ps, vol, fine, tpo) {
         if (!ps.length) return [];
         const z = ps[ps.length - 1],
-          key = [dS, ps.length, z.h, z.l, vol, fine];
+          te = Math.min(dS + (z.i + 1) * TPO_MS, Date.now()),
+          pv = tpo ? null : perVol(dS, fine),
+          vo = pv && (pv.end || pv.last >= te - 12e4) ? pv : null,
+          key = [dS, ps.length, z.h, z.l, vol, fine, vo && vo.n];
         if (subCache.has(key.join())) return subCache.get(key.join());
         let lo = Infinity,
           hi = -Infinity;
@@ -846,16 +875,23 @@
           lo = Math.min(lo, q.l);
           hi = Math.max(hi, q.h);
         });
-        /* TPO count per row, rows anchored on the day low */
+        /* volume (or TPO count) per row from the day low */
         const pocs = pocsBy(lo, hi, vol, fine, (s) => {
           const c = [];
           ps.forEach((q) => {
+            if (vo)
+              return (vo.p[q.i] || []).forEach((x, r) => {
+                const j = Math.max(0,
+                  Math.floor(((r + 0.5) * fine - lo) / s));
+                c[j] = (c[j] || 0) + x;
+              });
             const a = Math.floor((q.l - lo) / s),
               b = Math.floor((q.h - lo) / s);
             for (let r = a; r <= b; r++) c[r] = (c[r] || 0) + 1;
           });
           return c;
         });
+        pocs.vol = !!vo;
         if (subCache.size > 300) subCache.clear();
         subCache.set(key.join(), pocs);
         return pocs;
@@ -3935,6 +3971,7 @@
                 k15[0].t,
                 dS < dayOf(Date.now()) ? "" : lk.t + "|" + lk.v,
                 ageOrd,
+                usdtV.has(dS) && usdtV.get(dS).n,
               ].join();
             let zc = zCache.get(key);
             if (!zc) {
@@ -4007,7 +4044,8 @@
                 ? stepCols(rows, P.step, sps, VOL_MASS)
                 : new Map();
             m.step = P.step;
-            if (dS + (i + 1) * TPO_MS <= Date.now()) {
+            if (dS + (i + 1) * TPO_MS <= Date.now() &&
+              (!ps.length || sps.vol)) {
               if (stFz.size > 3000) stFz.clear();
               stFz.set(key, m);
             }
@@ -4138,7 +4176,7 @@
                 rows.get(r).push(q.i);
               }
             });
-            const sps = ps.length ? subPocs(dS, ps, vf, step) : [];
+            const sps = ps.length ? subPocs(dS, ps, vf, step, 1) : [];
             /* IC: the latest ipoc, its normal curve's edges (rows
                where its vol mass still gives a brick) */
             const hp = volHys.get(dS),
@@ -4311,10 +4349,8 @@
                it (its row, its period), the widest row filling
                the column, nothing else of the profile; classic
                until trades load */
-            if (showVw) {
-              loadAggr(P.dS);
-              if (useUsdt) loadUsdt(P.dS);
-            }
+            loadAggr(P.dS);
+            loadUsdt(P.dS);
             const vw = showVw ? vwOf(P.dS, P.step) : null,
               vs = vw && vw.mx ? (colW - 2) / vw.mx : 0;
             for (let r = P.a; r <= P.b && !vs; r++) {
@@ -4731,7 +4767,9 @@
                   h: Math.max(...Q.ps.map((q) => q.h)),
                   l: Math.min(...Q.ps.map((q) => q.l)),
                 };
-                if (dS < now) bzDays.set(key, o);
+                if (dS < now && subPocs(dS, Q.ps,
+                  volFor(dS) > 0 ? volFor(dS) : Q.step * 10,
+                  Q.step).vol) bzDays.set(key, o);
                 return o;
               };
           if (showBZ && k15.length) {
