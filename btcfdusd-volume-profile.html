@@ -401,7 +401,7 @@
               <button
                 id="udTog"
                 class=""
-                title="Up days green, down days black (ipocs)"
+                title="Up days green, down days black (vipocs)"
               >
                 UD
               </button>
@@ -415,7 +415,7 @@
               <button
                 id="izTog"
                 class=""
-                title="Zigzag over the ipocs (last 15 days)"
+                title="Zigzag over the vipocs (last 15 days)"
               >
                 IZ
               </button>
@@ -429,7 +429,7 @@
               <button
                 id="ybTog"
                 class="a"
-                title="Yellow bricks' barycentre vs the latest ipoc"
+                title="Yellow bricks' barycentre vs the latest vipoc"
               >
                 YB
               </button>
@@ -446,13 +446,6 @@
                 title="Profile bricks as wide as their traded volume"
               >
                 VBT
-              </button>
-              <button
-                id="usdtTog"
-                class="a"
-                title="VAP, V95, VBT from BTCUSDT (1s), FDUSD prices"
-              >
-                USDT
               </button>
               <button
                 id="soTog"
@@ -478,7 +471,7 @@
               <button
                 id="lcTog"
                 class=""
-                title="Day candles: latest ipoc to latest ipoc"
+                title="Day candles: latest vipoc to latest vipoc"
               >
                 LC
               </button>
@@ -520,46 +513,46 @@
             ></span
           ></span
         >
-        <span class="grp" title="P&amp;F"
+        <span class="grp" title="PF"
           ><span class="ttl"
-            ><span class="lbl">P&amp;F</span
+            ><span class="lbl">PF</span
             ><span class="box"
               ><button
-                id="pfBrTog"
+                id="pfBrTog" hidden
                 class="a"
-                title="P&amp;F bricks coloured by time; off = lines"
+                title="PF bricks coloured by time; off = lines"
               >
                 Br
               </button
               ><button
-                id="pfSgTog"
+                id="pfSgTog" hidden
                 class=""
                 title="Bricks past the last green / black signal"
               >
                 Colour
               </button
               ><button
-                id="pfSwTog"
+                id="pfSwTog" hidden
                 title="Swing triangles (with Colour)"
               >
                 Sw
               </button
               ><button
-                id="pfHlTog"
+                id="pfHlTog" hidden
                 class=""
-                title="P&amp;F signal bricks and volume dots"
+                title="PF signal bricks and volume dots"
               >
                 Alrt
               </button
               ><button
-                id="pfByTog"
+                id="pfByTog" hidden
                 class=""
                 title="Black dot on StpCol green: buy; mirror: sell"
               >
                 Buy
               </button
               ><button
-                id="pfXbTog"
+                id="pfXbTog" hidden
                 class=""
                 title="High (red) and low (grey) activity boxes"
               >
@@ -568,33 +561,33 @@
               ><button
                 id="pfIcTog"
                 class="a"
-                title="Latest ipoc and its normal curve edges"
+                title="Latest vipoc and its normal curve edges"
               >
                 IC
               </button
               ><button
-                id="pfIqTog"
+                id="pfIqTog" hidden
                 class=""
                 title="IC: 10% / 90% of the curve (1 vol out)"
               >
                 IC%
               </button
               ><button
-                id="pfRlTog"
+                id="pfRlTog" hidden
                 class="a"
                 title="IC: each wing's red shoulder (volume)"
               >
                 Gap
               </button
               ><button
-                id="pfVaTog"
+                id="pfVaTog" hidden
                 class="a"
                 title="Boxes with volume over 95% of the 150 before"
               >
                 V95
               </button
               ><button
-                id="pfBsTog"
+                id="pfBsTog" hidden
                 class="a"
                 title="IC: arrow where price runs into a shoulder"
               >
@@ -764,7 +757,7 @@
        * and percentile (nearest-rank, as in the Pine
        * script)
        */
-      /* P&F zoom out: up to this many columns (2 days hold
+      /* PF zoom out: up to this many columns (2 days hold
          about 4400) */
       const PF_MAX = 5000;
       /* V95's window: 750 min, as 150 bars of 5m; its top 8 */
@@ -1161,10 +1154,10 @@
         $("ladTog").className = hlLad ? "a" : "";
         schedule();
       }
-      /* up / down days (UD button): a day whose last ipoc (in
+      /* up / down days (UD button): a day whose last vipoc (in
          time) is under its first is tinted red, else green */
       let showUD = false,
-        /* ZZ button: the UD days' zigzag instead of the ipocs' */
+        /* ZZ button: the UD days' zigzag instead of the vipocs' */
         udZz = false;
       function setUdZz(v) {
         udZz = !!v;
@@ -1177,9 +1170,9 @@
         schedule();
       }
       /* YB button: barycentre of each day's yellow bricks
-         (21:00 UTC on), green above its latest ipoc, black
+         (21:00 UTC on), green above its latest vipoc, black
          below */
-      /* AG button: P1 = earliest ipoc, P3 = latest, by the
+      /* AG button: P1 = earliest vipoc, P3 = latest, by the
          average period of the bricks in its row; off: P1 to P3
          in birth order, latest = the latest first brick */
       let ageOrd = true;
@@ -1198,14 +1191,14 @@
         $("agTog").className = ageOrd ? "a" : "";
         schedule();
       }
-      /* LC button: day candles from latest ipoc to latest */
+      /* LC button: day candles from latest vipoc to latest */
       let showLC = false;
       function setShowLC(v) {
         showLC = !!v;
         $("lcTog").className = showLC ? "a" : "";
         schedule();
       }
-      /* IZ button: the zigzag over the ipocs */
+      /* IZ button: the zigzag over the vipocs */
       let showIZ = false;
       function setShowIZ(v) {
         showIZ = !!v;
@@ -1244,19 +1237,11 @@
       }
       /* VAP button: volume at price instead of the profiles */
       let showVap = false,
-        /* USDT button: VAP, V95 and VBT from BTCUSDT */
-        useUsdt = true,
         /* VBT button (volume brick time): bricks by volume */
         showVw = true;
       function setShowVw(v) {
         showVw = !!v;
         $("vbTog").className = showVw ? "a" : "";
-        schedule();
-      }
-      function setUseUsdt(v) {
-        useUsdt = !!v;
-        $("usdtTog").className = useUsdt ? "a" : "";
-        pfHotC = null;
         schedule();
       }
       function setShowVap(v) {
@@ -1278,9 +1263,9 @@
         schedule();
       }
       /*
-       * Trades from Binance aggTrades for the P&F, where m =
+       * Trades from Binance aggTrades for the PF, where m =
        * the buyer was the maker, so the taker sold. Loaded
-       * only while the P&F shows (about 13 requests a day);
+       * only while the PF shows (about 13 requests a day);
        * today topped up every 5s. aggrT: day -> { tr: [time,
        * price, qty, taker sold], last: last trade id, end,
        * at }.
@@ -1290,7 +1275,7 @@
       async function loadAggr(dS) {
         const d0 = aggrT.get(dS);
         if (aggrBusy.has(dS) || (d0 && d0.end)) return;
-        /* today: every 5s while the P&F shows, else 30s */
+        /* today: every 5s while the PF shows, else 30s */
         if (d0 && Date.now() - d0.at < 5000) return;
         aggrBusy.add(dS);
         const d = d0 || { tr: [], last: null, end: false, at: 0 },
@@ -1327,34 +1312,11 @@
           schedule();
         }
       }
-      /* VAP: a day's volume per row of its P&F box, from its
-         trades, topped up as they come; poc = the top row;
-         dl: its delta (taker buys - sells) per row */
-      const vapC = new Map();
-      function vapOf(dS) {
-        const d = aggrT.get(dS),
-          st = pfStep(dS);
-        if (!d || !d.tr.length) return null;
-        let v = vapC.get(dS);
-        if (!v || v.st !== st)
-          vapC.set(dS,
-            (v = { st, n: 0, rows: new Map(), dl: new Map(),
-              mx: 0 }));
-        for (; v.n < d.tr.length; v.n++) {
-          const [, p, q, sold] = d.tr[v.n],
-            r = Math.floor(p / st),
-            u = (v.rows.get(r) || 0) + q;
-          v.rows.set(r, u);
-          v.dl.set(r, (v.dl.get(r) || 0) + (sold ? -q : q));
-          if (u > v.mx) (v.mx = u), (v.poc = r);
-        }
-        return v;
-      }
-      /* USDT button: VAP and V95 from BTCUSDT 1s candles (the
-         real market), moved onto FDUSD prices. usdtK: day ->
-         { k: [time, high, low, close, vol, taker buy vol], end,
-         at }; today topped up every 5s, about 87 requests a
-         day */
+      /* all volume from BTCUSDT 1s candles (the real market),
+         every price shown in FDUSD: VAP, V95, VBT, vipocs.
+         usdtK: day -> { k: [time, high, low, close, vol,
+         taker buy vol], end, at }; today topped up every 5s,
+         about 87 requests a day */
       const usdtK = new Map(),
         usdtBusy = new Set();
       /* daily volume (1d candles) of BTCUSDT and BTCFDUSD, for
@@ -1414,7 +1376,7 @@
       /* a day's USDT seconds on FDUSD prices: each second's mid
          x the FDUSD / USDT ratio (last FDUSD trade over its
          close, smoothed over ~60s); px per second, and VAP rows
-         as vapOf. Null until both pairs are loaded */
+         by PF box. Null until both pairs are loaded */
       const usdtV = new Map();
       /* a second's volume over the rows its range spans, each
          by the share of the range inside it */
@@ -1462,7 +1424,7 @@
          size st from its seconds before t (on FDUSD prices,
          split by overlap); one cursor a day, rebuilt when t
          goes back; null until those seconds are loaded */
-      /* the IC's last volume ipoc per day, for its hysteresis */
+      /* the IC's last volume vipoc per day, for its hysteresis */
       const volHys = new Map(),
         zCur = new Map(),
         /* the P's own cursor: volume up to the last 30m close */
@@ -1494,15 +1456,13 @@
         return v;
       }
       /* VBT: a day's volume per profile brick, "row|period" ->
-         volume, from FDUSD trades or USDT seconds (USDT
-         button); null until loaded */
+         volume, from USDT seconds; null until loaded */
       const vwC = new Map();
       function vwOf(dS, st) {
-        const u = useUsdt ? usdtOf(dS) : null,
-          d = aggrT.get(dS);
-        if (useUsdt ? !u : !d || !d.tr.length) return null;
-        const n = useUsdt ? u.n : d.tr.length,
-          key = [dS, st, useUsdt, n].join();
+        const u = usdtOf(dS);
+        if (!u) return null;
+        const n = u.n,
+          key = [dS, st, n].join();
         if (vwC.has(key)) return vwC.get(key);
         const m = new Map();
         let mx = 0;
@@ -1510,16 +1470,13 @@
           const k = r + "|" + Math.floor((t - dS) / TPO_MS);
           m.set(k, (m.get(k) || 0) + q);
         };
-        if (useUsdt) {
-          const a = usdtK.get(dS).k;
-          for (let i = 0; i < n; i++) {
-            const [t, h, l, , q] = a[i],
-              e = u.rt[i];
-            if (e != null)
-              spread(l * e, h * e, st, (r, k) => add(t, r, q * k));
-          }
-        } else
-          d.tr.forEach(([t, p, q]) => add(t, Math.floor(p / st), q));
+        const a = usdtK.get(dS).k;
+        for (let i = 0; i < n; i++) {
+          const [t, h, l, , q] = a[i],
+            e = u.rt[i];
+          if (e != null)
+            spread(l * e, h * e, st, (r, k) => add(t, r, q * k));
+        }
         /* each row's volume, the widest (scale), the total */
         const rw = new Map();
         let tot = 0;
@@ -1536,7 +1493,7 @@
         return m;
       }
       /*
-       * Aggression point & figure (P&F button, in the DPoc
+       * Aggression point & figure (PF button, in the DPoc
        * panel).
        * Trades in time order are grouped into visits to a
        * brick; a visit's side is whoever traded more there as
@@ -1627,7 +1584,7 @@
         return cols;
       }
       /*
-       * P&F highlights, rolling like isBig: a box is hot when
+       * PF highlights, rolling like isBig: a box is hot when
        * its |delta| beats the 95th percentile of the BIG_WIN
        * boxes before it (in the order they printed, itself
        * included); a column gets a dot when its volume beats
@@ -1641,11 +1598,10 @@
       function pfHot(all) {
         const z = all[all.length - 1],
           zv = z ? [...z.v.values()].reduce((a, b) => a + b, 0) : 0,
-          ud = useUsdt ?
-            [...new Set(all.map((c) => dayOf(c.t0)))] : [],
+          ud = [...new Set(all.map((c) => dayOf(c.t0)))],
           uv = ud.map(usdtOf),
           key = [all[0] && all[0].st, z && z.st, all.length,
-            z && z.d.size, z && z.lo, zv, useUsdt,
+            z && z.d.size, z && z.lo, zv,
             uv.map((v) => v && v.n).join("/")].join();
         if (pfHotC && pfHotC.key === key) return pfHotC;
         const r = Math.ceil(BIG_PERC * BIG_WIN) - 1,
@@ -1659,15 +1615,8 @@
           at = [],
           hot = new Set(),
           vh = new Set(),
-          /* vd: a V95 box's delta; bx: each column's boxes
-             [volume, delta] by row, from FDUSD or USDT */
+          /* vd: a V95 box's delta */
           vd = new Map(),
-          bx = all.map((c) => {
-            const m = new Map();
-            if (!useUsdt)
-              c.v.forEach((v, r) => m.set(r, [v, c.d.get(r) || 0]));
-            return m;
-          }),
           dot = new Set(),
           cv = all.map((c) => {
             let s = 0;
@@ -1680,18 +1629,9 @@
             ad.push(Math.abs(v));
           }),
         );
-        /* FDUSD: a box = a column's row. USDT: a minute's row
-           (FDUSD's column length would skew it), shown on the
-           column trading at that minute's start */
-        bx.forEach((m, k) =>
-          m.forEach(([v, d], row) => {
-            sq2.push(k + "|" + row);
-            av.push(v);
-            at.push(all[k].t0);
-            dd.push(d);
-          }),
-        );
-        if (useUsdt && all.length) {
+        /* a box: a USDT minute's row, shown on the column
+           trading at that minute's start */
+        if (all.length) {
           let k = 0;
           ud.forEach((dS, i) => {
             const v = uv[i],
@@ -1748,7 +1688,7 @@
            (seconds grouped into visits to a box, side by taker
            volume, as pfCols), read at each column's start */
         let uf = null;
-        if (useUsdt && uv.length && uv.every(Boolean)) {
+        if (uv.length && uv.every(Boolean)) {
           uf = [];
           let b = null, up = null, buy = 0, vo = 0, t1 = 0;
           const fin = () => {
@@ -2083,7 +2023,7 @@
         volDays.set(dS, r);
         return r;
       }
-      /* P&F box of a day: a tenth of its vol, as its profile
+      /* PF box of a day: a tenth of its vol, as its profile
          rows, else 25 */
       function pfStep(dS) {
         const v = volOfDay(dS) || volN;
@@ -2093,8 +2033,8 @@
        * Alerts: on each window, the up / down triangles arm
        * an alert on each new up / down highlight until
        * unticked (main and 15s: big-candle dots; ZZ: the
-       * main zigzag breaking the other way; P&F: LH colour
-       * changes), once per bar (P&F: per change).
+       * main zigzag breaking the other way; PF: LH colour
+       * changes), once per bar (PF: per change).
        * Saved per device. alerts["w|dir"] = { ctx, ids }:
        * the bars already rung or there when armed, ctx =
        * what they were computed on (a new ctx resets them,
@@ -2104,7 +2044,7 @@
         alName = {
           main: "Chart",
           mini: "15s",
-          pf: "P&F",
+          pf: "PF",
           zz: "ZZ",
           vp: "VP",
         };
@@ -2119,7 +2059,7 @@
       Object.keys(alerts).forEach(
         (k) => alName[k.split("|")[0]] || delete alerts[k],
       );
-      /* P&F: the LH colour switches in the last two
+      /* PF: the LH colour switches in the last two
          columns, up = to blue, down = to orange; calm = a
          column starting a calm run (grey box) */
       function pfEvents() {
@@ -2129,8 +2069,8 @@
         loadAggr(d1);
         if (!aggrT.get(d0) || !aggrT.get(d1)) return null;
         /* V95 on USDT: wait for its seconds (no burst) */
-        if (useUsdt) loadUsdt(d0), loadUsdt(d1);
-        if (useUsdt && (!usdtOf(d0) || !usdtOf(d1))) return null;
+        loadUsdt(d0), loadUsdt(d1);
+        if (!usdtOf(d0) || !usdtOf(d1)) return null;
         const all = pfCols([d0, d1]),
           n = all.length,
           from = n > 1 ? all[n - 2].t0 : 0,
@@ -2164,7 +2104,7 @@
                 " " + ((r + 0.5) * all[k].st).toFixed(0),
             });
         });
-        return { ctx: pfStep(d0) + "|" + pfStep(d1) + "|" + useUsdt,
+        return { ctx: pfStep(d0) + "|" + pfStep(d1) + "|true",
           ev };
       }
       function alEvents(w) {
@@ -2306,7 +2246,7 @@
             alSave();
             return;
           }
-          /* q.dir: other than up / down (P&F calm) */
+          /* q.dir: other than up / down (PF calm) */
           const e = r.ev.find(
             (q) =>
               (q.dir || (q.up ? "up" : "dn")) === dir &&
@@ -2365,14 +2305,14 @@
         $("stTog").className = stCol ? "a" : "";
         schedule();
       }
-      /* the P&F panel: closed by its cross, back with the
-         P&F tag at the chart's top left */
+      /* the PF panel: closed by its cross, back with the
+         PF tag at the chart's top left */
       let pcPf = true;
       function setPcPf(v) {
         pcPf = !!v;
         schedule();
       }
-      /* P&F drawn as bricks coloured like the profiles (Br
+      /* PF drawn as bricks coloured like the profiles (Br
          button); off = the column lines */
       let pfBr = true;
       function setPfBr(v) {
@@ -2380,10 +2320,10 @@
         $("pfBrTog").className = pfBr ? "a" : "";
         schedule();
       }
-      /* Sg button: P&F bricks above the top of the latest
+      /* Sg button: PF bricks above the top of the latest
          green highlight green, below the bottom of the
          latest black one black (Br view) */
-      /* Hl button: show the P&F signal bricks and volume
+      /* Hl button: show the PF signal bricks and volume
          dots (off: only the Sg colours) */
       let pfHl = false;
       /* Buy button: a seller dot (black) while the latest
@@ -2392,16 +2332,16 @@
       let pfBy = false,
         /* Act button: the red / grey activity boxes */
         pfXb = false,
-        /* IC button: the ipoc channel */
+        /* IC button: the vipoc channel */
         pfIc = true,
         /* IC% button: its 10% / 90% lines and tails */
         pfIq = false,
         /* Gap button: the IC's red line */
-        pfRl = true,
+        pfRl = false,
         /* Bias button: the IC's bias arrows, big and small */
-        pfBs = true,
-        /* V95 button: the P&F's volume-hot boxes */
-        pfVa = true;
+        pfBs = false,
+        /* V95 button: the PF's volume-hot boxes */
+        pfVa = false;
       function setPfVa(v) {
         pfVa = !!v;
         $("pfVaTog").className = pfVa ? "a" : "";
@@ -2574,7 +2514,7 @@
       /*
        * vol.js, written by watch_simp at 00:00 UTC and when "v"
        * is typed in Telegram: window.VOL = 255, today's vol: the
-       * P&F and the steps. Past days use their own (volOfDay).
+       * PF and the steps. Past days use their own (volOfDay).
        * Checked every 30s; absent (office, phone) = today's
        * volOfDay, once its 20 days are loaded, else 255.
        */
@@ -3349,9 +3289,9 @@
           tpoFrac = null,
           /* VP alert events, from the last draw */
           vpEv = null,
-          /* P&F panel: columns shown (wheel) */
+          /* PF panel: columns shown (wheel) */
           pfN = 200,
-          /* pcPx: P&F width once dragged; full: window shown
+          /* pcPx: PF width once dragged; full: window shown
              full width */
           pcPx = null,
           full = null,
@@ -3462,7 +3402,7 @@
         }
         /*
          * header sections over their windows: profiles, POC
-         * candles, P&F (the chart section keeps to the right
+         * candles, PF (the chart section keeps to the right
          * edge, see the CSS); a section moves right to its
          * window's left edge when there is room on its line
          */
@@ -3474,7 +3414,7 @@
             ox = cv.getBoundingClientRect().left,
             T = [
               ["Profile and levels", 0],
-              ["P&F", pcPf && v.pcW ? v.pS : null],
+              ["PF", pcPf && v.pcW ? v.pS : null],
             ],
             key = [W, v.pS, v.x0, pcPf].join();
           if (key === hdrKey) return;
@@ -3543,7 +3483,7 @@
            * legendH = room for the TPO session legend and day
            * labels
            */
-          /* P&F / profiles full screen: no room right of the
+          /* PF / profiles full screen: no room right of the
              chart, they reach the price scale */
           const axW = 62,
             side =
@@ -3580,14 +3520,14 @@
               : fl === "pc"
                 ? x1 - 35
                 : pcPx ||
-                  /* profiles 20%, P&F 40%, chart 40% */
+                  /* profiles 20%, PF 40%, chart 40% */
                   Math.round(0.4 * W),
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
             px0 = W - axW;
-          /* profiles at the far left, then the P&F panel (pcW
+          /* profiles at the far left, then the PF panel (pcW
              wide, from pL), then the chart from x0; tR = the
-             profiles' right edge, pS where the P&F starts */
+             profiles' right edge, pS where the PF starts */
           const pcOff = pcW ? pcW + 10 : 0,
             x0 = tpoW + 10 + pcOff,
             pL = x0 - 3 - pcW,
@@ -4095,7 +4035,7 @@
             }
             return m;
           };
-          /* the forming 15m candle's high / low from the P&F
+          /* the forming 15m candle's high / low from the PF
              trades before t, or null */
           const liveHL = (cut, t) => {
             const d = aggrT.get(dayOf(cut)),
@@ -4136,11 +4076,11 @@
             kvC.set(kk, kn ? ksum / kn : 0);
             return kvC.get(kk);
           };
-          /* the ipoc on volume: the shrinking brick on the
+          /* the vipoc on volume: the shrinking brick on the
              day's USDT volume so far (rows of step), its latest
              P by age (volume-weighted time of the trades within
              half a vol), on its row's middle; the P nearest
-             the last ipoc (within vol) stays unless another is
+             the last vipoc (within vol) stays unless another is
              30 min newer */
           const volPoc = (zv, vf, step, pv) => {
             const rs = [...zv.rows.keys()];
@@ -4221,7 +4161,7 @@
               }
             });
             const sps = ps.length ? subPocs(dS, ps, vf, step, 1) : [];
-            /* IC: the latest ipoc, its normal curve's edges (rows
+            /* IC: the latest vipoc, its normal curve's edges (rows
                where its vol mass still gives a brick) */
             const hp = volHys.get(dS),
               pp = hp && hp.t < tp ? hp.px : null,
@@ -4266,7 +4206,7 @@
                 else cs = cw = 0;
                 if (cw > gw) (gs = cs), (gw = cw);
               }
-              /* red shoulders: per wing (above / below the ipoc
+              /* red shoulders: per wing (above / below the vipoc
                  row), the run of 2+ rows missing the most vs the
                  perfect mass; [bottom, top, missing] */
               const ip = Math.floor(S.px / step),
@@ -4324,6 +4264,42 @@
           g.clip();
           g.font = "10px ui-monospace,Menlo,monospace";
           g.textBaseline = "middle";
+          /* sub POCs: P1 solid, P2 dashed, P3 dotted, each
+             tagged with its price and its birth brick; green
+             above the POC before it, black below (navy with
+             none before it); St: the earliest session in
+             its row */
+          const drawPs = (P, sp, cx0) => sp.forEach((S, k) => {
+            const y = Y(S.px),
+              pv = zPrev.get(P.dS + "|" + S.px),
+              row = P.rows.get(Math.floor(S.px / P.step)),
+              c =
+                stCol && row && row.length
+                  ? tpoColor(Math.min(...row))
+                  : pv == null
+                  ? "#003366"
+                  : S.px < pv
+                    ? "#000"
+                    : "#089981",
+              tx = "P" + (k + 1) + " " + S.px.toFixed(DP) +
+                " ·" + S.born.toFixed(0);
+            g.strokeStyle = c;
+            g.lineWidth = 3;
+            g.setLineDash([[], [8, 4], [3, 3]][k]);
+            g.beginPath();
+            g.moveTo(cx0 - 2, y);
+            g.lineTo(cx0 + colW, y);
+            g.stroke();
+            g.setLineDash([]);
+            /* white halo so the tag reads over bricks */
+            g.font = "bold 11px ui-monospace,Menlo,monospace";
+            g.textAlign = "left";
+            g.strokeStyle = "#fff";
+            g.lineWidth = 3;
+            g.strokeText(tx, cx0, y - 9);
+            g.fillStyle = c;
+            g.fillText(tx, cx0, y - 9);
+          });
           for (let d = 0; d < cnt + ex; d++) {
             const Q = dayProf(tpoDays[d]),
               cx0 = 6 + (d - ex + tf) * (colW + gap),
@@ -4339,10 +4315,9 @@
                by delta (written), the top row darker; trades
                loaded on demand */
             if (showVap) {
-              if (useUsdt) loadUsdt(P.dS);
-              const v = (useUsdt ? usdtOf : vapOf)(P.dS);
-              if (!v) loadAggr(P.dS);
-              else {
+              loadUsdt(P.dS);
+              const v = usdtOf(P.dS);
+              if (v) {
                 const t5 = new Set([...v.rows]
                   .sort((a, b) => b[1] - a[1]).slice(0, 5)
                   .map(([r]) => r));
@@ -4366,13 +4341,17 @@
                 });
                 g.restore();
               }
+              /* its vipocs, as on the VP */
+              if (P.ps.length) drawPs(P, byAge(P, subPocs(P.dS,
+                P.ps, volFor(P.dS) > 0 ? volFor(P.dS) : P.step * 10,
+                P.step)), cx0);
               continue;
             }
             if (P.poc == null) continue;
-            /* UD: the whole day black when its last ipoc in time
-               is under its first (one ipoc: under the day
+            /* UD: the whole day black when its last vipoc in time
+               is under its first (one vipoc: under the day
                before's last), else green */
-            const ipocs = (q) =>
+            const vipocs = (q) =>
               q.ps.length
                 ? subPocs(
                     q.dS,
@@ -4392,10 +4371,10 @@
                 : [];
             let ud = null;
             if (showUD || udZz) {
-              const o = ipocs(P),
+              const o = vipocs(P),
                 ref = o.length > 1
                   ? o[0]
-                  : ipocs(dayProf(prevDay(P.dS))).pop();
+                  : vipocs(dayProf(prevDay(P.dS))).pop();
               if (o.length && ref != null)
                 ud = o[o.length - 1] < ref ? "#000" : "#089981";
             }
@@ -4540,7 +4519,7 @@
                Mass: real - perfect per row, a strip on the left,
                green extra, red missing */
             if (vs) {
-              const kv = kvFor(P.dS, useUsdt ? "BTCUSDT" : SYM);
+              const kv = kvFor(P.dS, "BTCUSDT");
               if (showMass) {
                 g.strokeStyle = "#000";
                 g.lineWidth = 1;
@@ -4639,50 +4618,13 @@
               g.lineWidth = 3;
               g.strokeRect(curB[0] - s / 2, curB[1] - s / 2, s, s);
             }
-            /* sub POCs: P1 solid, P2 dashed, P3 dotted, each
-               tagged with its price and its birth brick; green
-               above the POC before it, black below (navy with
-               none before it); St: the earliest session in
-               its row */
-            sp.forEach(
-              (S, k) => {
-                const y = Y(S.px),
-                  pv = zPrev.get(P.dS + "|" + S.px),
-                  row = P.rows.get(Math.floor(S.px / P.step)),
-                  c =
-                    stCol && row && row.length
-                      ? tpoColor(Math.min(...row))
-                      : pv == null
-                      ? "#003366"
-                      : S.px < pv
-                        ? "#000"
-                        : "#089981",
-                  tx = "P" + (k + 1) + " " + S.px.toFixed(DP) +
-                    " ·" + S.born.toFixed(0);
-                g.strokeStyle = c;
-                g.lineWidth = 3;
-                g.setLineDash([[], [8, 4], [3, 3]][k]);
-                g.beginPath();
-                g.moveTo(cx0 - 2, y);
-                g.lineTo(cx0 + colW, y);
-                g.stroke();
-                g.setLineDash([]);
-                /* white halo so the tag reads over bricks */
-                g.font = "bold 11px ui-monospace,Menlo,monospace";
-                g.textAlign = "left";
-                g.strokeStyle = "#fff";
-                g.lineWidth = 3;
-                g.strokeText(tx, cx0, y - 9);
-                g.fillStyle = c;
-                g.fillText(tx, cx0, y - 9);
-              },
-            );
+            drawPs(P, sp, cx0);
             /* LC button: a day's candle, open = yesterday's latest
-               ipoc, close = its own, wick = its range; today's is
+               vipoc, close = its own, wick = its range; today's is
                hollow until the day ends */
             if (showLC && P.ps.length) {
-              const c = ipocs(P).pop(),
-                o = ipocs(dayProf(prevDay(P.dS))).pop();
+              const c = vipocs(P).pop(),
+                o = vipocs(dayProf(prevDay(P.dS))).pop();
               if (c != null && o != null) {
                 const rgb = c >= o ? "8,153,129" : "0,0,0",
                   y0 = Y(Math.max(o, c)),
@@ -4705,7 +4647,7 @@
               }
             }
             if (showYB) {
-              const last = ipocs(P).pop();
+              const last = vipocs(P).pop();
               let sum = 0,
                 n = 0;
               P.rows.forEach((l, r) =>
@@ -5414,7 +5356,7 @@
               else g.stroke();
               g.restore();
             });
-            /* P&F: a grey circle arms the calm alert */
+            /* PF: a grey circle arms the calm alert */
             if (w !== "pf") return;
             const x = xr - 72,
               y = top + 3,
@@ -5490,7 +5432,7 @@
             g.restore();
           };
           /*
-           * the P&F columns in the DPoc panel, on the chart's
+           * the PF columns in the DPoc panel, on the chart's
            * price scale. Box colour by its delta (taker buys -
            * sells). Each column is a line (green buyers, black
            * sellers); a box whose |delta| tops the 95th
@@ -5559,7 +5501,7 @@
                  rank, no steps */
               const q = hs.exc[ci.get(c)];
               g.fillStyle = `rgba(242,54,69,${q ** 3})`;
-              g.fillRect(xm - sl / 2, bot - 8, sl + 0.5, 8);
+              if (pfXb) g.fillRect(xm - sl / 2, bot - 8, sl + 0.5, 8);
               /* Br: every box a brick, coloured by the time the
                  column first traded it, as the profiles; the
                  end bricks cut at the real high / low */
@@ -5673,7 +5615,7 @@
                   /* size by |delta|: 3px, +2px a BTC (USDT: per
                      10 BTC), 12px at most */
                   const rd = Math.min(12,
-                    3 + (2 * Math.abs(dl)) / (useUsdt ? 10 : 1));
+                    3 + (2 * Math.abs(dl)) / 10);
                   g.fillStyle = dl >= 0 ? "#089981" : "#e53935";
                   g.strokeStyle = "#000";
                   g.lineWidth = 1.5;
@@ -5712,7 +5654,7 @@
               });
             });
             /*
-             * P&F swings (Colour on): the bricks in the order
+             * PF swings (Colour on): the bricks in the order
              * they traded, green / black by Sg (blue ignored).
              * A black run that goes a brick under the lowest
              * one of the black run before the last green run
@@ -5771,7 +5713,7 @@
           };
           /* pcGeo: DPoc candles and their x, for the magnet */
           const pcGeo = [],
-            /* pfX: shown P&F columns [start time, x] */
+            /* pfX: shown PF columns [start time, x] */
             pfX = [];
           let pcShow = 0,
             pcSl = 0;
@@ -5990,14 +5932,14 @@
           }
           if (pcW) {
             const pa = pL;
-            /* P&F: columns from yesterday's and today's trades,
+            /* PF: columns from yesterday's and today's trades,
                box = the brick */
             const d1 = dayOf(Date.now()),
               s0 = pfStep(d1 - DAY),
               s1 = pfStep(d1);
             loadAggr(d1 - DAY);
             loadAggr(d1);
-            if (pfIc || (useUsdt && pfVa))
+            if (pfIc || pfVa)
               loadUsdt(d1 - DAY), loadUsdt(d1);
             const pfc = pfCols([d1 - DAY, d1]);
             const nFit = pfN,
@@ -6010,7 +5952,7 @@
             g.clip();
             /* same price scale as the chart */
             /* pb = what is loaded so far; pcBack waits for more;
-               negative = empty slots on the right. P&F keeps
+               negative = empty slots on the right. PF keeps
                15% of them (home), so new columns push it left */
             const items = pfc,
               room = items.length - nFit,
@@ -6027,12 +5969,12 @@
               cv2 = items.slice(k0, k1),
               jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
             drawPfCols(pfc, cv2, jOf, pa, sl);
-            /* IC: ipoc channel, each column as at its start (no
-               repaint): ipoc fat navy, edges thin */
+            /* IC: vipoc channel, each column as at its start (no
+               repaint): vipoc fat navy, edges thin */
             if (pfIc) {
-              /* edges per ipoc (a new one: a move of 1 vol or more):
+              /* edges per vipoc (a new one: a move of 1 vol or more):
                  they only widen, on a new high or low */
-              /* run arrow: the ipoc above (below) the day before's
+              /* run arrow: the vipoc above (below) the day before's
                  last, an up (down) column crossing a shoulder's
                  bottom (top) edge, shoulders as the column began:
                  tip at the edge (entry), target the far edge, stop
@@ -6086,7 +6028,7 @@
                   Y(u) - Y(l));
               });
               (pfIq ? [0, 1, 2, 3, 4] : [0, 1, 2]).forEach((j) => {
-                /* ipoc: fat, the VP POC's navy */
+                /* vipoc: fat, the VP POC's navy */
                 g.strokeStyle = j ? "#2962ff" : "#003366";
                 g.lineWidth = j ? (j > 2 ? 0.5 : 1) : 3;
                 g.beginPath();
@@ -6102,9 +6044,9 @@
                 });
                 g.stroke();
               });
-              /* green zone, 3 bricks: green above the ipoc, red
-                 below */
-              pts.forEach((q) => {
+              /* green zone (with Gap), 3 bricks: green above the
+                 vipoc, red below */
+              if (pfRl) pts.forEach((q) => {
                 if (!q || !q[2]) return;
                 const [c, h] = q[2];
                 g.fillStyle = c > q[1][0] ? "rgba(8,153,129,.3)"
@@ -6163,7 +6105,7 @@
             const pm = pa + pcW / 2;
             /* box: yesterday's / today's */
             g.fillText(
-              "P&F, box " + (s0 === s1 ? s1 : s0 + " / " + s1),
+              "PF, box " + (s0 === s1 ? s1 : s0 + " / " + s1),
               pm,
               bot + 10,
             );
@@ -6574,7 +6516,7 @@
                 ptag(y, L.b.toFixed(DP), col);
             });
             g.restore();
-            /* and on the P&F, from the first column started at
+            /* and on the PF, from the first column started at
                or after each time */
             if (pcW && pfX.length) {
               const pR = pL + pcW,
@@ -6828,7 +6770,7 @@
             g.lineWidth = 1;
           }
           /*
-           * the same orders in the P&F: a time maps to the last
+           * the same orders in the PF: a time maps to the last
            * column started by then; older than the first shown
            * column = its left edge, still open = the right edge
            */
@@ -6916,7 +6858,7 @@
               if (y >= top && y <= bot) {
                 /* the chart part starts at the candle of its
                    time (or just before); on the main chart a
-                   part over the P&F / profiles too (dSide),
+                   part over the PF / profiles too (dSide),
                    wherever the line was drawn */
                 const o = geoAt(l.t),
                   xm = o ? o.x + o.w / 2 : x0,
@@ -6974,8 +6916,8 @@
             g.fillRect(x0 - 2, 0, px0 - x0 + 2, H);
           }
           if (cfg.main) {
-            /* P&F: a cross at its top left closes it; once
-               closed, a P&F tag there on the chart opens it */
+            /* PF: a cross at its top left closes it; once
+               closed, a PF tag there on the chart opens it */
             if (pcW || (cfg.tpo && !pcPf && !full)) {
               const x = pcW ? pL + 6 : x0 + 4,
                 y = top + 4;
@@ -6998,7 +6940,7 @@
                 g.textAlign = "left";
                 g.textBaseline = "top";
                 g.strokeRect(x - 0.5, y - 1.5, 40, 15);
-                g.fillText("+P&F", x + 4, y + 1);
+                g.fillText("+PF", x + 4, y + 1);
                 icons.push({ k: "o|pc", x: x - 2, y: y - 3, w: 44,
                   h: 19 });
               }
@@ -7103,7 +7045,7 @@
             if (fl) lTag(4);
             let lbl = null;
             if (o) lbl = dlabel(o.c.t);
-            /* over the P&F: the hovered column's start time */
+            /* over the PF: the hovered column's start time */
             else if (
               pcW &&
               mouse.x >= pS &&
@@ -7161,7 +7103,7 @@
             if (lbl && mouse.x < tR) ttag(cx, lbl, XB, XF, true);
           }
           /*
-           * the P&F gets the crosshair's time too: a line on the
+           * the PF gets the crosshair's time too: a line on the
            * last column started by then (end of the hovered 5m
            * candle, or the 15s brick hovered in the other chart)
            */
@@ -7193,7 +7135,7 @@
               g.lineTo(px, bot);
               g.stroke();
               g.restore();
-              /* and that column's time under the P&F */
+              /* and that column's time under the PF */
               ttag(px, dlabel(pt), XB, XF);
             }
           }
@@ -7249,7 +7191,7 @@
               ttag((a + b.x + b.w) / 2, dlabel(ts), XB, XF);
             }
           }
-          /* hovering a P&F column: its time on this chart too */
+          /* hovering a PF column: its time on this chart too */
           if (pcW && mouse && mouse.x >= pS && mouse.x < x0 - 5) {
             const ro = geoAt(pfTime(mouse.x));
             if (ro && pfTime(mouse.x) != null) {
@@ -7451,7 +7393,7 @@
               const sn = snap(x, y);
               drag.p = sn.p;
               drag.t = sn.o.c.t;
-              /* over P&F / profiles the start is a screen x */
+              /* over PF / profiles the start is a screen x */
               drag.l = sn.left;
               drag.lk = sn.anc && sn.anc.lk;
               drag.fr = sn.anc && sn.anc.fr;
@@ -7544,7 +7486,7 @@
           }
         });
 
-        /* start time of the P&F column under x, if any */
+        /* start time of the PF column under x, if any */
         function pfTime(x) {
           if (!view || !view.pfX || !view.pcSl) return null;
           const q = view.pfX.find(
@@ -7564,7 +7506,7 @@
             y > view.bot
           )
             return false;
-          /* "pc" = profiles / P&F edge, "tpo" = the edge
+          /* "pc" = profiles / PF edge, "tpo" = the edge
              before the chart */
           if (view.pcW && view.tpoW && Math.abs(x - view.tR) <= 5)
             return "pc";
@@ -7580,7 +7522,7 @@
         /* where a box or dot starts: its candle, or the x it
            was drawn at over DPoc / the profiles */
         /* l.l: drawn over the profiles, a main chart x; "pf":
-           over the P&F, at the column of its time (the
+           over the PF, at the column of its time (the
            panel's left edge if older than those shown) */
         function xsOf(l) {
           if (l.l === "pf" && cfg.main) return pfXAt(l.t);
@@ -7602,7 +7544,7 @@
           const o = geoAt(l.t);
           return o ? o.x + o.w / 2 : view ? view.x0 : 0;
         }
-        /* the P&F column of time t, or the panel's left edge
+        /* the PF column of time t, or the panel's left edge
            if t is older than the columns shown */
         function pfXAt(t) {
           let x = view.pS + 2;
@@ -7610,8 +7552,8 @@
           return x;
         }
         /* a level line's start on the main chart's side
-           windows: its own x over the profiles, else the P&F
-           column of its time while the P&F shows */
+           windows: its own x over the profiles, else the PF
+           column of its time while the PF shows */
         function dSide(l) {
           if (!cfg.main || !view) return null;
           if (typeof l.l === "number") return l.l;
@@ -7639,7 +7581,7 @@
             ((y - view.top) / view.ch) * (view.hi - view.lo);
           const o = at(x);
           if (x < view.x0 - 5) {
-            /* over the P&F: magnet to that column, else free */
+            /* over the PF: magnet to that column, else free */
             const q = (view.pcGeo || []).find(
                 (g2) => x >= g2.xa && x < g2.xb,
               ),
@@ -7653,7 +7595,7 @@
                 p = v;
               }
             });
-            /* over the P&F: the column's own time, so the
+            /* over the PF: the column's own time, so the
                other charts start the line at the candle /
                brick then (or just before) */
             const pt = pfTime(x),
@@ -7661,7 +7603,7 @@
                 (q2) =>
                   x >= q2.cx0 - 2 && x <= q2.cx0 + view.colW + 2,
               );
-            /* anchors that survive a resize: a P&F column
+            /* anchors that survive a resize: a PF column
                time, a POC candle (its day and order), or a
                profile day and the place in its column */
             if (pt != null)
@@ -8143,7 +8085,7 @@
 
             const sg = Math.sign(e.deltaY),
               wx = e.clientX - cv.getBoundingClientRect().left;
-            /* over the P&F: its column count; over the profiles:
+            /* over the PF: its column count; over the profiles:
                the number of days, one at a time, 1 to 30 (the
                profiles keep their width, so the chart does not
                shrink) */
@@ -8563,7 +8505,6 @@
           showBZ,
           showYB,
           showVap,
-          useUsdt,
           showVw,
           showSO,
           showDO,
@@ -8646,31 +8587,14 @@
         if (st.dv >= 14 && typeof st.pocBand === "boolean")
           setPocBand(st.pocBand);
         /* POC: default changed in version 8 */
-        /* P&F: default changed in version 9 */
+        /* PF: default changed in version 9 */
         if (st.dv >= 9 && typeof st.pcPf === "boolean")
           setPcPf(st.pcPf);
         /* Br, Sw, Alrt: defaults changed in version 15;
            Alrt, Buy off in version 22, Act in 23 */
-        if (st.dv >= 19 && typeof st.pfBr === "boolean")
-          setPfBr(st.pfBr);
-        if (st.dv >= 26 && typeof st.pfSg === "boolean")
-          setPfSg(st.pfSg);
-        if (st.dv >= 22 && typeof st.pfHl === "boolean")
-          setPfHl(st.pfHl);
-        if (st.dv >= 15 && typeof st.pfSw === "boolean")
-          setPfSw(st.pfSw);
-        if (st.dv >= 22 && typeof st.pfBy === "boolean")
-          setPfBy(st.pfBy);
-        if (st.dv >= 23 && typeof st.pfXb === "boolean")
-          setPfXb(st.pfXb);
+        /* PF: channel only for now, its other buttons hidden
+           at their defaults (session-coloured bricks) */
         if (typeof st.pfIc === "boolean") setPfIc(st.pfIc);
-        if (st.dv >= 25 && typeof st.pfIq === "boolean")
-          setPfIq(st.pfIq);
-        if (st.dv >= 33 && typeof st.pfRl === "boolean")
-          setPfRl(st.pfRl);
-        if (st.dv >= 33 && typeof st.pfBs === "boolean")
-          setPfBs(st.pfBs);
-        if (typeof st.pfVa === "boolean") setPfVa(st.pfVa);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
           setShowPOC(st.showPOC);
         if (typeof st.stCol === "boolean") setStCol(st.stCol);
@@ -8689,8 +8613,6 @@
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
         if (st.dv >= 27 && typeof st.showVap === "boolean")
           setShowVap(st.showVap);
-        if (st.dv >= 31 && typeof st.useUsdt === "boolean")
-          setUseUsdt(st.useUsdt);
         if (st.dv >= 31 && typeof st.showVw === "boolean")
           setShowVw(st.showVw);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
@@ -8913,7 +8835,6 @@
       $("bzTog").onclick = () => setShowBZ(!showBZ);
       $("ybTog").onclick = () => setShowYB(!showYB);
       $("vapTog").onclick = () => setShowVap(!showVap);
-      $("usdtTog").onclick = () => setUseUsdt(!useUsdt);
       /* VBT on: USDT by default (the real market) */
       $("vbTog").onclick = () => {
         setShowVw(!showVw);
