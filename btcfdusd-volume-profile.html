@@ -880,11 +880,11 @@
           const c = [];
           ps.forEach((q) => {
             if (vo)
-              return (vo.p[q.i] || []).forEach((x, r) => {
-                const j = Math.max(0,
-                  Math.floor(((r + 0.5) * fine - lo) / s));
-                c[j] = (c[j] || 0) + x;
-              });
+              /* split by overlap: whole rows alias */
+              return (vo.p[q.i] || []).forEach((x, r) =>
+                spread(r * fine - lo, (r + 1) * fine - lo, s,
+                  (j, k) => (c[Math.max(0, j)] =
+                    (c[Math.max(0, j)] || 0) + x * k)));
             const a = Math.floor((q.l - lo) / s),
               b = Math.floor((q.h - lo) / s);
             for (let r = a; r <= b; r++) c[r] = (c[r] || 0) + 1;
@@ -4140,10 +4140,10 @@
               h = Math.round(vf / step / 2),
               ps = pocsBy(lo, hi, vf, step, (s) => {
                 const c = [];
-                zv.rows.forEach((q, r) => {
-                  const i = Math.floor(((r + 0.5) * step - lo) / s);
-                  c[i] = (c[i] || 0) + q;
-                });
+                /* split by overlap: whole rows alias */
+                zv.rows.forEach((q, r) =>
+                  spread(r * step - lo, (r + 1) * step - lo, s,
+                    (i, k) => (c[i] = (c[i] || 0) + q * k)));
                 return c;
               }),
               age = (P) => {
