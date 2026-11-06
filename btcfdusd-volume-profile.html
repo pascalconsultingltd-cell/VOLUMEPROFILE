@@ -581,7 +581,7 @@
               </button
               ><button
                 id="pfRlTog"
-                class=""
+                class="a"
                 title="IC: each wing's red shoulder (volume)"
               >
                 Gap
@@ -595,8 +595,8 @@
               </button
               ><button
                 id="pfBsTog"
-                class=""
-                title="IC: arrow when the extra bricks lean one way"
+                class="a"
+                title="IC: arrow at a shoulder edge, ipoc's way"
               >
                 Bias
               </button></span
@@ -2397,9 +2397,9 @@
         /* IC% button: its 10% / 90% lines and tails */
         pfIq = false,
         /* Gap button: the IC's red line */
-        pfRl = false,
+        pfRl = true,
         /* Bias button: the IC's bias arrows, big and small */
-        pfBs = false,
+        pfBs = true,
         /* V95 button: the P&F's volume-hot boxes */
         pfVa = true;
       function setPfVa(v) {
@@ -6022,10 +6022,11 @@
             if (pfIc) {
               /* edges per ipoc (a new one: a move of 1 vol or more):
                  they only widen, on a new high or low */
-              /* bias arrow: the zone's side of the ipoc, 3+ extra
-                 bricks, first time since the other side, a blank
-                 or a new ipoc; none in an excursion (a jump: price
-                 out of the channel), a blank */
+              /* bias arrow: the ipoc's last move up (down), a down
+                 (up) column whose low (high) came within a brick
+                 of a shoulder's bottom (top) edge, as that column
+                 began: at the next column's start; none in an
+                 excursion (a jump: price out of the channel) */
               /* sell: in a down excursion, a column starting 3+
                  bricks above the row with the most bricks since it
                  began (closed columns only); again once back to it.
@@ -6033,23 +6034,28 @@
                  Swing: a column touches its zone (closed columns
                  only), a later one starts 3+ bricks past the zone's
                  edge: an arrow that way, once per touch */
-              let hi, lo, pv = null, bs = 0, xm = null, ar = true,
-                tz = null;
+              let hi, lo, pv = null, mg = 0, pq = null, xm = null,
+                ar = true, tz = null;
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
-                if (!m.ic) return (pv = null), (bs = 0);
-                const [p, h, l, v] = m.ic,
-                  b = m.gl && m.gl[2] >= 3 ?
-                    Math.sign(m.gl[0] - p) : 0;
+                if (!m.ic) return (pv = pq = null), (mg = 0);
+                const [p, h, l, v] = m.ic;
                 const rs = pv === null || Math.abs(p - pv) >= v - p;
                 if (rs)
-                  (hi = h), (lo = l), (bs = 0), (xm = null),
-                    (tz = null);
+                  (hi = h), (lo = l), (xm = null), (tz = null);
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
+                if (pv !== null && p !== pv) mg = Math.sign(p - pv);
                 pv = p;
-                const exc = c.p0 > hi || c.p0 < lo,
-                  f = b && b !== bs && !exc ? b : 0;
-                bs = exc ? 0 : b;
+                const exc = c.p0 > hi || c.p0 < lo;
+                let f = 0;
+                if (pq && mg && !exc && pq[1].sh &&
+                  pq[0].up !== mg > 0)
+                  pq[1].sh.forEach((z) => {
+                    const x = mg > 0 ? pq[0].pl : pq[0].ph;
+                    if (z && Math.abs(x - z[+(mg < 0)]) <= c.st)
+                      f = mg;
+                  });
+                pq = [c, m];
                 let sd = 0;
                 const xd = c.p0 < lo ? 1 : c.p0 > hi ? -1 : 0;
                 if (xd) {
@@ -8555,7 +8561,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 32;
+      const DEFAULTS_VER = 33;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -8697,8 +8703,9 @@
         if (typeof st.pfIc === "boolean") setPfIc(st.pfIc);
         if (st.dv >= 25 && typeof st.pfIq === "boolean")
           setPfIq(st.pfIq);
-        if (typeof st.pfRl === "boolean") setPfRl(st.pfRl);
-        if (st.dv >= 28 && typeof st.pfBs === "boolean")
+        if (st.dv >= 33 && typeof st.pfRl === "boolean")
+          setPfRl(st.pfRl);
+        if (st.dv >= 33 && typeof st.pfBs === "boolean")
           setPfBs(st.pfBs);
         if (typeof st.pfVa === "boolean") setPfVa(st.pfVa);
         if (st.dv >= 8 && typeof st.showPOC === "boolean")
