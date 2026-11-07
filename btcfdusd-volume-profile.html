@@ -846,6 +846,8 @@
         zCache = new Map(),
         /* St colours of closed periods, frozen (see stAt) */
         stFz = new Map(),
+        /* VP age ranks per 30m close, frozen (see rkAt) */
+        rkFz = new Map(),
         /* PF columns' final IC by start time (see icFor) */
         icT = new Map();
       /* first brick of the sub POC search: SUB_K x the vol
@@ -3567,8 +3569,6 @@
         }
         function drawInner() {
           g.clearRect(0, 0, W, H);
-          /* VP age ranks per day [px, move, number], for the PF */
-          const rkDays = new Map();
           const arr = mode === "lb" ? lbBars(src()) : src();
           arrLen = arr.length;
           /*
@@ -4578,6 +4578,63 @@
             vw.dc = [ck, out];
             return out;
           };
+          /*
+           * PF: the VP age ranks (P's and D's together) as at the
+           * close of period i of day dS, from its closed periods
+           * only; frozen once its data is all in (no repaint).
+           * { two: the latest 2 [px, move, number], last: px }
+           */
+          const rkAt = (dS, i) => {
+            const fk = dS + "|" + i;
+            if (rkFz.has(fk)) return rkFz.get(fk);
+            const Q = dayProf(dS),
+              vf = volFor(dS),
+              kv = kvFor(dS, "BTCUSDT"),
+              vw = vwOf(dS, Q.step),
+              uk = usdtK.get(dS),
+              at = aggrT.get(dS),
+              z = uk && uk.k[uk.k.length - 1],
+              te = dS + (i + 1) * TPO_MS,
+              ps = Q.ps.filter((q) => q.i <= i);
+            if (!(volOfDay(dS) > 0) || !kv || !vw || !z || !at ||
+              te > Date.now() || !ps.length ||
+              !((uk.end && at.end) || z[0] >= te - 1000))
+              return null;
+            const rows = new Map(),
+              rw = new Map();
+            Q.rows.forEach((l, r) => {
+              const w = l.filter((p) => p <= i);
+              if (w.length) rows.set(r, w);
+            });
+            vw.forEach((q, k) => {
+              const [r, p] = k.split("|").map(Number);
+              if (p <= i) rw.set(r, (rw.get(r) || 0) + q);
+            });
+            const P = { ...Q, rows },
+              sp = subPocs(dS, ps, vf, Q.step),
+              dc = dCurve(P, { rw }, sp, kv, vf, expOf(P, sp, vf)),
+              ag = (X) => {
+                const w = rows.get(Math.floor(X.px / Q.step));
+                return w && w.length ? rowAge(w) : 99;
+              },
+              e = [...sp, ...(dc.ps || [])]
+                .map((X) => [ag(X), X.px])
+                .sort((a, b) => a[0] - b[0]);
+            /* 1 moves vs the day before's last (else its vipoc) */
+            const pv = rkAt(prevDay(dS), 47);
+            let q0 = pv ? pv.last
+              : vipocs(dayProf(prevDay(dS))).pop();
+            const out = e.map(([, px], n) => {
+              const mv = q0 == null ? 0 : px >= q0 ? 1 : -1;
+              q0 = px;
+              return [px, mv, n + 1];
+            });
+            const res = { two: out.slice(-2),
+              last: out.length ? out[out.length - 1][0] : null };
+            if (rkFz.size > 2000) rkFz.clear();
+            rkFz.set(fk, res);
+            return res;
+          };
           /* Perf: the curve's edge row by row, a step line from
              the profile's left edge, over its rows of a brick or
              more; w(e) = the width of e bricks */
@@ -4713,7 +4770,7 @@
                 full = uk && at && (P.dS === dayOf(Date.now())
                   ? z && z[0] >= Date.now() - 12e4
                   : uk.end && at.end);
-              if (!full || !vs || !(volFor(P.dS) > 0) ||
+              if (!full || !vs || !(volOfDay(P.dS) > 0) ||
                 !(kvFor(P.dS, "BTCUSDT") > 0)) {
                 g.font = "11px ui-monospace,Menlo,monospace";
                 g.textAlign = "left";
@@ -5009,7 +5066,6 @@
                 g.fillText(i + 1, x, Y(px));
               });
               if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
-              rkDays.set(P.dS, rk.map((e, i) => [e[2], e[3], i + 1]));
               g.restore();
               continue;
             }
@@ -6455,31 +6511,61 @@
                 });
                 g.stroke();
               });
-              /* the 2 latest VP age ranks (today's, else with the
-                 day before's last): a level across the PF each,
-                 green / red as their number (as they are now) */
-              const td = dayOf(Date.now());
-              g.font = "bold 12px ui-monospace,Menlo,monospace";
-              g.textAlign = "right";
-              g.textBaseline = "middle";
-              [...(rkDays.get(prevDay(td)) || []),
-                ...(rkDays.get(td) || [])].slice(-2)
-                .forEach(([px, mv, n]) => {
-                  const col = !mv ? "#000"
-                      : mv > 0 ? "#089981" : "#e53935",
-                    y = Y(px);
-                  g.strokeStyle = col;
-                  g.lineWidth = 2;
-                  g.beginPath();
-                  g.moveTo(pa, y);
-                  g.lineTo(pa + pcW, y);
-                  g.stroke();
-                  g.strokeStyle = "#fff";
-                  g.lineWidth = 3;
-                  g.strokeText(n, pa + pcW - 4, y - 9);
-                  g.fillStyle = col;
-                  g.fillText(n, pa + pcW - 4, y - 9);
+              /* the 2 latest VP age ranks as at each column's start
+                 (the last 30m close before it, no repaint): two
+                 step lines, green / red as their number, the
+                 numbers at the latest column */
+              const rkM = new Map(),
+                rkC = (t) => {
+                  const d = dayOf(t),
+                    i = Math.floor((t - d) / TPO_MS) - 1,
+                    k = d + "|" + i;
+                  if (!rkM.has(k)) {
+                    const x = i < 0 ? rkAt(prevDay(d), 47)
+                      : rkAt(d, i);
+                    rkM.set(k, x && x.two);
+                  }
+                  return rkM.get(k);
+                },
+                ser = cv2.map((c) => rkC(c.t0)),
+                cols = { g: "#089981", r: "#e53935", k: "#000" },
+                tag = [];
+              [0, 1].forEach((s) => {
+                const pth = { g: new Path2D(), r: new Path2D(),
+                    k: new Path2D() },
+                  at = (v) => v && v[v.length - 2 + s];
+                let py = null;
+                ser.forEach((v, k) => {
+                  const q = at(v);
+                  if (!q) return (py = null);
+                  const x = pa + sl * jOf(k),
+                    y = Y(q[0]),
+                    p = pth[!q[1] ? "k" : q[1] > 0 ? "g" : "r"];
+                  p.moveTo(x - sl / 2, py == null ? y : py);
+                  p.lineTo(x - sl / 2, y);
+                  p.lineTo(x + sl / 2, y);
+                  py = y;
+                  tag[s] = [q, x];
                 });
+                g.lineWidth = 2;
+                Object.keys(pth).forEach((c) => {
+                  g.strokeStyle = cols[c];
+                  g.stroke(pth[c]);
+                });
+              });
+              g.font = "bold 12px ui-monospace,Menlo,monospace";
+              g.textAlign = "left";
+              g.textBaseline = "middle";
+              tag.forEach((t) => {
+                if (!t) return;
+                const [[px, mv, n], x] = t;
+                g.strokeStyle = "#fff";
+                g.lineWidth = 3;
+                g.strokeText(n, x + 4, Y(px) - 9);
+                g.fillStyle = !mv ? "#000"
+                  : mv > 0 ? "#089981" : "#e53935";
+                g.fillText(n, x + 4, Y(px) - 9);
+              });
               g.textBaseline = "alphabetic";
               g.lineWidth = 1;
               /* green zone (with Gap), 3 bricks: green above the
@@ -6589,16 +6675,18 @@
             });
           /*
            * circles: green below bullish bars, black above
-           * bearish bars; the 15s window gets its own; none in
-           * HA (it shows only the big candles already)
+           * bearish bars; the 15s window gets its own; HA: in
+           * the middle of the candle (high to low), so a small
+           * one is not missed
            */
           geo.forEach((o) => {
             const f = bigs.get(o.c);
-            if (!f || side || ha) return;
+            if (!f || side) return;
             const c = o.c;
             if (c.c === c.o) return;
             const bull = c.c > c.o,
-              y = bull ? Y(c.l) + 12 : Y(c.h) - 12;
+              y = ha ? Y((c.h + c.l) / 2)
+                : bull ? Y(c.l) + 12 : Y(c.h) - 12;
             if (y < top || y > bot) return;
             g.fillStyle = bull ? "#4caf50" : "#000000";
             g.beginPath();
