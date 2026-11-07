@@ -1331,6 +1331,63 @@
          usdtK: day -> { k: [time, high, low, close, vol,
          taker buy vol], end, at }; today topped up every 5s,
          about 87 requests a day */
+      /* big candles: volume from BTCUSDT (prices stay FDUSD).
+         uv5: 5m start -> USDT volume, its 5m klines back to
+         the oldest 5m candle; live from its kline stream */
+      const uv5 = new Map();
+      let uvLo = Infinity,
+        uvBusy = false,
+        uvEnd = false;
+      async function loadUv5() {
+        if (uvBusy || uvEnd || !k5.length || uvLo <= k5[0].t) return;
+        uvBusy = true;
+        try {
+          const e = uvLo < Infinity ? "&endTime=" + (uvLo - 1) : "";
+          for (const h of REST) {
+            try {
+              const j = await fj(h + "/api/v3/klines?symbol=BTCUSDT" +
+                "&interval=5m&limit=1000" + e);
+              if (!Array.isArray(j)) continue;
+              if (!j.length) uvEnd = true;
+              j.forEach((r) => {
+                uv5.set(r[0], +r[5]);
+                uvLo = Math.min(uvLo, r[0]);
+              });
+              break;
+            } catch (err) {}
+          }
+        } finally {
+          uvBusy = false;
+          schedule();
+        }
+      }
+      /* a candle's USDT volume: 5m from uv5, 15s from the
+         USDT seconds in it; undefined until loaded */
+      function uOf(c, five) {
+        if (c.u !== undefined)
+          return Number.isFinite(c.u) ? c.u : undefined;
+        if (five) {
+          const u = uv5.get(c.t);
+          if (u === undefined) loadUv5();
+          return u;
+        }
+        const dS = dayOf(c.t),
+          d = usdtK.get(dS);
+        if (!d || !d.k.length) return loadUsdt(dS), undefined;
+        const a = d.k,
+          e = c.t + 15000;
+        if (a[0][0] > c.t || a[a.length - 1][0] < c.t)
+          return undefined;
+        let i = 0, j = a.length;
+        while (i < j) {
+          const m = (i + j) >> 1;
+          if (a[m][0] < c.t) i = m + 1;
+          else j = m;
+        }
+        let q = 0;
+        for (; i < a.length && a[i][0] < e; i++) q += a[i][4];
+        return q;
+      }
       const usdtK = new Map(),
         usdtBusy = new Set();
       /* daily volume (1d candles) of BTCUSDT and BTCFDUSD, for
@@ -2896,13 +2953,18 @@
        */
 
       function lbBars(arr) {
-        const out = [];
+        const out = [],
+          five = arr === k5;
         let av = 0,
-          ab = 0;
+          ab = 0,
+          au = 0;
         arr.forEach((c) => {
           if (c.c == null) return;
           av += c.v || 0;
           ab += c.bv || 0;
+          /* a missing second's volume: NaN, not big */
+          const u = uOf(c, five);
+          au += u === undefined ? NaN : u;
           const x = c.c;
           if (!out.length) {
             if (x !== c.o) {
@@ -2914,8 +2976,9 @@
                 l: Math.min(c.o, x),
                 v: av,
                 bv: ab,
+                u: au,
               });
-              av = ab = 0;
+              av = ab = au = 0;
             }
             return;
           }
@@ -2937,8 +3000,9 @@
             nb.l = Math.min(nb.o, nb.c);
             nb.v = av;
             nb.bv = ab;
+            nb.u = au;
             out.push(nb);
-            av = ab = 0;
+            av = ab = au = 0;
           }
         });
         return out;
@@ -3087,7 +3151,7 @@
         const h = REST[restI % REST.length],
           q = `symbol=${SYM}`;
         try {
-          const [bt, a5, a15, tr] = await Promise.all([
+          const [bt, a5, a15, tr, u5] = await Promise.all([
             fj(`${h}/api/v3/ticker/bookTicker?${q}`, 5000),
             fj(
               `${h}/api/v3/klines?${q}&interval=${IV}&limit=2`,
@@ -3104,7 +3168,11 @@
                   : `fromId=${pollId + 1}&limit=1000`),
               5000,
             ),
+            fj(`${h}/api/v3/klines?symbol=BTCUSDT` +
+              "&interval=5m&limit=2", 5000),
           ]);
+          if (Array.isArray(u5))
+            u5.forEach((r) => uv5.set(r[0], +r[5]));
           if (!polling) return;
           if (!Array.isArray(a5) || !Array.isArray(tr))
             throw new Error("bad reply");
@@ -3177,6 +3245,7 @@
           "bookTicker",
         ]
           .map((x) => sy + "@" + x)
+          .concat("btcusdt@kline_5m")
           .join("/");
         const again = () => {
           hostI++;
@@ -3225,6 +3294,8 @@
           }
           if (!m) return;
           if (m.e === "aggTrade") addTrade(+m.p, +m.q, m.T, m.m);
+          else if (m.e === "kline" && m.k && m.s === "BTCUSDT")
+            uv5.set(m.k.t, +m.k.v), schedule();
           else if (m.e === "kline" && m.k) onKline(m.k);
           /* bookTicker */
           else if (m.b !== undefined && m.a !== undefined)
@@ -8141,8 +8212,16 @@
 
         /* needs k>=BIG_WIN-1 */
         function isBig(arr, k) {
-          const c = arr[k];
+          const c = arr[k],
+            five = arr === k5;
           if (!c || c.h == null) return false;
+          /* volume from BTCUSDT: not big until it is loaded */
+          const us = [];
+          for (let j = k - BIG_WIN + 1; j <= k; j++) {
+            const u = uOf(arr[j], five);
+            if (u === undefined) return false;
+            us.push(u);
+          }
           const key =
             (cfg.main ? TF : "") +
             mode +
@@ -8153,7 +8232,7 @@
             "|" +
             c.c +
             "|" +
-            c.v +
+            us[BIG_WIN - 1] +
             "|" +
             arr[k - BIG_WIN + 1].t;
           let f = fcache.get(key);
@@ -8164,11 +8243,12 @@
             for (let j = 0; j < BIG_WIN; j++) {
               const q = arr[k - BIG_WIN + 1 + j];
               bs[j] = Math.abs(q.c - q.o);
-              vs[j] = q.v;
+              vs[j] = us[j];
             }
             bs.sort();
             vs.sort();
-            f = Math.abs(c.c - c.o) > bs[r] && c.v > vs[r];
+            f = Math.abs(c.c - c.o) > bs[r] &&
+              us[BIG_WIN - 1] > vs[r];
             fcache.set(key, f);
           }
           return f;
