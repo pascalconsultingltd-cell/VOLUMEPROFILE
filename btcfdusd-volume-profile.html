@@ -2940,10 +2940,12 @@
               exG = { x: x0 - w + sh, w, c: ec };
             }
           }
-          /* HA button: only the big candles and the ZFB, on
-             the profiles' UTC half hour colours, very light */
-          const ha = cfg.main && !side && geo.length;
-          if (ha) {
+          /* HA (VC / LB): only the big candles and the ZFB; Std:
+             every candle. Both on the profiles' UTC half hour
+             colours, very light */
+          const ha = cfg.main && !side && geo.length &&
+            mode !== "std";
+          if (cfg.main && !side && geo.length) {
             g.save();
             g.beginPath();
             g.rect(x0, top, px0 - x0, bot - top);
@@ -4620,7 +4622,7 @@
              (big needs a full window), not shown */
           const warm = arr.length ? arr[Math.min(arr.length - 1,
               3 * BIG_WIN)].t : 0;
-          if (ha && zOk) zfb(ha);
+          if (cfg.main && !side && geo.length && zOk) zfb(ha);
           /*
            * own orders (from orders.js): a segment at the
            * order price for as long as the order was alive,
