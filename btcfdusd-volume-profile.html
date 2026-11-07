@@ -4700,6 +4700,25 @@
             loadUsdt(P.dS);
             const vw = showVw ? vwOf(P.dS, P.step) : null,
               vs = vw && vw.mx ? (colW - 2) / vw.mx : 0;
+            /* VBT: a day shows once its data is all in (past: every
+               USDT second and FDUSD trade; today: to 2 min ago),
+               with its vol and kv; no TPO or partial draw first */
+            if (showVw) {
+              const uk = usdtK.get(P.dS),
+                at = aggrT.get(P.dS),
+                z = uk && uk.k[uk.k.length - 1],
+                full = uk && at && (P.dS === dayOf(Date.now())
+                  ? z && z[0] >= Date.now() - 12e4
+                  : uk.end && at.end);
+              if (!full || !vs || !(volFor(P.dS) > 0) ||
+                !(kvFor(P.dS, "BTCUSDT") > 0)) {
+                g.font = "11px ui-monospace,Menlo,monospace";
+                g.textAlign = "left";
+                g.fillStyle = "#787b86";
+                g.fillText("loading", cx0 + 4, top + 14);
+                continue;
+              }
+            }
             for (let r = P.a; r <= P.b && !vs; r++) {
               if (!showVA && r !== P.poc) continue;
               g.fillStyle =
