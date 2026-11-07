@@ -4256,8 +4256,10 @@
               if (vpC.size > 500) vpC.clear();
               vpC.set(pk, volPoc(pz, vf, step, pp));
             }
-            const S = (pz && vpC.get(pk)) ||
-              byAge({ rows, step }, sps).pop();
+            /* tp: the latest TPO P (time), for PF's orange line */
+            const T = byAge({ rows, step }, sps).pop(),
+              S = (pz && vpC.get(pk)) || T;
+            if (T) m.tp = (Math.floor(T.px / step) + 0.5) * step;
             if (pz && S && (!hp || hp.t < tp))
               volHys.set(dS, { t: tp, px: S.px });
             if (S) {
@@ -6096,7 +6098,7 @@
                     ...m.ic.slice(3)],
                   /* no zone in an excursion */
                   !bd[k0 + k][3] && m.gl, m.sh, bd[k0 + k][2],
-                  bd[k0 + k][4]];
+                  bd[k0 + k][4], m.tp];
               });
               g.fillStyle = "rgba(41,98,255,.07)";
               pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
@@ -6128,6 +6130,21 @@
                 });
                 g.stroke();
               });
+              /* TPO P (time): orange, as the vipoc's line */
+              g.strokeStyle = "#ff6d00";
+              g.lineWidth = 2;
+              g.beginPath();
+              let on = false;
+              pts.forEach((q) => {
+                if (!q || q[5] || q[6] == null) on = false;
+                if (!q || q[6] == null) return;
+                const y = Y(q[6]);
+                g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
+                g.lineTo(q[0] + sl / 2, y);
+                on = true;
+              });
+              g.stroke();
+              g.lineWidth = 1;
               /* green zone (with Gap), 3 bricks: green above the
                  vipoc, red below */
               if (pfRl) pts.forEach((q) => {
