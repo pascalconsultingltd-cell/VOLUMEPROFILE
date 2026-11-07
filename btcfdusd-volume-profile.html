@@ -6342,7 +6342,8 @@
               if (pfIc || pfVa) loadUsdt(d);
             });
             const pfc = pfCols(pds);
-            const nFit = pfN,
+            const nFit = pfN ||
+                Math.max(20, Math.round(pfc.length / 0.85)),
               sl = pcW / nFit;
             pcShow = nFit;
             pcSl = sl;
@@ -8756,14 +8757,20 @@
           newCandle,
           size,
           resetView: () => {
-            N = slotsFor(cfg.N);
+            /* main 5m: 3 days, from the Asia open (00:00 UTC) 2 days
+               back to now; VP 3 days; PF all its 3 days (pfN 0) */
+            N = slotsFor(cfg.main && TF === "5m"
+              ? Math.ceil((Date.now() - dayOf(Date.now()) +
+                2 * 864e5) / 3e5)
+              : cfg.N);
+            if (cfg.main) nTpo = 3;
             off = home();
             ysc = 1;
             ypan = 0;
             lock = null;
             pocHome = !!cfg.main;
             tpoFrac = null;
-            pfN = 200;
+            pfN = 0;
             pcPx = null;
             if (full !== fs0) setFull(fs0);
             pcBack = 0;
