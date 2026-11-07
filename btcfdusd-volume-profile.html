@@ -4604,6 +4604,8 @@
                 continue;
               }
             }
+            /* for the hover: its volume per brick and scale */
+            Object.assign(P, { vw, vs });
             for (let r = P.a; r <= P.b && !vs; r++) {
               if (!showVA && r !== P.poc) continue;
               g.fillStyle =
@@ -7487,7 +7489,9 @@
             }
           }
           /* candle hovered (or mirrored): its TPO period's bricks
-             outlined; TPO brick hovered: its half hour shaded */
+             outlined (VBT: their volume filled, row by row, from
+             the axis: the part of the bell they made); TPO brick
+             hovered: its half hour shaded */
           {
             const o = mouse && mouse.x >= x0 && hover >= 0 &&
                 geo[hover],
@@ -7504,7 +7508,14 @@
               hit = new Set();
             g.strokeStyle = "#e8590c";
             g.lineWidth = 2;
-            const box = (P, i, r) => {
+            /* VBT: periods per day, filled once at the end */
+            const vb = new Map(),
+              box = (P, i, r) => {
+              if (showVw) {
+                if (!P.vs) return;
+                if (!vb.has(P)) vb.set(P, new Set());
+                return void vb.get(P).add(i);
+              }
               const l = P.rows.get(r),
                 k = l ? l.indexOf(i) : -1;
               if (k < 0 || hit.has(P.dS + "|" + i + "|" + r)) return;
@@ -7527,6 +7538,18 @@
                 i = Math.floor((tc - P.dS) / TPO_MS);
               P.rows.forEach((l, r) => box(P, i, r));
             }
+            /* the crosshair's gold */
+            g.fillStyle = "rgba(184,134,11,.6)";
+            vb.forEach((is, P) => {
+              const rw = new Map();
+              P.vw.forEach((q, k) => {
+                const [r, i] = k.split("|").map(Number);
+                if (is.has(i)) rw.set(r, (rw.get(r) || 0) + q);
+              });
+              rw.forEach((q, r) => g.fillRect(P.cx0,
+                Y((r + 1) * P.step) + 0.5, q * P.vs,
+                Math.max(1, P.rowH - 1)));
+            });
             g.lineWidth = 1;
             const cm = TF === "5m" ? 300000 : 15000,
               v = ts == null || !geo ? [] : geo.filter((q) =>
