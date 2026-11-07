@@ -952,65 +952,6 @@
         });
         return out;
       }
-      /*
-       * swing zigzag over POC points in time order: a point
-       * below the last low is a new low, and the highest
-       * point between the previous low and it becomes the
-       * top (none in between: the leg just extends down);
-       * new highs likewise. Returns the pivots; what comes
-       * after the last one is still open.
-       */
-      function swings(zz) {
-        if (!zz.length) return [];
-        const piv = [{ q: zz[0], i: 0, up: null }];
-        let pl = piv[0],
-          ph = piv[0];
-        zz.forEach((q, i) => {
-          const down = q.p < pl.q.p;
-          if (!down && !(q.p > ph.q.p)) return;
-          const last = piv[piv.length - 1],
-            ref = down ? pl : ph;
-          /* first leg: the first point is the other end */
-          if (last.up === null) last.up = down;
-          if (last.up === !down) {
-            /* same side as the last pivot: the extreme in
-               between becomes a pivot, or the leg extends */
-            let mid = null;
-            for (let k = ref.i + 1; k < i; k++) {
-              const z = zz[k];
-              if (mid && (down ? z.p <= mid.q.p : z.p >= mid.q.p))
-                continue;
-              mid = { q: z, i: k };
-            }
-            if (mid) {
-              piv.push({ ...mid, up: down });
-              if (down) ph = piv[piv.length - 1];
-              else pl = piv[piv.length - 1];
-            } else piv.pop();
-          }
-          piv.push({ q, i, up: !down });
-          if (down) pl = piv[piv.length - 1];
-          else ph = piv[piv.length - 1];
-        });
-        return piv;
-      }
-      /*
-       * nested zigzags: a zigzag hides the swings after its
-       * last pivot that break neither extreme, so the points
-       * from that pivot on get their own zigzag, and so on;
-       * n levels at most, each level's pivots as swings()
-       */
-      function nests(zz, n) {
-        const out = [swings(zz)];
-        for (let k = 1; k < n; k++) {
-          const s = out[k - 1],
-            b = s.length > 1 ? s[s.length - 1].i : 0;
-          if (!b || zz.length - b < 3) break;
-          zz = zz.slice(b);
-          out.push(swings(zz));
-        }
-        return out;
-      }
       function kl(h, q) {
         return h + "/api/v3/klines?symbol=" + SYM + "&" + q;
       } /* klines URL */
@@ -1049,135 +990,17 @@
         seeded = {},
         olderBusy = {},
         olderEnd = {};
-      /* up / down days (UD button): a day whose last vipoc (in
-         time) is under its first is tinted red, else green */
-      let showUD = false,
-        /* ZZ button: the UD days' zigzag instead of the vipocs' */
-        udZz = false;
-      function setUdZz(v) {
-        udZz = !!v;
-        $("zzTog").className = udZz ? "a" : "";
-        schedule();
-      }
-      function setShowUD(v) {
-        showUD = !!v;
-        $("udTog").className = showUD ? "a" : "";
-        schedule();
-      }
-      /* YB button: barycentre of each day's yellow bricks
-         (21:00 UTC on), green above its latest vipoc, black
-         below */
-      /* AG button: P1 = earliest vipoc, P3 = latest, by the
-         average period of the bricks in its row; off: P1 to P3
-         in birth order, latest = the latest first brick */
-      let ageOrd = true;
+      /* P1 = the earliest vipoc, P3 = the latest, by the
+         average period of the bricks in its row */
       const rowAge = (w) =>
         w.reduce((a, b) => a + b, 0) / w.length;
       const byAge = (P, sp) => {
-        if (!ageOrd) return sp;
         const k = (S) => {
           const w = P.rows.get(Math.floor(S.px / P.step));
           return w && w.length ? rowAge(w) : 99;
         };
         return [...sp].sort((a, b) => k(a) - k(b));
       };
-      function setAgeOrd(v) {
-        ageOrd = !!v;
-        $("agTog").className = ageOrd ? "a" : "";
-        schedule();
-      }
-      /* LC button: day candles from latest vipoc to latest */
-      let showLC = false;
-      function setShowLC(v) {
-        showLC = !!v;
-        $("lcTog").className = showLC ? "a" : "";
-        schedule();
-      }
-      /* IZ button: the zigzag over the vipocs */
-      let showIZ = false;
-      function setShowIZ(v) {
-        showIZ = !!v;
-        $("izTog").className = showIZ ? "a" : "";
-        schedule();
-      }
-      /* BZ button: the zigzag from the barycentres' colours */
-      let showBZ = false;
-      /* a finished day's look: colour, yellow and day extremes */
-      const bzDays = new Map();
-      function setShowBZ(v) {
-        showBZ = !!v;
-        $("bzTog").className = showBZ ? "a" : "";
-        schedule();
-      }
-      /* DO button: DPoc candles over the profiles */
-      let showDO = false;
-      function setShowDO(v) {
-        showDO = !!v;
-        $("doTog").className = showDO ? "a" : "";
-        schedule();
-      }
-      /* CZ button: zigzag over the SO / DO candles' closes */
-      let showCZ = false;
-      function setShowCZ(v) {
-        showCZ = !!v;
-        $("czTog").className = showCZ ? "a" : "";
-        schedule();
-      }
-      /* SO button: SPoc candles over the profiles */
-      let showSO = false;
-      function setShowSO(v) {
-        showSO = !!v;
-        $("soTog").className = showSO ? "a" : "";
-        schedule();
-      }
-      /* VAP button: volume at price instead of the profiles */
-      let showVap = false,
-        /* VBT button (volume brick time): bricks by volume */
-        showVw = true;
-      function setShowVw(v) {
-        showVw = !!v;
-        $("vbTog").className = showVw ? "a" : "";
-        schedule();
-      }
-      /* NC button: the TPO normal curves over the VBT */
-      let showNc = false;
-      function setShowNc(v) {
-        showNc = !!v;
-        $("ncTog").className = showNc ? "a" : "";
-        schedule();
-      }
-      /* DT button: VBT shows only the delta vs its normal curve */
-      let showDt = true;
-      function setShowDt(v) {
-        showDt = !!v;
-        $("dtTog").className = showDt ? "a" : "";
-        schedule();
-      }
-      /* BF button: each vipoc's bell fill, belly / trail / lead */
-      let showBf = true;
-      function setShowBf(v) {
-        showBf = !!v;
-        $("bfTog").className = showBf ? "a" : "";
-        schedule();
-      }
-      function setShowVap(v) {
-        showVap = !!v;
-        $("vapTog").className = showVap ? "a" : "";
-        schedule();
-      }
-      let showYB = false;
-      function setShowYB(v) {
-        showYB = !!v;
-        $("ybTog").className = showYB ? "a" : "";
-        schedule();
-      }
-      /* value area shading and tags (VA button) */
-      let showVA = false;
-      function setShowVA(v) {
-        showVA = !!v;
-        $("vaTog").className = showVA ? "a" : "";
-        schedule();
-      }
       /*
        * Trades from Binance aggTrades for the PF, where m =
        * the buyer was the maker, so the taker sold. Loaded
@@ -2134,37 +1957,6 @@
       } catch (e) {
         setInterval(alTick, 1000);
       }
-      /* POC bands and tags on the chart (POC button) */
-      let showPOC = false;
-      function setShowPOC(v) {
-        showPOC = !!v;
-        $("pocTog").className = showPOC ? "a" : "";
-        schedule();
-      }
-      /* St button: bricks by their steps value, sub POC
-         lines and tags by the earliest session there */
-      let stCol = false,
-        /* Mass button: each day's profile against a perfect one
-           (vol mass normal round each sub POC): fits faded, extra
-           in colour, missing empty; the delta in a strip left */
-        showMass = true,
-        /* Perf button: the perfect profile outlined over it */
-        showPerf = true;
-      function setShowPerf(v) {
-        showPerf = !!v;
-        $("perfTog").className = showPerf ? "a" : "";
-        schedule();
-      }
-      function setShowMass(v) {
-        showMass = !!v;
-        $("massTog").className = showMass ? "a" : "";
-        schedule();
-      }
-      function setStCol(v) {
-        stCol = !!v;
-        $("stTog").className = stCol ? "a" : "";
-        schedule();
-      }
       /* the PF panel: closed by its cross, back with the
          PF tag at the chart's top left */
       let pcPf = true;
@@ -2253,14 +2045,6 @@
       function setPfSg(v) {
         pfSg = !!v;
         $("pfSgTog").className = pfSg ? "a" : "";
-        schedule();
-      }
-      /* PocBd button: POC bands across the chart, off by
-         default */
-      let pocBand = false;
-      function setPocBand(v) {
-        pocBand = !!v;
-        $("pbTog").className = pocBand ? "a" : "";
         schedule();
       }
       /* own orders on the chart (O button) */
@@ -3722,24 +3506,11 @@
             Object.assign(P, { poc, a, b, maxC });
             return P;
           };
-          /* a day's POC colour (rgb): black below the day
-             before's POC, candle green otherwise; navy only
-             when that day is not loaded.
-             Day D's profile and chart take D-1's colour. */
-          const pocRgb = (dS) => {
-            const A = dayProf(dS),
-              B = dayProf(prevDay(dS));
-            if (A.poc == null || B.poc == null || !B.full)
-              return "0,51,102";
-            const d =
-              (A.poc + 0.5) * A.step - (B.poc + 0.5) * B.step;
-            return d < 0 ? "0,0,0" : "8,153,129";
-          };
           /* the TPO profiles drawn at the left of the chart */
           /* 62px kept clear on the right for the last price tag */
           /* DT: room on the left for the first day's delta bell
              (0.35 of a column), x6 = the first column's axis */
-          const lmK = showDt && showVw ? 0.35 : 0,
+          const lmK = 0.35,
             colW = Math.max(
               1,
               (tpoW - 6 - 62 - (nTpo - 1) * gap) / (nTpo + lmK),
@@ -3778,7 +3549,6 @@
                 volFor(dS),
                 k15[0].t,
                 dS < dayOf(Date.now()) ? "" : lk.t + "|" + lk.v,
-                ageOrd,
                 usdtV.has(dS) && usdtV.get(dS).n,
               ].join();
             let zc = zCache.get(key);
@@ -3795,11 +3565,7 @@
                           [];
                         return {
                           p: S.px,
-                          o: !row.length
-                            ? 99
-                            : ageOrd
-                              ? rowAge(row)
-                              : Math.min(...row),
+                          o: !row.length ? 99 : rowAge(row),
                           n: Math.max(1, row.length),
                           m: Q.maxC,
                         };
@@ -4519,8 +4285,8 @@
                   d0 - 3 * DAY,
                   /* + the 20 days each day's vol needs */
                   dayStart - (cnt + 22 + tb) * DAY,
-                  /* the zigzag's 15 days; BZ: all of it */
-                  dayOf(Date.now()) - (showBZ ? 70 : 37) * DAY,
+                  /* the zigzag's 15 days */
+                  dayOf(Date.now()) - 37 * DAY,
                 ) -
                 7200000;
             if (need < k15[0].t) older("15m");
@@ -5081,219 +4847,6 @@
             pfX = [];
           let pcShow = 0,
             pcSl = 0;
-          const pv = (dS) => {
-              const P = dayProf(dS);
-              if (P.poc == null || !P.full) return null;
-              return (P.poc + 0.5) * P.step;
-            },
-            days = [];
-          for (
-            let d = dayOf(k15.length ? k15[0].t : dayStart);
-            d <= dayStart;
-            d = nextDay(d)
-          )
-            days.push(d);
-          /* POC candles: day POCs, or sub POCs (sub) */
-          const pocCds = (sub) => {
-            const seq = [];
-            if (sub)
-              days.forEach((dS) => {
-                const P = dayProf(dS);
-                if (P.poc == null || !P.full) return;
-                const vf = volFor(dS) > 0 ? volFor(dS) : P.step * 10;
-                subPocs(dS, P.ps, vf, P.step)
-                  .map((S) => {
-                    const r = P.rows.get(Math.floor(S.px / P.step));
-                    return {
-                      dS,
-                      p: S.px,
-                      f: r ? Math.min(...r) : 99,
-                      o: !r
-                        ? 99
-                        : ageOrd
-                          ? rowAge(r)
-                          : Math.min(...r),
-                    };
-                  })
-                  .sort((a, b) => a.o - b.o)
-                  .forEach((o) => seq.push(o));
-              });
-            const info = (
-                sub
-                  ? seq.map((o, k) => ({
-                      ...o,
-                      k,
-                      up: k ? o.p >= seq[k - 1].p : null,
-                    }))
-                  : days.map((dS) => {
-                      const p = pv(dS),
-                        q = pv(prevDay(dS)),
-                        up = p == null || q == null ? null : p >= q;
-                      return { dS, p, up };
-                    })
-              ).filter((o) => o.up != null),
-              cds = [];
-            [true, false].forEach((up) => {
-              const s = info.filter((o) => o.up === up);
-              for (let i = 1; i < s.length; i++) {
-                const a = s[i - 1],
-                  b = s[i];
-                if (up ? b.p <= a.p : b.p >= a.p) continue;
-                const eod = (o) => nextDay(o.dS) - 1;
-                let h = Math.max(a.p, b.p),
-                  l = Math.min(a.p, b.p);
-                if (sub) {
-                  /* sub POCs: high / low from the opening POC's
-                     first brick to the closing POC's, 15m */
-                  const ta = a.dS + a.f * TPO_MS,
-                    tb = b.dS + (b.f + 1) * TPO_MS;
-                  let j = 0,
-                    m = k15.length;
-                  while (j < m) {
-                    const md = (j + m) >> 1;
-                    if (k15[md].t < ta) j = md + 1;
-                    else m = md;
-                  }
-                  for (; j < k15.length && k15[j].t < tb; j++) {
-                    const c = k15[j];
-                    if (!okC(c)) continue;
-                    if (c.h > h) h = c.h;
-                    if (c.l < l) l = c.l;
-                  }
-                } else
-                  for (let d = a.dS; d <= b.dS; d = nextDay(d)) {
-                    const r = dayR.get(d);
-                    if (r) {
-                      if (r.h > h) h = r.h;
-                      if (r.l < l) l = r.l;
-                    }
-                  }
-                cds.push({
-                  t: b.dS,
-                  k: b.k,
-                  o: a.p,
-                  c: b.p,
-                  h,
-                  l,
-                  up,
-                  oe: eod(a),
-                  ce: eod(b),
-                });
-              }
-            });
-            cds.sort((m, n) => m.t - n.t || m.k - n.k || 0);
-            /* SPoc: today's candle so far (hollow) from the
-               sub POC before today's latest one to it, when
-               the rule above has not closed one today */
-            const b = seq[seq.length - 1],
-              a = seq[seq.length - 2],
-              last = cds[cds.length - 1];
-            if (
-              sub &&
-              a &&
-              b.dS === dayOf(Date.now()) &&
-              !(
-                last &&
-                last.t === b.dS &&
-                last.k === seq.length - 1
-              )
-            ) {
-              const eod = (o) => nextDay(o.dS) - 1;
-              let h = Math.max(a.p, b.p),
-                l = Math.min(a.p, b.p);
-              const ta = a.dS + a.f * TPO_MS;
-              k15.forEach((c) => {
-                if (c.t < ta || !okC(c)) return;
-                if (c.h > h) h = c.h;
-                if (c.l < l) l = c.l;
-              });
-              cds.push({
-                t: b.dS,
-                k: seq.length - 1,
-                o: a.p,
-                c: b.p,
-                h,
-                l,
-                up: b.p >= a.p,
-                live: true,
-                oe: eod(a),
-                ce: eod(b),
-              });
-            }
-            return cds;
-          };
-          /* SO / DO buttons: SPoc / DPoc candles over the
-             profiles, from the open POC's column to the close's,
-             see-through; CZ: zigzag over their closes, legs past
-             the swing before them green / red, else golden */
-          if ((showSO || showDO) && profs.length) {
-            const xOf = new Map(profs.map((q) => [q.dS, q.cx0])),
-              xs = (dS) =>
-                xOf.has(dS)
-                  ? xOf.get(dS)
-                  : dS < profs[0].dS
-                    ? -1e4
-                    : tR + 1e4;
-            g.save();
-            g.beginPath();
-            g.rect(0, top, tR, bot - top);
-            g.clip();
-            g.setLineDash([]);
-            [showSO, showDO].forEach((on, n) => {
-              if (!on) return;
-              const list = pocCds(!n);
-              g.lineWidth = 1;
-              list.forEach((c) => {
-                const x0 = xs(dayOf(c.oe)),
-                  x1 = xs(dayOf(c.ce)) + colW;
-                if (x1 < 0 || x0 > tR) return;
-                const rgb = c.up ? "8,153,129" : "0,0,0",
-                  y0 = Y(Math.max(c.o, c.c)),
-                  h = Math.max(1, Y(Math.min(c.o, c.c)) - y0),
-                  xm = (x0 + x1) / 2;
-                g.strokeStyle = `rgba(${rgb},.6)`;
-                g.beginPath();
-                g.moveTo(xm, Y(c.h));
-                g.lineTo(xm, Y(c.l));
-                g.stroke();
-                /* today's candle so far: hollow */
-                if (!c.live) {
-                  g.fillStyle = `rgba(${rgb},.22)`;
-                  g.fillRect(x0, y0, x1 - x0, h);
-                }
-                g.strokeRect(x0, y0, x1 - x0, h);
-              });
-              if (!showCZ) return;
-              g.lineCap = "round";
-              nests(
-                list.map((c) => ({
-                  x: xs(dayOf(c.ce)) + colW / 2,
-                  y: Y(c.c),
-                  p: c.c,
-                })),
-                4,
-              ).forEach((zs, k) => {
-                /* nested levels (see nests) thinner */
-                g.lineWidth = 2 * 0.7 ** k;
-                zs.forEach(({ q }, i) => {
-                  if (!i) return;
-                  const a = zs[i - 1].q,
-                    pr = i > 1 && zs[i - 2].q;
-                  g.strokeStyle =
-                    pr && q.p > a.p && q.p > pr.p
-                      ? "#089981"
-                      : pr && q.p < a.p && q.p < pr.p
-                        ? "#e53935"
-                        : "rgba(230,159,0,.9)";
-                  g.beginPath();
-                  g.moveTo(a.x, a.y);
-                  g.lineTo(q.x, q.y);
-                  g.stroke();
-                });
-              });
-            });
-            g.restore();
-          }
           if (pcW) pf: {
             const pa = pL;
             /* PF: columns from the last 3 days' trades (2 full
@@ -5761,92 +5314,6 @@
                 ptag(yy, pv.toFixed(DP), "rgb(" + rgb + ")");
             });
           };
-          /*
-           * YB lines, for every run of one colour (a BZ leg), each
-           * in its own colour, from the midnight that made it known
-           * to the midnight the next run starts: the latest
-           * barycentre of the run so far, the earliest of the run,
-           * and the latest of the other colour before it. The
-           * current run's lines run to the right, price tagged.
-           */
-          if (cfg.main && showYB && geo.length && k15.length) {
-            const days = [];
-            for (let d = dayOf(k15[0].t); d < now; d += DAY) {
-              const o = volOfDay(d) ? look(d) : null;
-              if (o && o.by) days.push({ d, b: o.b, by: o.by });
-            }
-            const xAt = (t) => {
-              if (t <= geo[0].c.t) return x0;
-              const o = geo.find((q) => q.c.t >= t);
-              return o ? o.x : px0;
-            };
-            /* i..j = a run; to = the next run's first day */
-            const segs = [];
-            for (let i = 0, j; i < days.length; i = j + 1) {
-              j = i;
-              while (
-                j + 1 < days.length &&
-                days[j + 1].by === days[i].by
-              )
-                j++;
-              const to = days[j + 1],
-                end = to ? to.d + DAY : Infinity,
-                from = days[i].d + DAY;
-              for (let k = i; k <= j; k++)
-                segs.push([
-                  days[k],
-                  days[k].d + DAY,
-                  k < j ? days[k + 1].d + DAY : end,
-                ]);
-              if (j > i) segs.push([days[i], from, end]);
-              if (i) segs.push([days[i - 1], from, end]);
-            }
-            g.save();
-            g.beginPath();
-            g.rect(x0, top, px0 - x0, bot - top);
-            g.clip();
-            /* a see-through zone 3 bricks tall, not a line */
-            segs.forEach(([L, t0, t1]) => {
-              const xa = xAt(t0),
-                xb = t1 === Infinity ? px0 : xAt(t1);
-              if (xb <= xa) return;
-              const y = Y(L.b),
-                h = 1.5 * dayProf(L.d).step,
-                col = L.by > 0 ? "#089981" : "#000";
-              g.fillStyle = L.by > 0 ?
-                "rgba(8,153,129,.3)" : "rgba(0,0,0,.2)";
-              g.fillRect(xa, Y(L.b + h), xb - xa,
-                Y(L.b - h) - Y(L.b + h));
-              if (t1 === Infinity && y >= top && y <= bot)
-                ptag(y, L.b.toFixed(DP), col);
-            });
-            g.restore();
-            /* and on the PF, from the first column started at
-               or after each time */
-            if (pcW && pfX.length) {
-              const pR = pL + pcW,
-                pxAt = (t) => {
-                  if (t <= pfX[0][0]) return pL;
-                  const q = pfX.find(([t0]) => t0 >= t);
-                  return q ? q[1] : pR;
-                };
-              g.save();
-              g.beginPath();
-              g.rect(pL, top, pcW, bot - top);
-              g.clip();
-              segs.forEach(([L, t0, t1]) => {
-                const xa = pxAt(t0),
-                  xb = pxAt(t1),
-                  h = 1.5 * dayProf(L.d).step;
-                if (xb <= xa) return;
-                g.fillStyle = L.by > 0 ?
-                  "rgba(8,153,129,.3)" : "rgba(0,0,0,.2)";
-                g.fillRect(xa, Y(L.b + h), xb - xa,
-                  Y(L.b - h) - Y(L.b + h));
-              });
-              g.restore();
-            }
-          }
           /*
            * ZFB: over all the loaded candles,
            * one following channel. Until the first big candle it is
@@ -6357,10 +5824,10 @@
               ttag(px, dlabel(pt), XB, XF);
             }
           }
-          /* candle hovered (or mirrored): its TPO period's bricks
-             outlined (VBT: their volume filled, row by row, from
-             the axis: the part of the bell they made); TPO brick
-             hovered: its half hour shaded */
+          /* candle hovered (or mirrored): its period's volume
+             (its zigzag leg's periods) filled in the bells, row
+             by row from the axis: the part of the bell they
+             made; a TPO period hovered: its half hour shaded */
           {
             const o = mouse && mouse.x >= x0 && hover >= 0 &&
                 geo[hover],
@@ -6370,43 +5837,20 @@
                 && xh.tpo ? mx : null,
               pOf = (t) => profs.find((q) => q.show &&
                 q.poc != null && t >= q.dS && t < q.dS + 864e5),
-              /* its zigzag leg: each candle's bricks (period,
-                 rows it traded); no leg: the whole period */
+              /* its zigzag leg's periods; no leg: its own */
               leg = tc != null &&
-                zLegs.find(([a, b]) => tc >= a && tc <= b),
-              hit = new Set();
-            g.strokeStyle = "#e8590c";
-            g.lineWidth = 2;
-            /* VBT: periods per day, filled once at the end */
+                zLegs.find(([a, b]) => tc >= a && tc <= b);
+            /* periods per day (drawn days only) */
             const vb = new Map(),
-              box = (P, i, r) => {
-              if (showVw) {
-                if (!P.vs) return;
+              add = (P, t) => {
+                if (!P || !P.vs) return;
                 if (!vb.has(P)) vb.set(P, new Set());
-                return void vb.get(P).add(i);
-              }
-              const l = P.rows.get(r),
-                k = l ? l.indexOf(i) : -1;
-              if (k < 0 || hit.has(P.dS + "|" + i + "|" + r)) return;
-              hit.add(P.dS + "|" + i + "|" + r);
-              g.strokeRect(P.cx0 + k * P.lw,
-                Y((r + 1) * P.step) + 0.5,
-                Math.max(1, P.lw - 1), Math.max(1, P.rowH - 1));
-            };
+                vb.get(P).add(Math.floor((t - P.dS) / TPO_MS));
+              };
             if (leg)
-              arr.forEach((q) => {
-                const P = okC(q) && q.t >= leg[0] && q.t <= leg[1] &&
-                  pOf(q.t);
-                if (!P) return;
-                const i = Math.floor((q.t - P.dS) / TPO_MS);
-                for (let r = Math.floor(q.l / P.step);
-                  r <= Math.floor(q.h / P.step); r++) box(P, i, r);
-              });
-            else if (tc != null && pOf(tc)) {
-              const P = pOf(tc),
-                i = Math.floor((tc - P.dS) / TPO_MS);
-              P.rows.forEach((l, r) => box(P, i, r));
-            }
+              arr.forEach((q) => okC(q) && q.t >= leg[0] &&
+                q.t <= leg[1] && add(pOf(q.t), q.t));
+            else if (tc != null) add(pOf(tc), tc);
             /* the crosshair's gold */
             g.fillStyle = "rgba(184,134,11,.6)";
             vb.forEach((is, P) => {
@@ -7754,27 +7198,6 @@
         return {
           v: 2,
           dv: DEFAULTS_VER,
-          pocBand,
-          showVA,
-          showUD,
-          udZz,
-          showIZ,
-          showBZ,
-          showYB,
-          showVap,
-          showNc,
-          showDt,
-          showBf,
-          showVw,
-          showSO,
-          showDO,
-          showCZ,
-          showLC,
-          ageOrd,
-          showPOC,
-          stCol,
-          showMass,
-          showPerf,
           pcPf,
           pfBr,
           pfSg,
@@ -7825,12 +7248,6 @@
         /* vol / B / O / L saved before version 2 of the
            defaults are ignored */
         const cur = st.dv >= 2;
-        /* B, PocBd: defaults changed in version 14 */
-        /* 6h: default changed in version 4, HL / VA in 5 */
-        const cur5 = st.dv >= 5;
-        if (st.dv >= 14 && typeof st.pocBand === "boolean")
-          setPocBand(st.pocBand);
-        /* POC: default changed in version 8 */
         /* PF: default changed in version 9 */
         if (st.dv >= 9 && typeof st.pcPf === "boolean")
           setPcPf(st.pcPf);
@@ -7839,43 +7256,6 @@
         /* PF: channel only for now, its other buttons hidden
            at their defaults (session-coloured bricks) */
         if (typeof st.pfIc === "boolean") setPfIc(st.pfIc);
-        if (st.dv >= 8 && typeof st.showPOC === "boolean")
-          setShowPOC(st.showPOC);
-        if (typeof st.stCol === "boolean") setStCol(st.stCol);
-        if (typeof st.showMass === "boolean")
-          setShowMass(st.showMass);
-        if (typeof st.showPerf === "boolean")
-          setShowPerf(st.showPerf);
-        if (cur5 && typeof st.showVA === "boolean")
-          setShowVA(st.showVA);
-        if (typeof st.showUD === "boolean") setShowUD(st.showUD);
-        if (typeof st.udZz === "boolean") setUdZz(st.udZz);
-        if (typeof st.showIZ === "boolean") setShowIZ(st.showIZ);
-        /* BZ: off by default from 37 */
-        if (st.dv >= 37 && typeof st.showBZ === "boolean")
-          setShowBZ(st.showBZ);
-        /* YB off by default from 38 */
-        if (st.dv >= 38 && typeof st.showYB === "boolean")
-          setShowYB(st.showYB);
-        if (st.dv >= 27 && typeof st.showVap === "boolean")
-          setShowVap(st.showVap);
-        /* NC off by default from 36 */
-        if (st.dv >= 36 && typeof st.showNc === "boolean")
-          setShowNc(st.showNc);
-        /* DT on by default from 34 */
-        if (st.dv >= 34 && typeof st.showDt === "boolean")
-          setShowDt(st.showDt);
-        if (st.dv >= 35 && typeof st.showBf === "boolean")
-          setShowBf(st.showBf);
-        if (st.dv >= 31 && typeof st.showVw === "boolean")
-          setShowVw(st.showVw);
-        if (typeof st.showSO === "boolean") setShowSO(st.showSO);
-        if (typeof st.showDO === "boolean") setShowDO(st.showDO);
-        if (typeof st.showCZ === "boolean") setShowCZ(st.showCZ);
-        if (typeof st.showLC === "boolean") setShowLC(st.showLC);
-        /* AG: default changed in version 12 */
-        if (st.dv >= 12 && typeof st.ageOrd === "boolean")
-          setAgeOrd(st.ageOrd);
         /* O / L: defaults changed in version 6 */
         const cur6 = st.dv >= 6;
         if (cur6 && typeof st.showOrders === "boolean")
@@ -8074,27 +7454,6 @@
       miniHome();
       mainChart.resetView();
       miniChart.resetView();
-      $("pbTog").onclick = () => setPocBand(!pocBand);
-      $("vaTog").onclick = () => setShowVA(!showVA);
-      $("udTog").onclick = () => setShowUD(!showUD);
-      $("zzTog").onclick = () => setUdZz(!udZz);
-      $("izTog").onclick = () => setShowIZ(!showIZ);
-      $("bzTog").onclick = () => setShowBZ(!showBZ);
-      $("ybTog").onclick = () => setShowYB(!showYB);
-      $("ncTog").onclick = () => setShowNc(!showNc);
-      $("dtTog").onclick = () => setShowDt(!showDt);
-      $("bfTog").onclick = () => setShowBf(!showBf);
-      $("vapTog").onclick = () => setShowVap(!showVap);
-      /* VBT on: USDT by default (the real market) */
-      $("vbTog").onclick = () => {
-        setShowVw(!showVw);
-        if (showVw) setUseUsdt(true);
-      };
-      $("soTog").onclick = () => setShowSO(!showSO);
-      $("doTog").onclick = () => setShowDO(!showDO);
-      $("czTog").onclick = () => setShowCZ(!showCZ);
-      $("lcTog").onclick = () => setShowLC(!showLC);
-      $("agTog").onclick = () => setAgeOrd(!ageOrd);
       $("pfBrTog").onclick = () => setPfBr(!pfBr);
       $("pfSgTog").onclick = () => setPfSg(!pfSg);
       $("pfHlTog").onclick = () => setPfHl(!pfHl);
@@ -8106,10 +7465,6 @@
       $("pfRlTog").onclick = () => setPfRl(!pfRl);
       $("pfBsTog").onclick = () => setPfBs(!pfBs);
       $("pfVaTog").onclick = () => setPfVa(!pfVa);
-      $("pocTog").onclick = () => setShowPOC(!showPOC);
-      $("stTog").onclick = () => setStCol(!stCol);
-      $("massTog").onclick = () => setShowMass(!showMass);
-      $("perfTog").onclick = () => setShowPerf(!showPerf);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
       /* installable app: only when served over https */
