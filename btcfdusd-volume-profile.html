@@ -775,7 +775,10 @@
         aggrBusy = new Set();
       /* PF: its days once all in, so today's 5s top-ups (busy)
          do not send it back to loading */
-      let pfSeen = "";
+      let pfSeen = "",
+        /* PF channel per column, kept until a column is added,
+           finalised or the latest one's IC moves */
+        pfBd = null;
       async function loadAggr(dS) {
         const d0 = aggrT.get(dS);
         if (aggrBusy.has(dS) || (d0 && d0.end)) return;
@@ -4082,7 +4085,8 @@
               }
               b0 = [x, p];
             });
-            g.fillStyle = "#434651";
+            /* the bricks, one shape, one fill */
+            const bp = new Path2D();
             shown.forEach((c, i) => {
               const xm = pa + sl * jOf(i),
                 st = c.st;
@@ -4090,12 +4094,14 @@
               for (let r = c.lo; r <= c.hi; r++) {
                 const yT = Y(Math.min((r + 1) * st, c.ph)),
                   yB = Y(Math.max(r * st, c.pl));
-                g.fillRect(xm - bw / 2, yT, bw,
+                bp.rect(xm - bw / 2, yT, bw,
                   Math.max(1, yB - yT) + 0.5);
               }
               pcGeo.push({ xa: xm - sl / 2, xb: xm + sl / 2,
                 c: { o: c.pl, h: c.ph, l: c.pl, c: c.ph } });
             });
+            g.fillStyle = "#434651";
+            g.fill(bp);
           };
           /* pcGeo: DPoc candles and their x, for the magnet */
           const pcGeo = [],
@@ -4163,17 +4169,23 @@
             /* IC: the vipoc channel, each column's edges as at
                its start (no repaint); a new vipoc (a move of 1
                vol or more) resets them, else they only widen */
-            let hi, lo, pv = null;
-            const bd = items.slice(0, k1).map((c) => {
-              const m = icFor(c.t0);
-              if (!m.ic) return (pv = null);
-              const [p, h, l, v] = m.ic,
-                rs = pv === null || Math.abs(p - pv) >= v - p;
-              if (rs) (hi = h), (lo = l);
-              else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
-              pv = p;
-              return [hi, lo, rs];
-            });
+            const zc = k1 && icFor(items[k1 - 1].t0).ic,
+              bk = [k1, items.length, k1 && items[k1 - 1].t0,
+                icT.size, zc].join();
+            if (!pfBd || pfBd.key !== bk) {
+              let hi, lo, pv = null;
+              pfBd = { key: bk, bd: items.slice(0, k1).map((c) => {
+                const m = icFor(c.t0);
+                if (!m.ic) return (pv = null);
+                const [p, h, l, v] = m.ic,
+                  rs = pv === null || Math.abs(p - pv) >= v - p;
+                if (rs) (hi = h), (lo = l);
+                else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
+                pv = p;
+                return [hi, lo, rs];
+              }) };
+            }
+            const bd = pfBd.bd;
             /* alerts: a column (of the last 2) whose high first
                goes over the channel's upper line, or low under
                the lower one, edges as at its start */
@@ -4208,9 +4220,13 @@
             }
             const pts = cv2.map((c, k) => bd[k0 + k] &&
               [pa + sl * jOf(k), bd[k0 + k]]);
-            g.fillStyle = "rgba(41,98,255,.07)";
-            pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
+            /* the band, one shape, one fill */
+            const band = new Path2D();
+            pts.forEach((q) => q && band.rect(q[0] - sl / 2,
               Y(q[1][0]), sl + 0.5, Y(q[1][1]) - Y(q[1][0])));
+            /* as dense as the old per-column fills stacked up */
+            g.fillStyle = "rgba(41,98,255,.45)";
+            g.fill(band);
             /* its edges, thin; a new channel: no vertical join */
             g.strokeStyle = "#2962ff";
             [0, 1].forEach((j) => {
