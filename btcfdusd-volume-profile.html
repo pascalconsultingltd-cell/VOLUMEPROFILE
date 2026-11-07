@@ -455,6 +455,13 @@
                 DT
               </button>
               <button
+                id="bfTog"
+                class="a"
+                title="VBT: each vipoc's bell filled, belly / wings"
+              >
+                BF
+              </button>
+              <button
                 id="vbTog"
                 class="a"
                 title="Profile bricks as wide as their traded volume"
@@ -1272,6 +1279,13 @@
       function setShowDt(v) {
         showDt = !!v;
         $("dtTog").className = showDt ? "a" : "";
+        schedule();
+      }
+      /* BF button: each vipoc's bell fill, belly / trail / lead */
+      let showBf = true;
+      function setShowBf(v) {
+        showBf = !!v;
+        $("bfTog").className = showBf ? "a" : "";
         schedule();
       }
       function setShowVap(v) {
@@ -4463,6 +4477,56 @@
              row's extra volume vs the curve), each with the extra
              of the rows nearest it, and their normal curves:
              row -> bricks' worth (2nd order curve); cached on vw */
+          /* BF: each P's own bell (rows nearest it, 3 sigma)
+             filled by the volume of closed 30m periods, capped
+             at the curve (no repaint); belly within 1 sigma,
+             lead wing = the side it moved to from the P before
+             it (P1: the day before's last), trail = the other */
+          const bellFill = (P, sp, vw, kv, vf) => {
+            const nC = Math.floor((Math.min(Date.now(),
+                nextDay(P.dS)) - P.dS) / TPO_MS),
+              ck = [kv, vf, nC, ...sp.map((S) => S.px)].join();
+            if (vw.bf && vw.bf[0] === ck) return vw.bf[1];
+            const st = P.step,
+              sg = vf / 1.2816,
+              rw = new Map(),
+              pd = vipocs(dayProf(prevDay(P.dS))).pop(),
+              out = { rw, ps: [] },
+              pc = (z) => (z[1] ? Math.round((100 * z[0]) / z[1])
+                : 0);
+            vw.forEach((q, k) => {
+              const [r, i] = k.split("|").map(Number);
+              if (i < nC) rw.set(r, (rw.get(r) || 0) + q);
+            });
+            sp.forEach((S, k) => {
+              const pv = k ? sp[k - 1].px : pd,
+                dir = pv == null ? 0 : Math.sign(S.px - pv),
+                R = Math.ceil((3 * sg) / st),
+                p0 = Math.floor(S.px / st),
+                z = { b: [0, 0], u: [0, 0], d: [0, 0] },
+                lead = [];
+              for (let r = p0 - R; r <= p0 + R; r++) {
+                const c = (r + 0.5) * st,
+                  x = (c - S.px) / sg;
+                if (Math.abs(x) > 3 || sp.some((O) =>
+                  Math.abs(c - O.px) < Math.abs(c - S.px)))
+                  continue;
+                const e = VOL_MASS * kv *
+                    (ncdf(((r + 1) * st - S.px) / sg) -
+                      ncdf((r * st - S.px) / sg)),
+                  w = z[Math.abs(x) <= 1 ? "b" : x > 0 ? "u" : "d"];
+                w[0] += Math.min(e, rw.get(r) || 0);
+                w[1] += e;
+                if (dir && Math.abs(x) > 1 && Math.sign(x) === dir)
+                  lead.push(r);
+              }
+              out.ps.push({ S, dir, lead, b: pc(z.b),
+                l: pc(dir > 0 ? z.u : z.d),
+                t: pc(dir > 0 ? z.d : z.u) });
+            });
+            vw.bf = [ck, out];
+            return out;
+          };
           const dCurve = (P, vw, sp, kv, vf, exp) => {
             const ck = [kv, vf, ...sp.map((S) => S.px)].join();
             if (vw.dc && vw.dc[0] === ck) return vw.dc[1];
@@ -4706,7 +4770,8 @@
               );
             }
             const dt = showDt && vs,
-              exp = showMass || showPerf || dt ? expOf(P, sp, vf)
+              exp = showMass || showPerf || dt || showBf
+                ? expOf(P, sp, vf)
                 : new Map(),
               /* DT: x of the curve on row r */
               kv = vs ? kvFor(P.dS, "BTCUSDT") : 0,
@@ -4841,6 +4906,20 @@
                       Math.max(1, rowH - 2));
                 });
               }
+              /* BF: the lead wing's empty part, from its closed
+                 volume to the curve, light blue */
+              const bf = showBf && kv ? bellFill(P, sp, vw, kv, vf)
+                : null;
+              if (bf) {
+                g.fillStyle = "rgba(47,128,200,.3)";
+                bf.ps.forEach((F) => F.lead.forEach((r) => {
+                  const x0 = cx0 + (bf.rw.get(r) || 0) * vs,
+                    yT = Y((r + 1) * P.step);
+                  if (cX(r) - x0 > 0.5)
+                    g.fillRect(x0, yT + 0.5, cX(r) - x0,
+                      Math.max(1, rowH - 1));
+                }));
+              }
               if (showPerf || dt)
                 perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
               /* NC: the same normal curves round the TPO sub POCs
@@ -4851,6 +4930,21 @@
               /* VBT too: its vipocs and YB (they went with it) */
               drawPs(P, sp, cx0,
                 dt && ((S) => cX(Math.floor(S.px / P.step))));
+              /* BF tag over each P: belly, trail, lead fill % */
+              if (bf) {
+                g.font = "bold 10px ui-monospace,Menlo,monospace";
+                g.textAlign = "left";
+                bf.ps.forEach((F) => {
+                  const tx = "B " + F.b + (F.dir ? " · T " + F.t +
+                      " · L " + F.l : "") + "%",
+                    y = Y(F.S.px) - 22;
+                  g.strokeStyle = "#fff";
+                  g.lineWidth = 3;
+                  g.strokeText(tx, cx0, y);
+                  g.fillStyle = "#2f80c8";
+                  g.fillText(tx, cx0, y);
+                });
+              }
               drawYB(P, cx0, rowH);
               continue;
             }
@@ -8745,7 +8839,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 34;
+      const DEFAULTS_VER = 35;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -8786,6 +8880,7 @@
           showVap,
           showNc,
           showDt,
+          showBf,
           showVw,
           showSO,
           showDO,
@@ -8898,6 +8993,8 @@
         /* DT on by default from 34 */
         if (st.dv >= 34 && typeof st.showDt === "boolean")
           setShowDt(st.showDt);
+        if (st.dv >= 35 && typeof st.showBf === "boolean")
+          setShowBf(st.showBf);
         if (st.dv >= 31 && typeof st.showVw === "boolean")
           setShowVw(st.showVw);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
@@ -9121,6 +9218,7 @@
       $("ybTog").onclick = () => setShowYB(!showYB);
       $("ncTog").onclick = () => setShowNc(!showNc);
       $("dtTog").onclick = () => setShowDt(!showDt);
+      $("bfTog").onclick = () => setShowBf(!showBf);
       $("vapTog").onclick = () => setShowVap(!showVap);
       /* VBT on: USDT by default (the real market) */
       $("vbTog").onclick = () => {
