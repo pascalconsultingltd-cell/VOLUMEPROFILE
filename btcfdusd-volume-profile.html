@@ -4674,14 +4674,16 @@
                    row): marked once every brick is drawn */
                 if (r === rNow && idx === iNow)
                   curB = [bx + (vs ? wv : lw) / 2, yT + rowH / 2];
-                /* DT: only what lies beyond the curve, in its
-                   session's colour */
+                /* DT: no bricks; what lies beyond the curve goes
+                   to the delta strip left of the axis (half
+                   scale, as Mass), in its session's colour */
                 if (dt) {
-                  const x0 = Math.max(bx, cX(r));
-                  if (bx + wv - x0 < 0.5) return;
+                  const x0 = Math.max(bx, cX(r)) - cX(r),
+                    x1 = bx + wv - cX(r);
+                  if (x1 - x0 < 0.5) return;
                   g.fillStyle = tpoColor(idx, 0.72);
-                  return void g.fillRect(x0, yT + 0.5,
-                    bx + wv - x0, Math.max(1, rowH - 1));
+                  return void g.fillRect(cx0 - 2 - x1 / 2, yT + 0.5,
+                    (x1 - x0) / 2, Math.max(1, rowH - 1));
                 }
                 g.fillStyle = showUD && ud
                   ? ud
@@ -4711,16 +4713,18 @@
                Mass: real - perfect per row, a strip on the left,
                green extra, red missing */
             if (vs) {
-              /* DT: what a row lacks up to the curve, red */
+              /* DT: what a row lacks vs the curve, red, in the
+                 delta strip */
               if (dt) {
                 g.fillStyle = "#e53935";
                 const rs = new Set([...exp.keys(), ...vw.rw.keys()]);
                 rs.forEach((r) => {
-                  const x0 = cx0 + (vw.rw.get(r) || 0) * vs,
+                  const dw = (cX(r) - cx0) / 2 -
+                      ((vw.rw.get(r) || 0) * vs) / 2,
                     yT = Y((r + 1) * P.step);
-                  if (cX(r) - x0 < 0.5 || yT > bot || yT + rowH < top)
+                  if (dw < 0.25 || yT > bot || yT + rowH < top)
                     return;
-                  g.fillRect(x0, yT + 0.5, cX(r) - x0,
+                  g.fillRect(cx0 - 2 - dw, yT + 0.5, dw,
                     Math.max(1, rowH - 1));
                 });
               }
