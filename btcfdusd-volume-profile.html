@@ -3588,13 +3588,9 @@
             Math.min(off, Math.max(0, arr.length - N)),
           );
           if (off >= arr.length - N) subX = 0;
-          /* view reaches the oldest loaded candle: load more */
-          if (
-            cfg.main &&
-            TF === "5m" &&
-            seeded[IV] &&
-            arr.length - off - N <= 0
-          )
+          /* 5m: all the history (to the cap) from the start, so
+             the ZFB zigzag never changes when the view moves */
+          if (cfg.main && TF === "5m" && seeded[IV] && !olderEnd[IV])
             older(IV);
           const vis = arr
             .slice(
@@ -4954,11 +4950,11 @@
                 });
               }
               /* BF: the lead wing's empty part, from its closed
-                 volume to the curve, light blue */
+                 volume to the curve, red */
               const bf = showBf && kv
                 ? bellFill(P, sp, vw, kv, vf, dm) : null;
               if (bf) {
-                g.fillStyle = "rgba(47,128,200,.3)";
+                g.fillStyle = "rgba(229,57,53,.85)";
                 bf.ps.forEach((F) => F.lead.forEach((r) => {
                   const x0 = cx0 + (bf.rw.get(r) || 0) * vs,
                     yT = Y((r + 1) * P.step);
@@ -7060,7 +7056,7 @@
                 view.ha.z.push({ x: xb, p: z.p, o: where.get(z.c) });
               /* both ends on one candle (it wicked and turned):
                  drawn vertical */
-              if (xb < x0 || xa > px0) return;
+              if (xb < x0 || xa > px0 || a.c.t < warm) return;
               g.strokeStyle = z.low
                 ? "rgb(230,159,0)"
                 : "rgb(41,98,255)";
@@ -7075,7 +7071,15 @@
             g.restore();
           };
           zLegs = [];
-          if (cfg.main && (showFZ || ha) && geo.length) zfb(ha);
+          /* 5m: drawn once all its history and USDT volume are in
+             (else more history changes it); the first 3 x BIG_WIN
+             candles warm up (big needs a full window), not shown */
+          const zOk = TF !== "5m" || (olderEnd[IV] &&
+              (uvEnd || uvLo <= k5[0].t)),
+            warm = arr.length ? arr[Math.min(arr.length - 1,
+              3 * BIG_WIN)].t : 0;
+          if (cfg.main && (showFZ || ha) && geo.length && zOk)
+            zfb(ha);
           /*
            * own orders (from orders.js): a segment at the
            * order price for as long as the order was alive,
