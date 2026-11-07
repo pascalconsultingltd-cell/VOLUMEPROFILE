@@ -4799,9 +4799,11 @@
                 const wx = (m, X) =>
                   (m.get(Math.floor(X.px / P.step)) || 0) * kv * vs;
                 sp.forEach((S) =>
-                  rk.push([ag(S), cx0 + wx(exp, S) / 2, S.px, 0, S]));
+                  rk.push([ag(S), cx0 + wx(exp, S) / 2, S.px, 0, S,
+                    1]));
                 (dc.ps || []).forEach((Q) =>
-                  rk.push([ag(Q), cx0 - 2 - wx(dc, Q) / 4, Q.px, 0]));
+                  rk.push([ag(Q), cx0 - 2 - wx(dc, Q) / 4, Q.px, 0, 0,
+                    -1]));
                 /* by age; each one's move vs the one before (1: the
                    day before's last bell, else its last vipoc): its
                    number's colour and, for a P, its BF lead side */
@@ -4814,6 +4816,25 @@
                 });
                 dm = new Map(rk.filter((e) => e[4])
                   .map((e) => [e[4], e[3]]));
+                /* each bell shaded as its number, very light: a row
+                   goes to its nearest P (right) / D (left) */
+                const shade = (sd, m, x0, wf) => {
+                  const bs = rk.filter((e) => e[5] === sd);
+                  if (bs.length) m.forEach((v, r) => {
+                    const c = (r + 0.5) * P.step,
+                      b = bs.reduce((a, e) => Math.abs(e[2] - c) <
+                        Math.abs(a[2] - c) ? e : a),
+                      w = wf(v),
+                      yT = Y((r + 1) * P.step);
+                    if (Math.abs(w) < 0.5 || !b[3]) return;
+                    g.fillStyle = b[3] > 0 ? "rgba(8,153,129,.12)"
+                      : "rgba(229,57,53,.12)";
+                    g.fillRect(Math.min(x0, x0 + w), yT, Math.abs(w),
+                      Y(r * P.step) - yT);
+                  });
+                };
+                shade(1, exp, cx0, (v) => v * kv * vs);
+                shade(-1, dc, cx0 - 2, (v) => (-v * kv * vs) / 2);
               }
               if (showMass && !dt) {
                 g.strokeStyle = "#000";
