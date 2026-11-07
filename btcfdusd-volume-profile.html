@@ -1178,7 +1178,9 @@
           av = [],
           at = [],
           vh = new Set(),
-          vd = new Map();
+          vd = new Map(),
+          /* vm: a V95 box's minute */
+          vm = new Map();
         if (all.length) {
           let k = 0;
           ud.forEach((dS, i) => {
@@ -1223,9 +1225,10 @@
           const n = Math.ceil((1 - BIG_PERC) * BIG_WIN);
           if (at[k] - at[0] >= VH_MS && w.length > n &&
             av[k] >= w[w.length - n])
-            vh.add(sq2[k]), vd.set(sq2[k], dd[k]);
+            vh.add(sq2[k]), vd.set(sq2[k], dd[k]),
+              vm.set(sq2[k], at[k]);
         }
-        return (pfHotC = { key, vh, vd });
+        return (pfHotC = { key, vh, vd, vm });
       }
       /*
        * A day's vol, as vol() in imports.py / 2: the height of
@@ -4236,19 +4239,24 @@
                   ev.push({ id: "icd" + c.t0, up: false,
                     txt: "under " + b[1].toFixed(0) });
               }
-              /* V95: a new box in the last 4 columns, any side */
+              /* V95: a new box in the last 4 columns, any side;
+                 once per minute and side (its id: the box's minute,
+                 not its column, which is rebuilt while it forms) */
               const hs = pfHot(items);
               hs.vh.forEach((key) => {
                 const [k, r] = key.split("|").map(Number),
                   dl = hs.vd.get(key) || 0;
                 if (k >= k1 - 4)
-                  ev.push({ id: "v95" + items[k].t0 + "|" + r,
+                  ev.push({ id: "v95" + hs.vm.get(key) +
+                      (dl >= 0 ? "+" : "-"),
                     dir: "v95", up: dl >= 0,
                     txt: "V95 " + (dl >= 0 ? "+" : "") +
                       dl.toFixed(2) + " " +
                       ((r + 0.5) * items[k].st).toFixed(0) });
               });
-              pfEvS = { ctx: bx, ev };
+              /* v2: V95 ids by minute (the new ctx resets the
+                 ids silently, no repeat on reload) */
+              pfEvS = { ctx: bx + "|v2", ev };
             }
             const pts = cv2.map((c, k) => bd[k0 + k] &&
               [pa + sl * jOf(k), bd[k0 + k]]);
