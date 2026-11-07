@@ -6515,8 +6515,8 @@
               /* the latest swing: the 3 latest VP age ranks (over
                  days) as at each column's start (the last 30m close
                  before it, no repaint), the 2 latest drawn; green
-                 when the 3rd is vol/4 or more above the 1st, red
-                 when as far below, else black; numbers at end;
+                 when the 3rd is above the middle of the 2 before,
+                 red below; numbers at end;
                  only inside the IC channel, no vertical joins */
               const rkM = new Map(),
                 rkC = (t) => {
@@ -6527,19 +6527,17 @@
                     const d0 = i < 0 ? prevDay(d) : d,
                       x = rkAt(d0, i < 0 ? 47 : i),
                       pv = x && rkAt(prevDay(d0), 47);
-                    const v = x &&
-                      [...(pv ? pv.all : []), ...x.all].slice(-3);
-                    if (v) v.vol = volFor(d0);
-                    rkM.set(k, v);
+                    rkM.set(k, x &&
+                      [...(pv ? pv.all : []), ...x.all].slice(-3));
                   }
                   return rkM.get(k);
                 },
                 ser = cv2.map((c) => rkC(c.t0)),
                 cols = { g: "#089981", r: "#e53935", k: "#000" },
-                /* swing: the 3rd vs the 1st, vol/4 at least */
+                /* swing: the 3rd vs the middle of the 2 before */
                 tr = (v) => v.length < 3 ? "k"
-                  : v[2][0] - v[0][0] >= v.vol / 4 ? "g"
-                  : v[0][0] - v[2][0] >= v.vol / 4 ? "r" : "k",
+                  : 2 * v[2][0] > v[0][0] + v[1][0] ? "g"
+                  : 2 * v[2][0] < v[0][0] + v[1][0] ? "r" : "k",
                 pth = { g: new Path2D(), r: new Path2D(),
                   k: new Path2D() };
               const tag = [];
