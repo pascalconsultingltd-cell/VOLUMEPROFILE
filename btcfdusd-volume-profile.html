@@ -6515,7 +6515,8 @@
                  days) as at each column's start (the last 30m close
                  before it, no repaint), 3 step lines; the latest
                  inside the range of the 2 before: black, below it:
-                 red (break down), above: green; numbers at end */
+                 red (break down), above: green; numbers at end;
+                 only inside the IC channel, no vertical joins */
               const rkM = new Map(),
                 rkC = (t) => {
                   const d = dayOf(t),
@@ -6541,17 +6542,14 @@
                 const pth = { g: new Path2D(), r: new Path2D(),
                     k: new Path2D() },
                   at = (v) => v && v[v.length - 3 + s];
-                let py = null;
                 ser.forEach((v, k) => {
-                  const q = at(v);
-                  if (!q) return (py = null);
+                  const q = at(v),
+                    c = pts[k] && pts[k][1];
+                  if (!q || !c || q[0] > c[1] || q[0] < c[2]) return;
                   const x = pa + sl * jOf(k),
-                    y = Y(q[0]),
-                    p = pth[tr(v)];
-                  p.moveTo(x - sl / 2, py == null ? y : py);
-                  p.lineTo(x - sl / 2, y);
-                  p.lineTo(x + sl / 2, y);
-                  py = y;
+                    y = Y(q[0]);
+                  pth[tr(v)].moveTo(x - sl / 2, y);
+                  pth[tr(v)].lineTo(x + sl / 2, y);
                   tag[s] = [q, x, tr(v)];
                 });
                 g.lineWidth = 2;
