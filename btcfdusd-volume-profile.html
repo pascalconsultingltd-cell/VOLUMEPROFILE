@@ -3569,6 +3569,10 @@
           g.clearRect(0, 0, W, H);
           const arr = mode === "lb" ? lbBars(src()) : src();
           arrLen = arr.length;
+          /* main 5m: candles and zigzag drawn once all the history
+             and its USDT volume are in (else big ones pop in) */
+          const zOk = !cfg.main || TF !== "5m" || (olderEnd[IV] &&
+            !!k5.length && (uvEnd || uvLo <= k5[0].t));
           /*
            * a panned line-break view is counted in bricks:
            * stay on the same bricks when new ones print
@@ -6332,7 +6336,7 @@
             });
             g.restore();
           }
-          if (pcW) {
+          if (pcW) pf: {
             const pa = pL;
             /* PF: columns from the last 3 days' trades (2 full
                days back at least), box = the brick */
@@ -6343,6 +6347,23 @@
               loadAggr(d);
               if (pfIc || pfVa) loadUsdt(d);
             });
+            /* drawn once its days are all in: trades (today: a
+               catch-up pass done), with IC / VA their USDT seconds
+               and vol */
+            const inD = (m, b, d) => {
+                const x = m.get(d);
+                return !!x && (x.end || (x.at > 0 && !b.has(d)));
+              },
+              pfOk = pds.every((d) => inD(aggrT, aggrBusy, d) &&
+                (!(pfIc || pfVa) || (volOfDay(d) > 0 &&
+                  inD(usdtK, usdtBusy, d))));
+            if (!pfOk) {
+              g.font = "11px ui-monospace,Menlo,monospace";
+              g.textAlign = "left";
+              g.fillStyle = "#787b86";
+              g.fillText("loading", pa + 6, top + 14);
+              break pf;
+            }
             const pfc = pfCols(pds);
             const nFit = pfN ||
                 Math.max(20, Math.round(pfc.length / 0.85)),
@@ -6525,12 +6546,18 @@
           /* candles */
 
           /* big candles: their circles, and HA shows only them */
-          const bigs = bigFlags(
+          if (!zOk) {
+            g.font = "11px ui-monospace,Menlo,monospace";
+            g.textAlign = "left";
+            g.fillStyle = "#787b86";
+            g.fillText("loading", x0 + 6, top + 14);
+          }
+          const bigs = !zOk ? new Map() : bigFlags(
             arr,
             Math.max(0, arr.length - off - N),
             Math.min(arr.length, arr.length - off),
           );
-          (exG ? [exG].concat(geo) : geo)
+          (!zOk ? [] : exG ? [exG].concat(geo) : geo)
             .filter((o) => !ha || bigs.get(o.c))
             .forEach(({ x, w, c }) => {
               const col = c.c >= c.o ? "#089981" : "#000000",
@@ -7062,12 +7089,9 @@
             g.restore();
           };
           zLegs = [];
-          /* 5m: drawn once all its history and USDT volume are in
-             (else more history changes it); the first 3 x BIG_WIN
-             candles warm up (big needs a full window), not shown */
-          const zOk = TF !== "5m" || (olderEnd[IV] &&
-              (uvEnd || uvLo <= k5[0].t)),
-            warm = arr.length ? arr[Math.min(arr.length - 1,
+          /* zOk: see the top; the first 3 x BIG_WIN candles warm up
+             (big needs a full window), not shown */
+          const warm = arr.length ? arr[Math.min(arr.length - 1,
               3 * BIG_WIN)].t : 0;
           if (cfg.main && (showFZ || ha) && geo.length && zOk)
             zfb(ha);
