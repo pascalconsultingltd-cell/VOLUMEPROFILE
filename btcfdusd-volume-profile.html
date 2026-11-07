@@ -846,8 +846,6 @@
         zCache = new Map(),
         /* St colours of closed periods, frozen (see stAt) */
         stFz = new Map(),
-        /* VP age ranks per 30m close, frozen (see rkAt) */
-        rkFz = new Map(),
         /* PF columns' final IC by start time (see icFor) */
         icT = new Map();
       /* first brick of the sub POC search: SUB_K x the vol
@@ -4578,63 +4576,6 @@
             vw.dc = [ck, out];
             return out;
           };
-          /*
-           * PF: the VP age ranks (P's and D's together) as at the
-           * close of period i of day dS, from its closed periods
-           * only; frozen once its data is all in (no repaint).
-           * { all: [px, move, number] by age, last: px }
-           */
-          const rkAt = (dS, i) => {
-            const fk = dS + "|" + i;
-            if (rkFz.has(fk)) return rkFz.get(fk);
-            const Q = dayProf(dS),
-              vf = volFor(dS),
-              kv = kvFor(dS, "BTCUSDT"),
-              vw = vwOf(dS, Q.step),
-              uk = usdtK.get(dS),
-              at = aggrT.get(dS),
-              z = uk && uk.k[uk.k.length - 1],
-              te = dS + (i + 1) * TPO_MS,
-              ps = Q.ps.filter((q) => q.i <= i);
-            if (!(volOfDay(dS) > 0) || !kv || !vw || !z || !at ||
-              te > Date.now() || !ps.length ||
-              !((uk.end && at.end) || z[0] >= te - 1000))
-              return null;
-            const rows = new Map(),
-              rw = new Map();
-            Q.rows.forEach((l, r) => {
-              const w = l.filter((p) => p <= i);
-              if (w.length) rows.set(r, w);
-            });
-            vw.forEach((q, k) => {
-              const [r, p] = k.split("|").map(Number);
-              if (p <= i) rw.set(r, (rw.get(r) || 0) + q);
-            });
-            const P = { ...Q, rows },
-              sp = subPocs(dS, ps, vf, Q.step),
-              dc = dCurve(P, { rw }, sp, kv, vf, expOf(P, sp, vf)),
-              ag = (X) => {
-                const w = rows.get(Math.floor(X.px / Q.step));
-                return w && w.length ? rowAge(w) : 99;
-              },
-              e = [...sp, ...(dc.ps || [])]
-                .map((X) => [ag(X), X.px])
-                .sort((a, b) => a[0] - b[0]);
-            /* 1 moves vs the day before's last (else its vipoc) */
-            const pv = rkAt(prevDay(dS), 47);
-            let q0 = pv ? pv.last
-              : vipocs(dayProf(prevDay(dS))).pop();
-            const out = e.map(([, px], n) => {
-              const mv = q0 == null ? 0 : px >= q0 ? 1 : -1;
-              q0 = px;
-              return [px, mv, n + 1];
-            });
-            const res = { all: out,
-              last: out.length ? out[out.length - 1][0] : null };
-            if (rkFz.size > 2000) rkFz.clear();
-            rkFz.set(fk, res);
-            return res;
-          };
           /* Perf: the curve's edge row by row, a step line from
              the profile's left edge, over its rows of a brick or
              more; w(e) = the width of e bricks */
@@ -6494,8 +6435,7 @@
                 if (l > u) g.fillRect(q[0] - sl / 2, Y(l), sl + 0.5,
                   Y(u) - Y(l));
               });
-              /* channel edges only: the vipoc shown is the VP's
-                 (the swing lines below), not the IC's own */
+              /* channel edges only (no vipoc line) */
               (pfIq ? [1, 2, 3, 4] : [1, 2]).forEach((j) => {
                 g.strokeStyle = "#2962ff";
                 g.lineWidth = j > 2 ? 0.5 : 1;
@@ -6512,64 +6452,6 @@
                 });
                 g.stroke();
               });
-              /* the latest swing: the 3 latest VP age ranks (over
-                 days) as at each column's start (the last 30m close
-                 before it, no repaint), the 2 latest drawn; green
-                 when the 3rd is above the middle of the 2 before,
-                 red below; numbers at end;
-                 only inside the IC channel, no vertical joins */
-              const rkM = new Map(),
-                rkC = (t) => {
-                  const d = dayOf(t),
-                    i = Math.floor((t - d) / TPO_MS) - 1,
-                    k = d + "|" + i;
-                  if (!rkM.has(k)) {
-                    const d0 = i < 0 ? prevDay(d) : d,
-                      x = rkAt(d0, i < 0 ? 47 : i),
-                      pv = x && rkAt(prevDay(d0), 47);
-                    rkM.set(k, x &&
-                      [...(pv ? pv.all : []), ...x.all].slice(-3));
-                  }
-                  return rkM.get(k);
-                },
-                ser = cv2.map((c) => rkC(c.t0)),
-                cols = { g: "#089981", r: "#e53935", k: "#000" },
-                /* swing: the 3rd vs the middle of the 2 before */
-                tr = (v) => v.length < 3 ? "k"
-                  : 2 * v[2][0] > v[0][0] + v[1][0] ? "g"
-                  : 2 * v[2][0] < v[0][0] + v[1][0] ? "r" : "k",
-                pth = { g: new Path2D(), r: new Path2D(),
-                  k: new Path2D() };
-              const tag = [];
-              ser.forEach((v, k) => [1, 2].forEach((s) => {
-                const q = v && v[v.length - 3 + s],
-                  c = pts[k] && pts[k][1];
-                if (!q || !c || q[0] > c[1] || q[0] < c[2]) return;
-                const x = pa + sl * jOf(k),
-                  y = Y(q[0]);
-                pth[tr(v)].moveTo(x - sl / 2, y);
-                pth[tr(v)].lineTo(x + sl / 2, y);
-                tag[s] = [q, x, tr(v)];
-              }));
-              g.lineWidth = 2;
-              Object.keys(pth).forEach((c) => {
-                g.strokeStyle = cols[c];
-                g.stroke(pth[c]);
-              });
-              g.font = "bold 12px ui-monospace,Menlo,monospace";
-              g.textAlign = "left";
-              g.textBaseline = "middle";
-              tag.forEach((t) => {
-                if (!t) return;
-                const [[px, , n], x, c] = t;
-                g.strokeStyle = "#fff";
-                g.lineWidth = 3;
-                g.strokeText(n, x + 4, Y(px) - 9);
-                g.fillStyle = cols[c];
-                g.fillText(n, x + 4, Y(px) - 9);
-              });
-              g.textBaseline = "alphabetic";
-              g.lineWidth = 1;
               /* green zone (with Gap), 3 bricks: green above the
                  vipoc, red below */
               if (pfRl) pts.forEach((q) => {
