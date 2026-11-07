@@ -4391,7 +4391,8 @@
              above the POC before it, black below (navy with
              none before it); St: the earliest session in
              its row */
-          const drawPs = (P, sp, cx0) => sp.forEach((S, k) => {
+          /* xe(S): where its line stops (DT: at the curve) */
+          const drawPs = (P, sp, cx0, xe) => sp.forEach((S, k) => {
             const y = Y(S.px),
               pv = zPrev.get(P.dS + "|" + S.px),
               row = P.rows.get(Math.floor(S.px / P.step)),
@@ -4410,7 +4411,7 @@
             g.setLineDash([[], [8, 4], [3, 3]][k]);
             g.beginPath();
             g.moveTo(cx0 - 2, y);
-            g.lineTo(cx0 + colW, y);
+            g.lineTo(xe ? xe(S) : cx0 + colW, y);
             g.stroke();
             g.setLineDash([]);
             /* white halo so the tag reads over bricks */
@@ -4792,8 +4793,10 @@
                   g.lineWidth = 2;
                   g.setLineDash([[], [8, 4], [3, 3]][k]);
                   g.beginPath();
+                  /* to the delta's curve */
                   g.moveTo(cx0 - 2, y);
-                  g.lineTo(cx0 - 2 - colW / 2, y);
+                  g.lineTo(cx0 - 2 - ((dc.get(Math.floor(Q.px /
+                    P.step)) || 0) * kv * vs) / 2, y);
                   g.stroke();
                   g.setLineDash([]);
                   g.strokeStyle = "#fff";
@@ -4833,7 +4836,8 @@
                 perfLine(P, expOf(P, subPocs(P.dS, P.ps, vf, P.step,
                   1), vf), cx0, (e) => e * kv * vs, "#ff6d00");
               /* VBT too: its vipocs and YB (they went with it) */
-              drawPs(P, sp, cx0);
+              drawPs(P, sp, cx0,
+                dt && ((S) => cX(Math.floor(S.px / P.step))));
               drawYB(P, cx0, rowH);
               continue;
             }
