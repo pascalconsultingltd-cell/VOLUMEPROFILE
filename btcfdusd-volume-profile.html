@@ -377,237 +377,12 @@
         </button></span
       >
       <div class="ctl">
-        <!-- groups: chart, profile and levels, channels,
-             orders, view; .box = buttons that go together -->
-        <span class="grp" title="Profile and levels"
+        <!-- groups: profile, main chart; .box = buttons that
+             go together -->
+        <span class="grp" title="Volume profile"
           ><span class="ttl"
             ><span class="lbl">Volume Profile</span
-            ><span class="box"
-              ><span id="tpoBtns"></span>
-              <button
-                id="vaTog"
-                class=""
-                title="Value area on / off; the POC always stays"
-              >
-                VA
-              </button>
-              <button
-                id="udTog"
-                class=""
-                title="Up days green, down days black (vipocs)"
-              >
-                UD
-              </button>
-              <button
-                id="zzTog"
-                class=""
-                title="Zigzag over the UD days"
-              >
-                ZZ
-              </button>
-              <button
-                id="izTog"
-                class=""
-                title="Zigzag over the vipocs (last 15 days)"
-              >
-                IZ
-              </button>
-              <button
-                id="bzTog"
-                class=""
-                title="Zigzag: high after a green YB, low after black"
-              >
-                BZ
-              </button>
-              <button
-                id="ybTog"
-                class=""
-                title="Yellow bricks' barycentre vs the latest vipoc"
-              >
-                YB
-              </button>
-              <button
-                id="vapTog"
-                class=""
-                title="Volume at price instead of the profiles"
-              >
-                VAP
-              </button>
-              <button
-                id="ncTog"
-                class=""
-                title="VBT: the normal curves from the TPO, in volume"
-              >
-                NC
-              </button>
-              <button
-                id="dtTog"
-                class="a"
-                title="VBT: delta vs its normal curve only"
-              >
-                DT
-              </button>
-              <button
-                id="bfTog"
-                class="a"
-                title="VBT: each vipoc's bell filled, belly / wings"
-              >
-                BF
-              </button>
-              <button
-                id="vbTog"
-                class="a"
-                title="Profile bricks as wide as their traded volume"
-              >
-                VBT
-              </button>
-              <button
-                id="soTog"
-                class=""
-                title="SPoc candles over the volume profiles"
-              >
-                SO
-              </button>
-              <button
-                id="doTog"
-                class=""
-                title="DPoc candles over the volume profiles"
-              >
-                DO
-              </button>
-              <button
-                id="czTog"
-                class=""
-                title="Zigzag over the SO / DO candles' closes"
-              >
-                CZ
-              </button>
-              <button
-                id="lcTog"
-                class=""
-                title="Day candles: latest vipoc to latest vipoc"
-              >
-                LC
-              </button>
-              <button
-                id="agTog"
-                class="a"
-                title="P1 to P3 by average brick age (off: by birth)"
-              >
-                AG
-              </button>
-              <button
-                id="pocTog"
-                class=""
-                title="POC bands and tags on / off"
-              >
-                POC
-              </button>
-              <button
-                id="stTog"
-                class=""
-                title="Bricks by steps value around their sub POC"
-              >
-                PocStpCol
-              </button
-              ><button
-                id="massTog"
-                class="a"
-                title="Real - perfect (normal vol mass) bricks"
-              >
-                Mass
-              </button
-              ><button
-                id="perfTog"
-                class="a"
-                title="Perfect profile (normal vol mass) outline"
-              >
-                Perf
-              </button></span
-            ></span
-          ></span
-        >
-        <span class="grp" title="PF"
-          ><span class="ttl"
-            ><span class="lbl">PF</span
-            ><span class="box"
-              ><button
-                id="pfBrTog" hidden
-                class="a"
-                title="PF bricks coloured by time; off = lines"
-              >
-                Br
-              </button
-              ><button
-                id="pfSgTog" hidden
-                class=""
-                title="Bricks past the last green / black signal"
-              >
-                Colour
-              </button
-              ><button
-                id="pfSwTog" hidden
-                title="Swing triangles (with Colour)"
-              >
-                Sw
-              </button
-              ><button
-                id="pfHlTog" hidden
-                class=""
-                title="PF signal bricks and volume dots"
-              >
-                Alrt
-              </button
-              ><button
-                id="pfByTog" hidden
-                class=""
-                title="Black dot on StpCol green: buy; mirror: sell"
-              >
-                Buy
-              </button
-              ><button
-                id="pfXbTog" hidden
-                class=""
-                title="High (red) and low (grey) activity boxes"
-              >
-                Act
-              </button
-              ><button
-                id="pfIcTog"
-                class="a"
-                title="Latest vipoc and its normal curve edges"
-              >
-                IC
-              </button
-              ><button
-                id="pfIqTog" hidden
-                class=""
-                title="IC: 10% / 90% of the curve (1 vol out)"
-              >
-                IC%
-              </button
-              ><button
-                id="pfRlTog" hidden
-                class="a"
-                title="IC: each wing's red shoulder (volume)"
-              >
-                Gap
-              </button
-              ><button
-                id="pfVaTog" hidden
-                class="a"
-                title="Boxes with volume over 95% of the 150 before"
-              >
-                V95
-              </button
-              ><button
-                id="pfBsTog" hidden
-                class="a"
-                title="IC: arrow where price runs into a shoulder"
-              >
-                Bias
-              </button></span
-            ></span
+            ><span class="box"><span id="tpoBtns"></span></span></span
         ></span>
         <span class="grp" title="Main chart"
           ><span class="ttl"
@@ -646,19 +421,6 @@
                     title="Order lines; off = executions only"
                   >
                     L
-                  </button>
-</span
-                ></span
-              ><span class="ttl"
-                ><span class="lbl">Axis</span
-                ><span class="box"
-
-                  ><button
-                    id="pbTog"
-                    class=""
-                    title="POC bands: yesterday's and today's P1-P3"
-                  >
-                    PocBd
                   </button></span
                 ></span
               ></span
@@ -1392,15 +1154,11 @@
         return cols;
       }
       /*
-       * PF highlights, rolling like isBig: a box is hot when
-       * its |delta| beats the 95th percentile of the BIG_WIN
-       * boxes before it (in the order they printed, itself
-       * included); a column gets a dot when its volume beats
-       * that of the BIG_WIN columns before it; vh: a box whose
-       * volume ranks in the top 5% of BIG_WIN slots (8) among
-       * the boxes of the VH_MS before (its column's start), as
-       * a 5m bar in 150. Cached until a
-       * trade changes the columns.
+       * V95 (PF alert): a box (a USDT minute's row, on the
+       * column trading at that minute's start) whose volume
+       * ranks in the top 5% of BIG_WIN slots (8) among the boxes
+       * of the VH_MS before, as a 5m bar in 150; vd = its delta.
+       * Cached until a trade changes the columns.
        */
       let pfHotC = null;
       function pfHot(all) {
@@ -1412,33 +1170,12 @@
             z && z.d.size, z && z.lo, zv,
             uv.map((v) => v && v.n).join("/")].join();
         if (pfHotC && pfHotC.key === key) return pfHotC;
-        const r = Math.ceil(BIG_PERC * BIG_WIN) - 1,
-          top = (xs, k) =>
-            xs.slice(k - BIG_WIN + 1, k + 1).sort((p, q) => p - q)[r],
-          seq = [],
-          ad = [],
-          sq2 = [],
+        const sq2 = [],
           dd = [],
           av = [],
           at = [],
-          hot = new Set(),
           vh = new Set(),
-          /* vd: a V95 box's delta */
-          vd = new Map(),
-          dot = new Set(),
-          cv = all.map((c) => {
-            let s = 0;
-            c.v.forEach((v) => (s += v));
-            return s;
-          });
-        all.forEach((c, k) =>
-          c.d.forEach((v, row) => {
-            seq.push(k + "|" + row);
-            ad.push(Math.abs(v));
-          }),
-        );
-        /* a box: a USDT minute's row, shown on the column
-           trading at that minute's start */
+          vd = new Map();
         if (all.length) {
           let k = 0;
           ud.forEach((dS, i) => {
@@ -1459,8 +1196,7 @@
               if (m0 < all[0].t0) continue;
               while (k + 1 < all.length && all[k + 1].t0 <= m0) k++;
               mb.forEach(([q, d], r) => {
-                const key = k + "|" + r;
-                sq2.push(key);
+                sq2.push(k + "|" + r);
                 av.push(q);
                 at.push(m0);
                 dd.push(d);
@@ -1468,8 +1204,6 @@
             }
           });
         }
-        for (let k = BIG_WIN - 1; k < ad.length; k++)
-          if (ad[k] > top(ad, k)) hot.add(seq[k]);
         /* sorted window kept as it slides */
         for (let k = 0, j = 0, w = []; k < av.length; k++) {
           const ins = (x) => {
@@ -1488,78 +1222,7 @@
             av[k] >= w[w.length - n])
             vh.add(sq2[k]), vd.set(sq2[k], dd[k]);
         }
-        for (let k = BIG_WIN - 1; k < cv.length; k++)
-          if (cv[k] > top(cv, k)) dot.add(k);
-        /* exc: excitement, each flip adds 1 and it halves every
-           30s; kept as its rank (0..1) in the BIG_WIN before it,
-           smoothed over about 7 columns. USDT: its own flips
-           (seconds grouped into visits to a box, side by taker
-           volume, as pfCols), read at each column's start */
-        let uf = null;
-        if (uv.length && uv.every(Boolean)) {
-          uf = [];
-          let b = null, up = null, buy = 0, vo = 0, t1 = 0;
-          const fin = () => {
-            if (b == null || 2 * buy >= vo === up) return;
-            up = 2 * buy >= vo;
-            uf.push(t1);
-          };
-          ud.forEach((dS, i) => {
-            const v = uv[i],
-              a = usdtK.get(dS).k,
-              s2 = pfStep(dS);
-            for (let n = 0; n < v.n; n++) {
-              if (v.px[n] == null) continue;
-              const r = Math.floor(v.px[n] / s2);
-              if (r !== b)
-                fin(), (b = r), (t1 = a[n][0]), (buy = vo = 0);
-              buy += a[n][5];
-              vo += a[n][4];
-            }
-          });
-          fin();
-        }
-        let e = 0,
-          s = 0,
-          j = 0,
-          tl = -Infinity;
-        const ex = all.map((c, k) => {
-            if (uf) {
-              for (; j < uf.length && uf[j] <= c.t0; j++)
-                (e = 1 + e * 0.5 ** ((uf[j] - tl) / 3e4)),
-                  (tl = uf[j]);
-              return e * 0.5 ** ((c.t0 - tl) / 3e4);
-            }
-            const h = k ? (c.t0 - all[k - 1].t0) / 3e4 : 1 / 0;
-            return (e = 1 + e * 0.5 ** h);
-          }),
-          exc = ex.map((v, k) => {
-            const w = ex.slice(Math.max(0, k - BIG_WIN + 1), k + 1),
-              rk = w.filter((q) => q <= v).length / w.length;
-            return (s += (rk - s) / 4);
-          });
-        /* gTop[k] / bBot[k]: top of the latest green
-           highlight / bottom of the latest black one, as of
-           column k (Sg button) */
-        const gTop = [],
-          bBot = [];
-        let gt = null,
-          bb = null;
-        all.forEach((c, k) => {
-          let up = -1e9,
-            dn = 1e9;
-          c.d.forEach((v, r) => {
-            if (!hot.has(k + "|" + r)) return;
-            if (v >= 0) up = Math.max(up, (r + 1) * c.st);
-            else dn = Math.min(dn, r * c.st);
-          });
-          if (up > -1e9) gt = up;
-          if (dn < 1e9) bb = dn;
-          gTop[k] = gt;
-          bBot[k] = bb;
-        });
-        return (pfHotC =
-          { key, hot, vh, vd, dot, exc, gTop, bBot });
+        return (pfHotC = { key, vh, vd });
       }
       /*
        * A day's vol, as vol() in imports.py / 2: the height of
@@ -3343,28 +3006,6 @@
                 rows.get(r).push(q.i);
               }
             });
-            /* dev[i] = POC row once period i is in (the
-               developing POC), same rule as the final one */
-            const cnt = new Map(),
-              dev = [];
-            let r0 = Infinity,
-              r1 = -Infinity;
-            ps.forEach((q) => {
-              const qa = Math.floor(q.l / step),
-                qb = Math.floor(q.h / step);
-              for (let r = qa; r <= qb; r++)
-                cnt.set(r, (cnt.get(r) || 0) + 1);
-              r0 = Math.min(r0, qa);
-              r1 = Math.max(r1, qb);
-              const C = (r) => cnt.get(r) || 0,
-                md = (r0 + r1) / 2,
-                D = (r) => Math.abs(r - md);
-              let p = r0;
-              for (let r = r0; r <= r1; r++)
-                if (C(r) > C(p) || (C(r) === C(p) && D(r) < D(p)))
-                  p = r;
-              dev[q.i] = p;
-            });
             /* full = the whole day is loaded */
             const P = {
               dS,
@@ -3374,7 +3015,6 @@
               poc: null,
               a: null,
               b: null,
-              dev,
               ps,
               full: k15.length > 0 && k15[0].t <= dS,
             };
@@ -3698,51 +3338,8 @@
                 b = a;
               while (n(b + 1) >= 1) b++;
               while (n(a - 1) >= 1) a--;
-              /* 4th, 5th: the curve's 90% / 10% points, 1 vol out */
-              m.ic = [S.px, (b + 1) * step, a * step, S.px + vf,
-                S.px - vf];
-              m.d = dS;
-              /* green zone: the biggest chunk of adjacent rows with
-                 extra volume vs all sub POCs' perfect mass (in
-                 bricks' worth of USDT volume; bricks while it
-                 loads), at its weighted middle; isolated rows far
-                 away are noise */
-              let cs = 0, cw = 0, gs = 0, gw = 0;
-              const dzs = [];
-              for (let r = a; r <= b; r++) {
-                const e = sps.reduce((x, Q) => x + VOL_MASS * (
-                    ncdf(((r + 1) * step - Q.px) / sg) -
-                    ncdf((r * step - Q.px) / sg)), 0),
-                  E = Math.round(e),
-                  d = (rows.get(r) || []).length - E;
-                const dz = zv ? (zv.rows.get(r) || 0) / kv - e : d;
-                dzs.push(dz);
-                if (dz > 0) (cs += dz * (r + 0.5) * step), (cw += dz);
-                else cs = cw = 0;
-                if (cw > gw) (gs = cs), (gw = cw);
-              }
-              /* red shoulders: per wing (above / below the vipoc
-                 row), the run of 2+ rows missing the most vs the
-                 perfect mass; [bottom, top, missing] */
-              const ip = Math.floor(S.px / step),
-                sh = [];
-              let ds = 0,
-                r0 = a;
-              for (let r = a; r <= b + 1; r++) {
-                const dz = r <= b && r !== ip ? dzs[r - a] : 0;
-                if (dz < 0) {
-                  if (!ds) r0 = r;
-                  ds -= dz;
-                  continue;
-                }
-                const k = +(r0 < ip);
-                if (ds && r - r0 >= 2 && ds > (sh[k] ? sh[k][2] : 0))
-                  sh[k] = [r0 * step, r * step, ds];
-                ds = 0;
-              }
-              if (sh[0] || sh[1]) m.sh = sh;
-              /* middle, half height, its extra bricks */
-              if (gw) m.gl = [gs / gw, 1.5 * step, gw];
+              /* 4th: 1 vol out (a new vipoc: a move of 1 vol) */
+              m.ic = [S.px, (b + 1) * step, a * step, S.px + vf];
             }
             /* kept once its candles (and volume) are all loaded */
             if (zv && k15.length && k15[0].t <= dS &&
@@ -6439,8 +6036,17 @@
           return { ctx: (cfg.main ? TF : "") + mode, ev: out };
         }
         /* ZFB pivots { low, p, c } (see the ZFB drawing); the
-           last one is the open leg's extreme */
+           last one is the open leg's extreme. Cached on the data
+           (the scale, the drawing and the alerts all ask), each
+           caller gets copies (the drawing moves the open end) */
+        let zfbC = null;
         function zfbPiv(arr) {
+          const z = arr[arr.length - 1],
+            key = [arr.length, arr[0] && arr[0].t, z && z.t,
+              z && z.o, z && z.h, z && z.l, z && z.c, uv5.size,
+              volDays.size, volN].join();
+          if (zfbC && zfbC.key === key)
+            return zfbC.piv.map((o) => ({ ...o }));
           const piv = [];
           let dn = null,
             ht = 0,
@@ -6487,6 +6093,7 @@
             }
           }
           if (dn !== null) piv.push({ low: dn, p: ext, c: at });
+          zfbC = { key, piv: piv.map((o) => ({ ...o })) };
           return piv;
         }
         /*
