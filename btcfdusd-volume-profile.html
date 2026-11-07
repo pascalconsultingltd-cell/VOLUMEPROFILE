@@ -4458,6 +4458,52 @@
             });
             return exp;
           };
+          /* DT: the delta's own P's (the shrinking brick on each
+             row's extra volume vs the curve), each with the extra
+             of the rows nearest it, and their normal curves:
+             row -> bricks' worth (2nd order curve); cached on vw */
+          const dCurve = (P, vw, sp, kv, vf, exp) => {
+            const ck = [kv, vf, ...sp.map((S) => S.px)].join();
+            if (vw.dc && vw.dc[0] === ck) return vw.dc[1];
+            const st = P.step,
+              dp = new Map(),
+              out = new Map();
+            vw.rw.forEach((u, r) => {
+              const d = u - (exp.get(r) || 0) * kv;
+              if (d > 0) dp.set(r, d);
+            });
+            const rs = [...dp.keys()];
+            if (rs.length && kv) {
+              const lo = Math.min(...rs) * st,
+                hi = (Math.max(...rs) + 1) * st,
+                ps = pocsBy(lo, hi, vf, st, (z) => {
+                  const c = [];
+                  dp.forEach((q, r) =>
+                    spread(r * st - lo, (r + 1) * st - lo, z,
+                      (i, k) => (c[i] = (c[i] || 0) + q * k)));
+                  return c;
+                }),
+                sg = vf / 1.2816,
+                N = Math.ceil((4 * sg) / st),
+                ms = ps.map(() => 0),
+                gap = (r, Q) => Math.abs((r + 0.5) * st - Q.px);
+              dp.forEach((q, r) => {
+                let j = 0;
+                ps.forEach((Q, i) => gap(r, Q) < gap(r, ps[j]) &&
+                  (j = i));
+                ms[j] += q / kv;
+              });
+              ps.forEach((Q, i) => {
+                const p = Math.floor(Q.px / st);
+                for (let r = p - N; r <= p + N; r++)
+                  out.set(r, (out.get(r) || 0) + ms[i] * (
+                    ncdf(((r + 1) * st - Q.px) / sg) -
+                    ncdf((r * st - Q.px) / sg)));
+              });
+            }
+            vw.dc = [ck, out];
+            return out;
+          };
           /* Perf: the curve's edge row by row, a step line from
              the profile's left edge, over its rows of a brick or
              more; w(e) = the width of e bricks */
@@ -4728,6 +4774,10 @@
                     Math.max(1, rowH - 1));
                 });
               }
+              /* DT: the delta's normal curve over its strip */
+              if (dt)
+                perfLine(P, dCurve(P, vw, sp, kv, vf, exp), cx0 - 2,
+                  (e) => (-e * kv * vs) / 2, "#000");
               if (showMass && !dt) {
                 g.strokeStyle = "#000";
                 g.lineWidth = 1;
