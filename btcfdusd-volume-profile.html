@@ -421,7 +421,7 @@
               </button>
               <button
                 id="bzTog"
-                class="a"
+                class=""
                 title="Zigzag: high after a green YB, low after black"
               >
                 BZ
@@ -1229,7 +1229,7 @@
         schedule();
       }
       /* BZ button: the zigzag from the barycentres' colours */
-      let showBZ = true;
+      let showBZ = false;
       /* a finished day's look: colour, yellow and day extremes */
       const bzDays = new Map();
       function setShowBZ(v) {
@@ -8867,7 +8867,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 36;
+      const DEFAULTS_VER = 37;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -9011,8 +9011,8 @@
         if (typeof st.showUD === "boolean") setShowUD(st.showUD);
         if (typeof st.udZz === "boolean") setUdZz(st.udZz);
         if (typeof st.showIZ === "boolean") setShowIZ(st.showIZ);
-        /* BZ: default changed in version 13 */
-        if (st.dv >= 13 && typeof st.showBZ === "boolean")
+        /* BZ: off by default from 37 */
+        if (st.dv >= 37 && typeof st.showBZ === "boolean")
           setShowBZ(st.showBZ);
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
         if (st.dv >= 27 && typeof st.showVap === "boolean")
