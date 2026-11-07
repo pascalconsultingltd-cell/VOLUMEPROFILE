@@ -1867,84 +1867,6 @@
           { key, hot, vh, vd, dot, exc, gTop, bBot });
       }
       /*
-       * LH: a column trading under the latest green dot's low
-       * makes orange pending, over the latest black dot's high
-       * blue; once per dot. Pending orange turns what follows
-       * orange on a swing low: a buyer column (pull back), then
-       * a low a brick under the one before; blue the mirror.
-       * Trading back a brick past the pull-back's high (low)
-       * switches back, and that colour back the same way a
-       * brick past the switching column's other end.
-       * [time, colour, price] of each switch.
-       */
-      function pfLhSw(all, hs) {
-        const lhM = [];
-        let gD = null,
-          bD = null,
-          pd = null,
-          ex = null;
-        all.forEach((c, k) => {
-          const at = (ok) => {
-            let t = null;
-            c.tm.forEach((tt, r) => {
-              if (ok(r) && (t == null || tt < t)) t = tt;
-            });
-            return t == null ? c.t0 : t;
-          };
-          /* ex: { dn, X = the last switch's pull-back
-             extreme } */
-          const X = ex && (ex.dn ? ex.X + c.st : ex.X - c.st);
-          if (ex && (ex.dn ? c.ph > X : c.pl < X)) {
-            const dn = ex.dn,
-              t = at((r) =>
-                dn ? (r + 1) * c.st > X : r * c.st < X,
-              );
-            lhM.push([t, dn ? "#2962ff" : "#ff6d00", X]);
-            /* the exit's colour exits the same way: a brick
-               past this column's other end turns it back */
-            ex = { dn: !dn, X: dn ? c.pl : c.ph };
-          }
-          /* pd: { dn, L = extreme since the break, pb =
-             pulled back, X = pull-back extreme } */
-          if (pd) {
-            const { dn, L } = pd,
-              x = dn ? c.pl : c.ph,
-              e = dn ? L - c.st : L + c.st;
-            if (pd.pb && (dn ? x < e : x > e)) {
-              const t = at((r) =>
-                dn ? r * c.st < e : (r + 1) * c.st > e,
-              );
-              lhM.push([t, dn ? "#ff6d00" : "#2962ff", e]);
-              ex = { dn, X: pd.X };
-              pd = null;
-            } else {
-              pd.L = dn ? Math.min(L, x) : Math.max(L, x);
-              if (c.up === dn) pd.pb = true;
-              if (pd.pb)
-                pd.X = dn
-                  ? Math.max(pd.X, c.ph)
-                  : Math.min(pd.X, c.pl);
-            }
-          }
-          if (gD != null && c.pl < gD) {
-            pd = { dn: true, L: c.pl, pb: false, X: -1e9 };
-            gD = null;
-          }
-          if (bD != null && c.ph > bD) {
-            pd = { dn: false, L: c.ph, pb: false, X: 1e9 };
-            bD = null;
-          }
-          if (hs.dot.has(k)) {
-            if (c.up) gD = c.pl;
-            else bD = c.ph;
-          }
-        });
-        /* only real changes of colour */
-        return lhM
-          .sort((a, b) => a[0] - b[0])
-          .filter((m, i, a) => !i || m[1] !== a[i - 1][1]);
-      }
-      /*
        * A day's vol, as vol() in imports.py / 2: the height of
        * the last 5 clean slow regimes of the 20 finished days
        * before it. Regimes from its 30m bars { i, h, l } (i =
@@ -2146,8 +2068,9 @@
        * Alerts: on each window, the up / down triangles arm
        * an alert on each new up / down highlight until
        * unticked (main and 15s: big-candle dots; ZZ: the
-       * main zigzag breaking the other way; PF: LH colour
-       * changes), once per bar (PF: per change).
+       * main zigzag breaking the other way; PF: a column
+       * crossing the IC channel's upper / lower line, and V95
+       * boxes), once per bar (PF: per column / box).
        * Saved per device. alerts["w|dir"] = { ctx, ids }:
        * the bars already rung or there when armed, ctx =
        * what they were computed on (a new ctx resets them,
@@ -2169,59 +2092,16 @@
         alerts = JSON.parse(localStorage.getItem(ALK)) || {};
       } catch (e) {}
       /* drop alerts of windows gone (FB) */
-      Object.keys(alerts).forEach(
-        (k) => alName[k.split("|")[0]] || delete alerts[k],
-      );
-      /* PF: the LH colour switches in the last two
-         columns, up = to blue, down = to orange; calm = a
-         column starting a calm run (grey box) */
-      function pfEvents() {
-        const d1 = dayOf(Date.now()),
-          d0 = d1 - 86400000;
-        loadAggr(d0);
-        loadAggr(d1);
-        if (!aggrT.get(d0) || !aggrT.get(d1)) return null;
-        /* V95 on USDT: wait for its seconds (no burst) */
-        loadUsdt(d0), loadUsdt(d1);
-        if (!usdtOf(d0) || !usdtOf(d1)) return null;
-        const all = pfCols([d0, d1]),
-          n = all.length,
-          from = n > 1 ? all[n - 2].t0 : 0,
-          hs = pfHot(all),
-          ev = pfLhSw(all, hs)
-            .filter(([t]) => t >= from)
-            .map(([t, col, p]) => ({
-              id: "lh" + t + "|" + col,
-              up: col === "#2962ff",
-              txt:
-                (col === "#2962ff" ? "blue " : "orange ") +
-                p.toFixed(0),
-            }));
-        for (let k = Math.max(1, n - 2); k < n; k++)
-          if (hs.exc[k] <= 0.25 && hs.exc[k - 1] > 0.25)
-            ev.push({
-              id: "calm" + all[k].t0,
-              dir: "calm",
-              txt: "calm " + all[k].lp.toFixed(0),
-            });
-        /* V95: a new box in the last 4 columns, either side */
-        hs.vh.forEach((key) => {
-          const [k, r] = key.split("|").map(Number),
-            dl = hs.vd.get(key) || 0;
-          if (k >= n - 4)
-            ev.push({
-              id: "v95" + all[k].t0 + "|" + r,
-              dir: "v95",
-              up: dl >= 0,
-              txt: "V95 " + (dl >= 0 ? "+" : "") + dl.toFixed(2) +
-                " " + ((r + 0.5) * all[k].st).toFixed(0),
-            });
-        });
-        return { ctx: pfStep(d0) + "|" + pfStep(d1) + "|true",
-          ev };
-      }
+      Object.keys(alerts).forEach((k) =>
+        (alName[k.split("|")[0]] && k !== "pf|calm") ||
+        delete alerts[k]);
       function alEvents(w) {
-        if (w === "pf") return pfEvents();
+        /* PF: worked out while drawing too */
+        if (w === "pf") {
+          if (!charts[0]) return null;
+          charts[0].draw();
+          return charts[0].pfEv();
+        }
         /* VP: worked out while drawing, so draw first (a
            background tab skips frames) */
         if (w === "vp") {
@@ -2359,21 +2239,16 @@
             alSave();
             return;
           }
-          /* q.dir: other than up / down (PF calm) */
-          const e = r.ev.find(
-            (q) =>
-              (q.dir || (q.up ? "up" : "dn")) === dir &&
-              !a.ids.includes(q.id),
-          );
+          /* q.dir: other than up / down (PF V95) */
+          const e = r.ev.find((q) =>
+            (q.dir || (q.up ? "up" : "dn")) === dir &&
+            !a.ids.includes(q.id));
           if (!e) return;
           /* stays armed; this bar is done */
           a.ids = a.ids.concat(e.id).slice(-50);
           alSave();
-          notify(
-            alName[w] + (e.dir ? " ● " : e.up ? " ▲ " : " ▼ ") +
-              e.txt,
-            e.up,
-          );
+          const mk = e.dir ? " ● " : e.up ? " ▲ " : " ▼ ";
+          notify(alName[w] + mk + e.txt, e.up);
         });
       }
       /* a tab behind other windows slows its timers to once a
@@ -3416,6 +3291,8 @@
           tpoFrac = null,
           /* VP alert events, from the last draw */
           vpEv = null,
+          /* PF alert events (IC channel crossed), from the draw */
+          pfEvS = null,
           /* PF panel: columns shown (wheel) */
           pfN = 200,
           /* pcPx: PF width once dragged; full: window shown
@@ -5761,27 +5638,15 @@
               else g.stroke();
               g.restore();
             });
-            /* PF: a grey circle arms the calm alert */
+            /* PF: V95 alert, a ringed dot, green / red while armed */
             if (w !== "pf") return;
-            const x = xr - 72,
+            const x2 = xr - 90,
               y = top + 3,
-              on = alerts["pf|calm"];
-            icons.push({ k: "a|pf|calm", x: x - 3, y: y - 3, w: 18,
-              h: 19 });
-            g.save();
-            g.setLineDash([]);
-            g.beginPath();
-            g.arc(x + 6, y + 6.5, 4.5, 0, 7);
-            g.lineWidth = 1.2;
-            g.strokeStyle = on ? "#9e9e9e" : "#b4bdc8";
-            g.fillStyle = "#9e9e9e";
-            if (on) g.fill();
-            else g.stroke();
-            /* V95 alert: a ringed dot, green / red while armed */
-            const x2 = x - 18,
               v95 = alerts["pf|v95"];
             icons.push({ k: "a|pf|v95", x: x2 - 3, y: y - 3, w: 18,
               h: 19 });
+            g.save();
+            g.setLineDash([]);
             g.lineWidth = v95 ? 1.5 : 1.2;
             g.strokeStyle = v95 ? "#000" : "#b4bdc8";
             [["#089981", Math.PI / 2], ["#e53935", -Math.PI / 2]]
@@ -6439,6 +6304,38 @@
                   });
                 return [hi, lo, f, exc, rs];
               });
+              /* alerts: a column (of the last 2) whose high first
+                 goes over the channel's upper line, or low under
+                 the lower one, edges as at its start */
+              if (k1 === items.length) {
+                const ev = [];
+                for (let k = Math.max(1, k1 - 2); k < k1; k++) {
+                  const b = bd[k],
+                    a = bd[k - 1],
+                    c = items[k],
+                    q = items[k - 1];
+                  if (!b || !b.length || !a || !a.length) continue;
+                  if (c.ph > b[0] && q.ph <= a[0])
+                    ev.push({ id: "icu" + c.t0, up: true,
+                      txt: "over " + b[0].toFixed(0) });
+                  if (c.pl < b[1] && q.pl >= a[1])
+                    ev.push({ id: "icd" + c.t0, up: false,
+                      txt: "under " + b[1].toFixed(0) });
+                }
+                /* V95: a new box in the last 4 columns, any side */
+                const hs = pfHot(items);
+                hs.vh.forEach((key) => {
+                  const [k, r] = key.split("|").map(Number),
+                    dl = hs.vd.get(key) || 0;
+                  if (k >= k1 - 4)
+                    ev.push({ id: "v95" + items[k].t0 + "|" + r,
+                      dir: "v95", up: dl >= 0,
+                      txt: "V95 " + (dl >= 0 ? "+" : "") +
+                        dl.toFixed(2) + " " +
+                        ((r + 0.5) * items[k].st).toFixed(0) });
+                });
+                pfEvS = { ctx: bx, ev };
+              }
               const pts = cv2.map((c, k) => {
                 const m = icFor(c.t0);
                 return m.ic && [pa + sl * jOf(k),
@@ -8773,6 +8670,7 @@
           alertEv,
           zzEv,
           vpEv: () => vpEv,
+          pfEv: () => pfEvS,
           newCandle,
           size,
           resetView: () => {
