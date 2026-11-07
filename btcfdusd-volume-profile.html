@@ -631,51 +631,6 @@
                   title="Candles shown"
                 ></span></span
               ><span class="ttl"
-                ><span class="lbl">Boxes</span
-                ><span class="box"
-                  ><button
-                    id="boxTog"
-                    class=""
-                    title="Static boxes on the high-volume candles"
-                  >
-                    B
-                  </button>
-                  <button
-                    id="fboxTog"
-                    class="a"
-                    title="Following channels on the big candles"
-                  >
-                    FB
-                  </button>
-                  <button
-                    id="fzTog"
-                    class="a"
-                    title="Zigzag of the following channels' extremes"
-                  >
-                    ZFB
-                  </button>
-                  <button
-                    id="haTog"
-                    class="a"
-                    title="Only the big candles and the ZFB"
-                  >
-                    HA
-                  </button>
-                  <button
-                    id="vwTog"
-                    class=""
-                    title="VWAP of the UTC day, on the main chart"
-                  >
-                    VWAP
-                  </button>
-                  <span
-                    id="boxN"
-                    title="Latest 1, 2 or 3 big candles"
-                    ><button>1</button><button>2</button
-                    ><button>3</button></span
-                  ></span
-                ></span
-              ><span class="ttl"
                 ><span class="lbl">Orders</span
                 ><span class="box"
                   ><button
@@ -692,32 +647,13 @@
                   >
                     L
                   </button>
-                  <button
-                    id="grTog"
-                    class=""
-                    title="Grid bots (grid.js, grid2.js, grid3.js)"
-                  >
-                    Gr
-                  </button></span
+</span
                 ></span
               ><span class="ttl"
                 ><span class="lbl">Axis</span
                 ><span class="box"
+
                   ><button
-                    id="ladTog"
-                    class=""
-                    title="Steps from the day high / low; off = POC"
-                  >
-                    HL
-                  </button>
-                  <button
-                    id="gridTog"
-                    class=""
-                    title="Lines at 06, 12, 18 UTC; midnight stays"
-                  >
-                    6h
-                  </button>
-                  <button
                     id="pbTog"
                     class=""
                     title="POC bands: yesterday's and today's P1-P3"
@@ -1113,62 +1049,6 @@
         seeded = {},
         olderBusy = {},
         olderEnd = {};
-      /*
-       * automatic box on the latest high-volume candle (B
-       * button)
-       */
-      let autoBox = false;
-      /* channels shown: the latest 1, 2 or 3 big candles */
-      let nBox = 1;
-      function setNBox(v) {
-        nBox = v;
-        [...$("boxN").children].forEach(
-          (b, i) => (b.className = i + 1 === nBox ? "a" : ""),
-        );
-        schedule();
-      }
-      function setAutoBox(v) {
-        autoBox = !!v;
-        $("boxTog").className = autoBox ? "a" : "";
-        schedule();
-      }
-      /* following channels on the same candles (FB button) */
-      let followBox = false;
-      function setFollowBox(v) {
-        followBox = !!v;
-        $("fboxTog").className = followBox ? "a" : "";
-        schedule();
-      }
-      /* zigzag of those channels' extremes (ZFB button) */
-      let showFZ = true;
-      function setShowFZ(v) {
-        showFZ = !!v;
-        $("fzTog").className = showFZ ? "a" : "";
-        schedule();
-      }
-      /* HA button: the main chart shows only the big candles
-         and the ZFB, the price scale and crosshair stay */
-      let onlyHA = true;
-      function setOnlyHA(v) {
-        onlyHA = !!v;
-        $("haTog").className = onlyHA ? "a" : "";
-        schedule();
-      }
-      /* the UTC day's VWAP on the main chart (VWAP button) */
-      let showVW = false;
-      function setShowVW(v) {
-        showVW = !!v;
-        $("vwTog").className = showVW ? "a" : "";
-        schedule();
-      }
-      /* vol ladder from the day's high and low (HL button);
-         off = from the previous day's POC */
-      let hlLad = false;
-      function setHlLad(v) {
-        hlLad = !!v;
-        $("ladTog").className = hlLad ? "a" : "";
-        schedule();
-      }
       /* up / down days (UD button): a day whose last vipoc (in
          time) is under its first is tinted red, else green */
       let showUD = false,
@@ -2383,14 +2263,6 @@
         $("pbTog").className = pocBand ? "a" : "";
         schedule();
       }
-      /* vertical 6-hour lines (6h button); the midnight
-         line and the time labels stay either way */
-      let showGrid = false;
-      function setShowGrid(v) {
-        showGrid = !!v;
-        $("gridTog").className = showGrid ? "a" : "";
-        schedule();
-      }
       /* own orders on the chart (O button) */
       let showOrders = false;
       function setShowOrders(v) {
@@ -2404,18 +2276,6 @@
       function setShowLines(v) {
         showLines = !!v;
         $("ordLineTog").className = showLines ? "a" : "";
-        schedule();
-      }
-      /* grid bot (Gr button): its orders and levels, from
-         grid.js written by GRID-TRADING/grid.py */
-      let showGr = false,
-        gOrders = [],
-        /* per file: its level changes */
-        gLv = [],
-        gFiles = [null, null, null];
-      function setShowGr(v) {
-        showGr = !!v;
-        $("grTog").className = showGr ? "a" : "";
         schedule();
       }
       /*
@@ -2466,29 +2326,6 @@
         };
         s.onerror = () => next(false);
         s.src = "orders.js?t=" + Date.now();
-        document.head.appendChild(s);
-      }
-      /* grid.js: window.GRID = { orders: [...as orders.js],
-         lv: [[time, anchor, step], ...] }, every 3s */
-      /* grid.js, grid2.js, grid3.js (grid1-3), one at a time
-         as all set window.GRID */
-      function loadGrid(k = 0) {
-        const s = document.createElement("script");
-        window.GRID = undefined;
-        s.onload = s.onerror = () => {
-          s.remove();
-          const a = window.GRID;
-          gFiles[k] = a && Array.isArray(a.orders) ? a : null;
-          if (k < 2) return loadGrid(k + 1);
-          gOrders = gFiles.flatMap((x) =>
-            x ? x.orders.map(readOrder) : [],
-          );
-          gLv = gFiles.map((x) => (x && x.lv) || []);
-          schedule();
-          setTimeout(loadGrid, 3000);
-        };
-        s.src =
-          ["grid.js", "grid2.js", "grid3.js"][k] + "?t=" + Date.now();
         document.head.appendChild(s);
       }
       /*
@@ -3735,7 +3572,7 @@
           }
           /* HA button: only the big candles and the ZFB, on
              the profiles' UTC half hour colours, very light */
-          const ha = cfg.main && onlyHA && !side && geo.length;
+          const ha = cfg.main && !side && geo.length;
           if (ha) {
             g.save();
             g.beginPath();
@@ -5384,7 +5221,7 @@
               pc = (pT + pB) / 2,
               vah = (R.b + 1) * R.step,
               val = R.a * R.step,
-              fx = !hlLad && zFix != null,
+              fx = zFix != null,
               z0 = fx ? zFix : pc,
               v = volN,
               /* kS thins the ladder below 16px spacing */
@@ -5496,48 +5333,6 @@
               return a;
             };
             const runs = [{ ref: null, xa: sg.xa, xb: sg.xb }];
-            if (volN > 0 && hlLad) {
-              let up = null,
-                H = -1e12,
-                L = 1e12,
-                ref = null,
-                refUp;
-              const step = (c) => {
-                H = Math.max(H, c.h);
-                L = Math.min(L, c.l);
-                const dn = up !== false && c.c < H - 2 * v,
-                  ris = up !== true && c.c > L + 2 * v;
-                if (!dn && !ris) return;
-                /* both on one giant candle: a red one takes
-                   the high, a green one the low */
-                refUp = dn && ris ? c.c < c.o : dn;
-                ref = refUp ? H : L;
-                up = !refUp;
-                H = c.h;
-                L = c.l;
-              };
-              /* day's candles left of the view count too */
-              if (!i)
-                arr.forEach((c) => {
-                  if (
-                    okC(c) &&
-                    dayOf(c.t) === sg.dS &&
-                    c.t < geo[0].c.t
-                  )
-                    step(c);
-                });
-              runs.length = 0;
-              geo.forEach((o) => {
-                if (dayOf(o.c.t) !== sg.dS) return;
-                step(o.c);
-                const r = runs[runs.length - 1],
-                  xb = o.x + o.w;
-                if (r && r.ref === ref && r.refUp === refUp)
-                  r.xb = xb;
-                else runs.push({ ref, refUp, xa: o.x, xb });
-              });
-              if (last) runs[runs.length - 1].xb = sg.xb;
-            }
             /* last day: its latest levels cross the TPO area */
             const end = runs[runs.length - 1],
               tpoRun = Object.assign({}, end, { xa: 0, xb: x0 - 5 });
@@ -6552,7 +6347,7 @@
           marks.forEach((o) => {
             const xm = Math.round(o.x + o.w / 2) + 0.5,
               mid0 = new Date(o.c.t).getUTCHours() < 6;
-            if (!mid0 && !showGrid) return;
+            if (!mid0) return;
             /* midnight solid navy like the 0 line, the
                others dashed black like the vol steps */
             g.strokeStyle = mid0
@@ -6698,131 +6493,6 @@
             });
           };
           /*
-           * Automatic channels on the latest big-volume candles
-           * (1 to 3 of them, chosen in the header).
-           * It is as tall as that candle (high to low) and it
-           * trails the market: after a down candle its bottom
-           * follows every new low, after an up candle its top
-           * follows every new high. It is drawn as a channel,
-           * candle by candle, so the moving edges are visible
-           * from the start.
-           * When a candle closes out of it on the far side
-           * (above when following lows, below when following
-           * highs), that channel stops there and a new one of
-           * the same height starts in the opposite direction,
-           * and so on. Following highs = green, lows = black.
-           */
-          if (cfg.main && (autoBox || (followBox && !ha))) {
-            /* the latest nBox big candles, newest first */
-            const bigs = [],
-              where = new Map(geo.map((o) => [o.c, o]));
-            for (
-              let k = arr.length - 1;
-              k >= BIG_WIN - 1 && bigs.length < nBox;
-              k--
-            ) {
-              const c = arr[k];
-              if (okC(c) && c.c !== c.o && isBig(arr, k))
-                bigs.push(k);
-            }
-            bigs.forEach((k, bi) => {
-              /* an older candle's channels stop at the next
-                 big candle, which starts its own */
-              const kEnd = bi ? bigs[bi - 1] : arr.length - 1,
-                A = arr[k],
-                ht = A.h - A.l,
-                runs = [];
-              let dn = A.c < A.o,
-                ext = dn ? A.l : A.h,
-                pts = [{ c: A, ext }];
-              /* B: a static Alt+B style box on the candle, 66%
-                 line placed as in its channel */
-              if (autoBox)
-                drawBox({ t: A.t, lo: dn ? A.h : A.l, hi: ext });
-              for (let j = k + 1; j <= kEnd; j++) {
-                const q = arr[j];
-                if (!okC(q)) continue;
-                ext = dn ? Math.min(ext, q.l) : Math.max(ext, q.h);
-                pts.push({ c: q, ext });
-                const out = dn ? q.c > ext + ht : q.c < ext - ht;
-                if (!out) continue;
-                runs.push({ dn, pts, live: false });
-                dn = !dn;
-                ext = dn ? q.l : q.h;
-                pts = [{ c: q, ext }];
-              }
-              runs.push({ dn, pts, live: !bi });
-              /* FB: the following channels, none in HA mode */
-              (followBox && !ha ? runs : []).forEach((r) => {
-                /* far = the side away from the trailed edge;
-                   the 66% line sits 34% in from it */
-                const far = (e) => (r.dn ? e + ht : e - ht),
-                  p66 = (e) => e + 0.66 * (far(e) - e),
-                  /* FB: yellow down, blue up (B: black / green) */
-                  rgb = r.dn ? "230,159,0" : "41,98,255",
-                  n = r.pts.length,
-                  sg = [];
-                r.pts.forEach((p, i) => {
-                  const o = where.get(p.c);
-                  if (!o) return;
-                  const xm = o.x + o.w / 2,
-                    end = i === n - 1;
-                  sg.push({
-                    e: p.ext,
-                    xa: i ? o.x : xm,
-                    xb: end ? (r.live ? px0 : xm) : o.x + o.w,
-                  });
-                });
-                if (!sg.length) return;
-                const edge = (f, back) => {
-                  (back ? [...sg].reverse() : sg).forEach((s) => {
-                    const y = Y(f(s.e));
-                    g.lineTo(back ? s.xb : s.xa, y);
-                    g.lineTo(back ? s.xa : s.xb, y);
-                  });
-                };
-                g.save();
-                g.beginPath();
-                g.rect(x0, top, px0 - x0, bot - top);
-                g.clip();
-                /* fill only the far 34%, up to the 66% line */
-                g.beginPath();
-                g.moveTo(sg[0].xa, Y(p66(sg[0].e)));
-                edge(p66, false);
-                edge(far, true);
-                g.closePath();
-                g.fillStyle = "rgba(" + rgb + ",.07)";
-                g.fill();
-                /* solid far edge only: the trailed edge is
-                   not drawn */
-                g.beginPath();
-                g.moveTo(sg[0].xa, Y(far(sg[0].e)));
-                edge(far, false);
-                g.strokeStyle = "rgba(" + rgb + ",.5)";
-                g.lineWidth = 1;
-                g.setLineDash([]);
-                g.stroke();
-                g.setLineDash([5, 4]);
-                g.beginPath();
-                g.moveTo(sg[0].xa, Y(p66(sg[0].e)));
-                edge(p66, false);
-                g.stroke();
-                g.setLineDash([]);
-                g.restore();
-                /* current prices of the live channel, when
-                   its latest candle is on screen */
-                if (!r.live || !where.has(r.pts[n - 1].c)) return;
-                const e = r.pts[n - 1].ext;
-                [p66(e), far(e)].forEach((pv) => {
-                  const yy = Y(pv);
-                  if (yy >= top && yy <= bot)
-                    ptag(yy, pv.toFixed(DP), "rgb(" + rgb + ")");
-                });
-              });
-            });
-            g.lineWidth = 1;
-          }
-          /*
            * YB lines, for every run of one colour (a BZ leg), each
            * in its own colour, from the midnight that made it known
            * to the midnight the next run starts: the latest
@@ -6908,47 +6578,8 @@
               g.restore();
             }
           }
-          /* VWAP: from each UTC midnight, on (H + L + C) / 3 */
-          if (cfg.main && showVW && geo.length) {
-            const where = new Map(geo.map((o) => [o.c, o]));
-            let day = null,
-              pv = 0,
-              vs = 0,
-              on = false,
-              last = null;
-            g.save();
-            g.beginPath();
-            g.rect(x0, top, px0 - x0, bot - top);
-            g.clip();
-            g.strokeStyle = "#7b1fa2";
-            g.lineWidth = 1.5;
-            g.setLineDash([]);
-            g.beginPath();
-            arr.forEach((q) => {
-              if (!okC(q)) return;
-              if (dayOf(q.t) !== day) {
-                day = dayOf(q.t);
-                pv = vs = 0;
-                on = false;
-              }
-              pv += ((q.h + q.l + q.c) / 3) * q.v;
-              vs += q.v;
-              const o = where.get(q);
-              if (!o || !vs) return;
-              last = pv / vs;
-              const x = o.x + o.w / 2,
-                y = Y(last);
-              if (on) g.lineTo(x, y);
-              else g.moveTo(x, y);
-              on = true;
-            });
-            g.stroke();
-            g.restore();
-            if (last != null && Y(last) >= top && Y(last) <= bot)
-              ptag(Y(last), last.toFixed(DP), "#7b1fa2");
-          }
           /*
-           * ZFB: over all the loaded candles, whatever nBox shows,
+           * ZFB: over all the loaded candles,
            * one following channel. Until the first big candle it is
            * as tall as the day's vol. A big candle the same way only
            * resizes it, so the leg goes on; one the other way, or a
@@ -7021,78 +6652,15 @@
              (big needs a full window), not shown */
           const warm = arr.length ? arr[Math.min(arr.length - 1,
               3 * BIG_WIN)].t : 0;
-          if (cfg.main && (showFZ || ha) && geo.length && zOk)
-            zfb(ha);
+          if (ha && zOk) zfb(ha);
           /*
            * own orders (from orders.js): a segment at the
            * order price for as long as the order was alive,
            * as thick as its quantity; dot = filled,
            * cancelled just stops, open orders run to the edge
            */
-          /* my orders (O) and the grid bot's (Gr) */
-          const ords = (showOrders ? orders : []).concat(
-            showGr ? gOrders : [],
-          );
-          /* grid bot levels (Gr), from each change to the
-             next, between xL and xR: grid1 anchor + k x step
-             (purple), grid2 / grid3 their levels (teal /
-             orange) */
-          const gridLv = (xOf, xL, xR) => {
-            if (!showGr) return;
-            g.save();
-            g.beginPath();
-            g.rect(xL, top, xR - xL, bot - top);
-            g.clip();
-            g.setLineDash([2, 3]);
-            g.lineWidth = 1;
-            gLv.forEach((L, f) => {
-              g.beginPath();
-              L.forEach(([t, a, s], i) => {
-                const xs = xOf(t),
-                  xe = i + 1 < L.length ? xOf(L[i + 1][0]) : xR,
-                  ps = Array.isArray(a) ? a : [];
-                if (xe <= xs) return;
-                if (!ps.length)
-                  for (
-                    let p = a + Math.ceil((lo - a) / s) * s;
-                    p <= hi;
-                    p += s
-                  )
-                    ps.push(p);
-                ps.forEach((p) => {
-                  if (p < lo || p > hi) return;
-                  g.moveTo(xs, Y(p));
-                  g.lineTo(xe, Y(p));
-                });
-              });
-              g.strokeStyle = [
-                "rgba(142,68,173,.45)",
-                "rgba(0,128,128,.55)",
-                "rgba(230,120,0,.6)",
-              ][f];
-              g.stroke();
-            });
-            g.setLineDash([]);
-            g.restore();
-          };
-          gridLv(
-            (t) => {
-              const q = geoAt(t);
-              return q ? q.x + q.w / 2 : x0;
-            },
-            x0,
-            px0,
-          );
-          if (pcPf && pfX.length)
-            gridLv(
-              (tt) => {
-                let x = pL;
-                for (const [t0, xm] of pfX) if (t0 <= tt) x = xm;
-                return x;
-              },
-              pL,
-              pL + pcW,
-            );
+          /* my orders (O) */
+          const ords = showOrders ? orders : [];
           if (ords.length) {
             const n = arr.length;
             const tEnd = off > 0 && n - off < n
@@ -8917,14 +8485,6 @@
         return {
           v: 2,
           dv: DEFAULTS_VER,
-          autoBox,
-          followBox,
-          showFZ,
-          onlyHA,
-          showVW,
-          nBox,
-          hlLad,
-          showGrid,
           pocBand,
           showVA,
           showUD,
@@ -8960,7 +8520,6 @@
           pfVa,
           showOrders,
           showLines,
-          showGr,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -8998,23 +8557,8 @@
            defaults are ignored */
         const cur = st.dv >= 2;
         /* B, PocBd: defaults changed in version 14 */
-        if (st.dv >= 14 && typeof st.autoBox === "boolean")
-          setAutoBox(st.autoBox);
-        if (cur && [1, 2, 3].includes(st.nBox)) setNBox(st.nBox);
-        if (typeof st.followBox === "boolean")
-          setFollowBox(st.followBox);
-        if (typeof st.showFZ === "boolean") setShowFZ(st.showFZ);
-        if (st.dv >= 18 && typeof st.onlyHA === "boolean")
-          setOnlyHA(st.onlyHA);
-        if (st.dv >= 17 && typeof st.showVW === "boolean")
-          setShowVW(st.showVW);
         /* 6h: default changed in version 4, HL / VA in 5 */
-        const cur4 = st.dv >= 4,
-          cur5 = st.dv >= 5;
-        if (cur5 && typeof st.hlLad === "boolean")
-          setHlLad(st.hlLad);
-        if (cur4 && typeof st.showGrid === "boolean")
-          setShowGrid(st.showGrid);
+        const cur5 = st.dv >= 5;
         if (st.dv >= 14 && typeof st.pocBand === "boolean")
           setPocBand(st.pocBand);
         /* POC: default changed in version 8 */
@@ -9069,7 +8613,6 @@
           setShowOrders(st.showOrders);
         if (cur6 && typeof st.showLines === "boolean")
           setShowLines(st.showLines);
-        if (typeof st.showGr === "boolean") setShowGr(st.showGr);
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -9256,18 +8799,12 @@
       };
       $("sym").textContent = SYM + " " + TF;
       document.title = SYM;
-      setNBox(1);
-      [...$("boxN").children].forEach(
-        (b, i) => (b.onclick = () => setNBox(i + 1)),
-      );
       restore();
       /* a fresh page starts as after Alt+R: settings kept,
          views back home */
       miniHome();
       mainChart.resetView();
       miniChart.resetView();
-      $("ladTog").onclick = () => setHlLad(!hlLad);
-      $("gridTog").onclick = () => setShowGrid(!showGrid);
       $("pbTog").onclick = () => setPocBand(!pocBand);
       $("vaTog").onclick = () => setShowVA(!showVA);
       $("udTog").onclick = () => setShowUD(!showUD);
@@ -9304,14 +8841,8 @@
       $("stTog").onclick = () => setStCol(!stCol);
       $("massTog").onclick = () => setShowMass(!showMass);
       $("perfTog").onclick = () => setShowPerf(!showPerf);
-      $("boxTog").onclick = () => setAutoBox(!autoBox);
-      $("fboxTog").onclick = () => setFollowBox(!followBox);
-      $("fzTog").onclick = () => setShowFZ(!showFZ);
-      $("haTog").onclick = () => setOnlyHA(!onlyHA);
-      $("vwTog").onclick = () => setShowVW(!showVW);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
-      $("grTog").onclick = () => setShowGr(!showGr);
       /* installable app: only when served over https */
       if (
         "serviceWorker" in navigator &&
@@ -9319,7 +8850,6 @@
       )
         navigator.serviceWorker.register("sw.js").catch(() => {});
       loadOrders();
-      loadGrid();
       loadVol();
       connect();
       hist(IV, () => seedIv(IV));
