@@ -3504,7 +3504,7 @@
             tpoW0 = cfg.tpo
               ? tpoFrac != null
                 ? Math.max(80, Math.min(W * 0.75, tpoFrac * W))
-                : Math.max(80, W * 0.2 - 5)
+                : Math.max(80, W * 0.29 - 5)
               : 0,
             /*
              * full = "main" / "tpo" / "pc": that window takes
@@ -3524,8 +3524,8 @@
               : fl === "pc"
                 ? x1 - 35
                 : pcPx ||
-                  /* profiles 20%, PF 40%, chart 40% */
-                  Math.round(0.4 * W),
+                  /* profiles 29%, PF 34%, chart the rest */
+                  Math.round(0.34 * W),
             legendH = cfg.main ? 22 : 0,
             timeH = 16,
             px0 = W - axW;
@@ -8729,12 +8729,12 @@
           size,
           resetView: () => {
             /* main 5m: 3 days, from the Asia open (00:00 UTC) 2 days
-               back to now; VP 3 days; PF all its 3 days (pfN 0) */
+               back to now; VP 6 days; PF all its 3 days (pfN 0) */
             N = slotsFor(cfg.main && TF === "5m"
               ? Math.ceil((Date.now() - dayOf(Date.now()) +
                 2 * 864e5) / 3e5)
               : cfg.N);
-            if (cfg.main) nTpo = 3;
+            if (cfg.main) nTpo = 6;
             off = home();
             ysc = 1;
             ypan = 0;
