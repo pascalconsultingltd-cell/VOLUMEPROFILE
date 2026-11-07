@@ -202,7 +202,7 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 3px 26px 3px 26px;
+        padding: 1px 26px 1px 26px;
         font-size: 11px;
         color: var(--mu);
         background: var(--panel);
@@ -214,17 +214,10 @@
         touch-action: none;
         user-select: none;
       }
-      #mhead b {
-        color: var(--tx);
-        font-weight: 600;
-      }
       #mhead button {
         margin-left: auto;
         padding: 0 6px;
         line-height: 16px;
-      }
-      #mhead #mx {
-        margin-left: 4px;
       }
       #mbody {
         flex: 1;
@@ -747,8 +740,7 @@
     </div>
     <div id="mini">
       <div id="mhead">
-        <b>15s</b><span id="mst"></span
-        ><button id="mx" title="Hide">×</button>
+        <button id="mx" title="Hide">×</button>
       </div>
       <div id="mbody"><canvas id="mc"></canvas></div>
       <div class="grip" data-c="tl" title="Drag to resize"></div>
@@ -2829,25 +2821,12 @@
           c15 = [...all.values()]
             .sort((x, y) => x.t - y.t)
             .slice(-8000);
-          if (first) {
-            bricks = lbBars(c15).length;
-            $("mst").textContent =
-              bricks >= TARGET
-                ? ""
-                : "loading 15s " + bricks + "/" + TARGET;
-          }
+          if (first) bricks = lbBars(c15).length;
           schedule();
           return first && bricks >= TARGET;
         });
         cut = null;
         seam = null;
-        if (first)
-          $("mst").textContent =
-            m.size && bricks < TARGET
-              ? "15s history: only " +
-                bricks +
-                " bricks available"
-              : "";
         return m.size > 0;
       }
       /* 15s fills run one at a time */
@@ -7341,6 +7320,14 @@
           tq.filter((a) => a[2] === "#fff")
             .concat(tq.filter((a) => a[2] !== "#fff"))
             .forEach((a) => ptag(...a));
+          /* 15s: its name at the bottom, as the PF's (under the
+             price axis, clear of the time labels) */
+          if (!cfg.main) {
+            g.font = "11px ui-monospace,Menlo,monospace";
+            g.fillStyle = "#6b7684";
+            g.textAlign = "center";
+            g.fillText("15s", (px0 + W) / 2, bot + 10);
+          }
           /* last price, on top of the drawings and their tags */
 
           const last = vis[vis.length - 1],
