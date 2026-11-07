@@ -5768,6 +5768,20 @@
               hotB = [],
               /* each shown column's x, for the swing marks */
               xs = new Map();
+            /* background: each column's half hour colour, very
+               light, as the main chart's; a run of one period is
+               one rect */
+            let b0 = null;
+            [...shown, null].forEach((c, i) => {
+              const x = pa + sl * jOf(i) - sl / 2,
+                p = c && Math.floor((c.t0 % 864e5) / TPO_MS);
+              if (b0 && c && b0[1] === p) return;
+              if (b0) {
+                g.fillStyle = tpoColor(b0[1], 0.08);
+                g.fillRect(b0[0], top, x - b0[0], bot - top);
+              }
+              b0 = [x, p];
+            });
             shown.forEach((c, i) => {
               const xm = pa + sl * jOf(i),
                 st = c.st;
@@ -5778,13 +5792,11 @@
               const q = hs.exc[ci.get(c)];
               g.fillStyle = `rgba(242,54,69,${q ** 3})`;
               if (pfXb) g.fillRect(xm - sl / 2, bot - 8, sl + 0.5, 8);
-              /* Br: every box a brick, coloured by the time the
-                 column first traded it, as the profiles; the
-                 end bricks cut at the real high / low */
+              /* Br: every box a brick, soft black (the time is the
+                 background); the end bricks cut at the real high /
+                 low */
               if (pfBr)
                 for (let r = c.lo; r <= c.hi; r++) {
-                  /* a brick the column jumped over: its start time */
-                  const t = c.tm.has(r) ? c.tm.get(r) : c.t0;
                   const yT = Y(Math.min((r + 1) * st, c.ph)),
                     yB = Y(Math.max(r * st, c.pl)),
                     solid = hot(c, r);
@@ -5804,9 +5816,7 @@
                       ? "#000"
                       : thin
                         ? "#7f9fc8"
-                        : tpoColor(
-                            Math.floor((t % 86400000) / TPO_MS),
-                          );
+                        : "#434651";
                   g.fillRect(
                     xm - w / 2,
                     yT,
