@@ -4485,11 +4485,13 @@
              filled by the volume of closed 30m periods, capped
              at the curve (no repaint); belly within 1 sigma,
              lead wing = the side it moved to from the P before
-             it (P1: the day before's last), trail = the other */
-          const bellFill = (P, sp, vw, kv, vf) => {
+             it (P1: the day before's last), trail = the other;
+             dm (DT): P -> its move in the age ranks (P's and D's) */
+          const bellFill = (P, sp, vw, kv, vf, dm) => {
             const nC = Math.floor((Math.min(Date.now(),
                 nextDay(P.dS)) - P.dS) / TPO_MS),
-              ck = [kv, vf, nC, ...sp.map((S) => S.px)].join();
+              ck = [kv, vf, nC, ...sp.map((S) => S.px),
+                ...(dm ? dm.values() : [])].join();
             if (vw.bf && vw.bf[0] === ck) return vw.bf[1];
             const st = P.step,
               sg = vf / 1.2816,
@@ -4504,7 +4506,8 @@
             });
             sp.forEach((S, k) => {
               const pv = k ? sp[k - 1].px : pd,
-                dir = pv == null ? 0 : Math.sign(S.px - pv),
+                dir = dm ? dm.get(S) || 0
+                  : pv == null ? 0 : Math.sign(S.px - pv),
                 R = Math.ceil((3 * sg) / st),
                 p0 = Math.floor(S.px / st),
                 z = { b: [0, 0], u: [0, 0], d: [0, 0] },
@@ -4849,6 +4852,7 @@
                  up, black down; rk = the P's and D's ages (rank
                  written at the end) */
               const rk = [];
+              let dm = null;
               if (dt) {
                 const dk = k15.filter((c) => okC(c) && c.t >= P.dS &&
                     c.t < nextDay(P.dS)),
@@ -4911,9 +4915,21 @@
                 const wx = (m, X) =>
                   (m.get(Math.floor(X.px / P.step)) || 0) * kv * vs;
                 sp.forEach((S) =>
-                  rk.push([ag(S), cx0 + wx(exp, S) / 2, S.px]));
+                  rk.push([ag(S), cx0 + wx(exp, S) / 2, S.px, 0, S]));
                 (dc.ps || []).forEach((Q) =>
-                  rk.push([ag(Q), cx0 - 2 - wx(dc, Q) / 4, Q.px]));
+                  rk.push([ag(Q), cx0 - 2 - wx(dc, Q) / 4, Q.px, 0]));
+                /* by age; each one's move vs the one before (1: the
+                   day before's last bell, else its last vipoc): its
+                   number's colour and, for a P, its BF lead side */
+                let q0 = rkEnd.has(prevDay(P.dS))
+                  ? rkEnd.get(prevDay(P.dS))
+                  : vipocs(dayProf(prevDay(P.dS))).pop();
+                rk.sort((a, b) => a[0] - b[0]).forEach((e) => {
+                  e[3] = q0 == null ? 0 : e[2] >= q0 ? 1 : -1;
+                  q0 = e[2];
+                });
+                dm = new Map(rk.filter((e) => e[4])
+                  .map((e) => [e[4], e[3]]));
               }
               if (showMass && !dt) {
                 g.strokeStyle = "#000";
@@ -4939,8 +4955,8 @@
               }
               /* BF: the lead wing's empty part, from its closed
                  volume to the curve, light blue */
-              const bf = showBf && kv ? bellFill(P, sp, vw, kv, vf)
-                : null;
+              const bf = showBf && kv
+                ? bellFill(P, sp, vw, kv, vf, dm) : null;
               if (bf) {
                 g.fillStyle = "rgba(47,128,200,.3)";
                 bf.ps.forEach((F) => F.lead.forEach((r) => {
@@ -4986,16 +5002,13 @@
               g.textBaseline = "middle";
               g.strokeStyle = "#fff";
               g.lineWidth = 3;
-              let pb = rkEnd.get(prevDay(P.dS));
-              rk.sort((a, b) => a[0] - b[0])
-                .forEach(([, x, px], i) => {
-                g.fillStyle = pb == null ? "#000"
-                  : px >= pb ? "#089981" : "#e53935";
+              rk.forEach(([, x, px, mv], i) => {
+                g.fillStyle = !mv ? "#000"
+                  : mv > 0 ? "#089981" : "#e53935";
                 g.strokeText(i + 1, x, Y(px));
                 g.fillText(i + 1, x, Y(px));
-                pb = px;
               });
-              if (rk.length) rkEnd.set(P.dS, pb);
+              if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
               g.restore();
               continue;
             }
