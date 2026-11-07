@@ -3546,6 +3546,21 @@
             g.stroke();
             g.restore();
           };
+          /* rects gathered per colour, filled once per colour
+             (layer order kept by filling each layer when done) */
+          const batch = () => {
+            const m = new Map();
+            return {
+              rect: (col, x, y, w, h) => {
+                if (!m.has(col)) m.set(col, new Path2D());
+                m.get(col).rect(x, y, w, h);
+              },
+              fill: () => m.forEach((p, col) => {
+                g.fillStyle = col;
+                g.fill(p);
+              }),
+            };
+          };
           /* DT: each day's last bell (by age), for the next day */
           const rkEnd = new Map();
           for (let d = 0; d < cnt + ex; d++) {
@@ -3636,7 +3651,11 @@
             /* the vipocs' normal curves in volume, a brick's
                worth = the mean volume / bricks of the 5 finished
                days before (fixed all day: no repaint) */
-            const exp = expOf(P, sp, vf),
+            /* kept on vw while its P's and vol stay */
+            const ek = [vf, ...sp.map((S) => S.px)].join();
+            if (!vw.ex || vw.ex[0] !== ek)
+              vw.ex = [ek, expOf(P, sp, vf)];
+            const exp = vw.ex[1],
               kv = kvFor(P.dS, "BTCUSDT"),
               cX = (r) => cx0 + (exp.get(r) || 0) * kv * vs;
             /* the bells' axis = the day's candle, wick low to high,
@@ -3645,10 +3664,20 @@
                end) */
             const rk = [];
             {
-              const dk = k15.filter((c) => okC(c) && c.t >= P.dS &&
-                  c.t < nextDay(P.dS)),
-                o = dk.length ? dk[0].o : null,
-                c = dk.length ? dk[dk.length - 1].c : null;
+              /* its first / last 15m candle, by binary search */
+              const at = (t) => {
+                  let a = 0, b = k15.length;
+                  while (a < b) {
+                    const m = (a + b) >> 1;
+                    if (k15[m].t < t) a = m + 1;
+                    else b = m;
+                  }
+                  return a;
+                },
+                i0 = at(P.dS),
+                i1 = at(nextDay(P.dS)) - 1,
+                o = i1 >= i0 ? k15[i0].o : null,
+                c = i1 >= i0 ? k15[i1].c : null;
               g.strokeStyle = g.fillStyle = o != null && c < o
                 ? "#000" : "#089981";
               /* the wick, its high and low capped with a dash */
@@ -3717,7 +3746,8 @@
               .map((e) => [e[4], e[3]]));
             /* each bell shaded as its number, very light: a row
                goes to its nearest P (right) / D (left) */
-            const shade = (sd, m, x0, wf) => {
+            const sb = batch(),
+              shade = (sd, m, x0, wf) => {
               const bs = rk.filter((e) => e[5] === sd);
               if (bs.length) m.forEach((v, r) => {
                 const c = (r + 0.5) * P.step,
@@ -3726,18 +3756,19 @@
                   w = wf(v),
                   yT = Y((r + 1) * P.step);
                 if (Math.abs(w) < 0.5 || !b[3]) return;
-                g.fillStyle = b[3] > 0 ? "rgba(8,153,129,.12)"
-                  : "rgba(229,57,53,.12)";
-                g.fillRect(Math.min(x0, x0 + w), yT, Math.abs(w),
-                  Y(r * P.step) - yT);
+                sb.rect(b[3] > 0 ? "rgba(8,153,129,.12)"
+                  : "rgba(229,57,53,.12)", Math.min(x0, x0 + w), yT,
+                  Math.abs(w), Y(r * P.step) - yT);
               });
             };
             shade(1, exp, cx0, (v) => v * kv * vs);
             shade(-1, dc, cx0 - 2, (v) => (-v * kv * vs) / 2);
+            sb.fill();
             /* what a row lacks vs the curve (negative delta),
                the black curve filled from its volume, in its
                nearest P's number colour (black: soft black) */
-            const bp = rk.filter((e) => e[5] === 1);
+            const bp = rk.filter((e) => e[5] === 1),
+              nb = batch();
             exp.forEach((e, r) => {
               const x0 = cx0 + (vw.rw.get(r) || 0) * vs,
                 yT = Y((r + 1) * P.step),
@@ -3748,24 +3779,25 @@
               if (cX(r) - x0 < 0.25 || yT > bot ||
                 yT + rowH < top)
                 return;
-              g.fillStyle = !b || !b[3] ? "rgba(67,70,81,.45)"
+              nb.rect(!b || !b[3] ? "rgba(67,70,81,.45)"
                 : b[3] > 0 ? "rgba(8,153,129,.6)"
-                  : "rgba(229,57,53,.6)";
-              g.fillRect(x0, yT + 0.5, cX(r) - x0,
+                  : "rgba(229,57,53,.6)", x0, yT + 0.5, cX(r) - x0,
                 Math.max(1, rowH - 1));
             });
+            nb.fill();
             /* BF: the lead wing's empty part, from its closed
                volume to the curve, dark blue, over the other
                fills */
             const bf = bellFill(P, sp, vw, kv, vf, dm);
-            g.fillStyle = "rgba(13,71,161,.85)";
+            const lb = batch();
             bf.ps.forEach((F) => F.lead.forEach((r) => {
               const x0 = cx0 + (bf.rw.get(r) || 0) * vs,
                 yT = Y((r + 1) * P.step);
               if (cX(r) - x0 > 0.5)
-                g.fillRect(x0, yT + 0.5, cX(r) - x0,
-                  Math.max(1, rowH - 1));
+                lb.rect("rgba(13,71,161,.85)", x0, yT + 0.5,
+                  cX(r) - x0, Math.max(1, rowH - 1));
             }));
+            lb.fill();
             perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
             /* its vipocs: black lines to the curve */
             drawPs(P, sp, cx0, (S) => cX(Math.floor(S.px / P.step)));
@@ -4224,8 +4256,7 @@
             const band = new Path2D();
             pts.forEach((q) => q && band.rect(q[0] - sl / 2,
               Y(q[1][0]), sl + 0.5, Y(q[1][1]) - Y(q[1][0])));
-            /* as dense as the old per-column fills stacked up */
-            g.fillStyle = "rgba(41,98,255,.45)";
+            g.fillStyle = "rgba(41,98,255,.2)";
             g.fill(band);
             /* its edges, thin; a new channel: no vertical join */
             g.strokeStyle = "#2962ff";
