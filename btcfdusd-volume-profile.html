@@ -6494,10 +6494,11 @@
                 if (l > u) g.fillRect(q[0] - sl / 2, Y(l), sl + 0.5,
                   Y(u) - Y(l));
               });
-              (pfIq ? [0, 1, 2, 3, 4] : [0, 1, 2]).forEach((j) => {
-                /* vipoc: fat, the VP POC's navy */
-                g.strokeStyle = j ? "#2962ff" : "#003366";
-                g.lineWidth = j ? (j > 2 ? 0.5 : 1) : 3;
+              /* channel edges only: the vipoc shown is the VP's
+                 (the swing lines below), not the IC's own */
+              (pfIq ? [1, 2, 3, 4] : [1, 2]).forEach((j) => {
+                g.strokeStyle = "#2962ff";
+                g.lineWidth = j > 2 ? 0.5 : 1;
                 g.beginPath();
                 let on = false;
                 pts.forEach((q) => {
@@ -6513,8 +6514,8 @@
               });
               /* the latest swing: the 3 latest VP age ranks (over
                  days) as at each column's start (the last 30m close
-                 before it, no repaint), the latest one's line; it
-                 inside the range of the 2 before: black, below it:
+                 before it, no repaint), the 2 latest drawn; the
+                 latest in the range of the 2 before: black, below:
                  red (break down), above: green; numbers at end;
                  only inside the IC channel, no vertical joins */
               const rkM = new Map(),
@@ -6539,33 +6540,34 @@
                   : v[2][0] < Math.min(v[0][0], v[1][0]) ? "r" : "k",
                 pth = { g: new Path2D(), r: new Path2D(),
                   k: new Path2D() };
-              let tag = null;
-              ser.forEach((v, k) => {
-                const q = v && v[v.length - 1],
+              const tag = [];
+              ser.forEach((v, k) => [1, 2].forEach((s) => {
+                const q = v && v[v.length - 3 + s],
                   c = pts[k] && pts[k][1];
                 if (!q || !c || q[0] > c[1] || q[0] < c[2]) return;
                 const x = pa + sl * jOf(k),
                   y = Y(q[0]);
                 pth[tr(v)].moveTo(x - sl / 2, y);
                 pth[tr(v)].lineTo(x + sl / 2, y);
-                tag = [q, x, tr(v)];
-              });
+                tag[s] = [q, x, tr(v)];
+              }));
               g.lineWidth = 2;
               Object.keys(pth).forEach((c) => {
                 g.strokeStyle = cols[c];
                 g.stroke(pth[c]);
               });
-              if (tag) {
-                const [[px, , n], x, c] = tag;
-                g.font = "bold 12px ui-monospace,Menlo,monospace";
-                g.textAlign = "left";
-                g.textBaseline = "middle";
+              g.font = "bold 12px ui-monospace,Menlo,monospace";
+              g.textAlign = "left";
+              g.textBaseline = "middle";
+              tag.forEach((t) => {
+                if (!t) return;
+                const [[px, , n], x, c] = t;
                 g.strokeStyle = "#fff";
                 g.lineWidth = 3;
                 g.strokeText(n, x + 4, Y(px) - 9);
                 g.fillStyle = cols[c];
                 g.fillText(n, x + 4, Y(px) - 9);
-              }
+              });
               g.textBaseline = "alphabetic";
               g.lineWidth = 1;
               /* green zone (with Gap), 3 bricks: green above the
