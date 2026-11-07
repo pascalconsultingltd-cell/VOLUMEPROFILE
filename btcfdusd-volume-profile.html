@@ -6018,16 +6018,16 @@
           }
           if (pcW) {
             const pa = pL;
-            /* PF: columns from yesterday's and today's trades,
-               box = the brick */
+            /* PF: columns from the last 3 days' trades (2 full
+               days back at least), box = the brick */
             const d1 = dayOf(Date.now()),
-              s0 = pfStep(d1 - DAY),
-              s1 = pfStep(d1);
-            loadAggr(d1 - DAY);
-            loadAggr(d1);
-            if (pfIc || pfVa)
-              loadUsdt(d1 - DAY), loadUsdt(d1);
-            const pfc = pfCols([d1 - DAY, d1]);
+              pds = [d1 - 2 * DAY, d1 - DAY, d1],
+              bx = [...new Set(pds.map(pfStep))].join(" / ");
+            pds.forEach((d) => {
+              loadAggr(d);
+              if (pfIc || pfVa) loadUsdt(d);
+            });
+            const pfc = pfCols(pds);
             const nFit = pfN,
               sl = pcW / nFit;
             pcShow = nFit;
@@ -6204,9 +6204,9 @@
             g.fillStyle = "#6b7684";
             g.textAlign = "center";
             const pm = pa + pcW / 2;
-            /* box: yesterday's / today's */
+            /* box per day, oldest first */
             g.fillText(
-              "PF, box " + (s0 === s1 ? s1 : s0 + " / " + s1),
+              "PF, box " + bx,
               pm,
               bot + 10,
             );
