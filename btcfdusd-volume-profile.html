@@ -5040,10 +5040,10 @@
             if (showPerf)
               perfLine(P, exp, cx0, (e) => e * lw, "#000");
             /* around it, an empty 15px square in the last price
-               blue, never tighter than the brick */
+               colour, never tighter than the brick */
             if (curB) {
               const s = Math.max(15, Math.max(lw, rowH) + 4);
-              g.strokeStyle = "#2962ff";
+              g.strokeStyle = "#434651";
               g.lineWidth = 3;
               g.strokeRect(curB[0] - s / 2, curB[1] - s / 2, s, s);
             }
@@ -7377,13 +7377,18 @@
               alIcons("zz", px0 - 2, 1, "ZZ");
             }
           } else alIcons("mini", px0 - 2);
-          /* last price */
+          /* the waiting axis tags, ladder ones underneath */
+          tagsNow = true;
+          tq.filter((a) => a[2] === "#fff")
+            .concat(tq.filter((a) => a[2] !== "#fff"))
+            .forEach((a) => ptag(...a));
+          /* last price, on top of the drawings and their tags */
 
           const last = vis[vis.length - 1],
             lp = mid != null ? mid : last.c,
             ly = Math.max(top, Math.min(bot, Y(lp)));
-          /* thin solid blue: no other line on the chart is blue */
-          const LP = "#2962ff";
+          /* soft black */
+          const LP = "#434651";
           g.strokeStyle = LP;
           g.setLineDash([]);
           g.lineWidth = 2;
@@ -7417,11 +7422,6 @@
             });
             g.restore();
           }
-          /* the waiting axis tags, ladder ones underneath */
-          tagsNow = true;
-          tq.filter((a) => a[2] === "#fff")
-            .concat(tq.filter((a) => a[2] !== "#fff"))
-            .forEach((a) => ptag(...a));
           /* hover */
 
           /* crosshair line / tag background / tag text */
