@@ -6513,7 +6513,7 @@
               });
               /* the latest swing: the 3 latest VP age ranks (over
                  days) as at each column's start (the last 30m close
-                 before it, no repaint), 3 step lines; the latest
+                 before it, no repaint), the latest one's line; it
                  inside the range of the 2 before: black, below it:
                  red (break down), above: green; numbers at end;
                  only inside the IC channel, no vertical joins */
@@ -6537,39 +6537,35 @@
                 tr = (v) => v.length < 3 ? "k"
                   : v[2][0] > Math.max(v[0][0], v[1][0]) ? "g"
                   : v[2][0] < Math.min(v[0][0], v[1][0]) ? "r" : "k",
-                tag = [];
-              [0, 1, 2].forEach((s) => {
-                const pth = { g: new Path2D(), r: new Path2D(),
-                    k: new Path2D() },
-                  at = (v) => v && v[v.length - 3 + s];
-                ser.forEach((v, k) => {
-                  const q = at(v),
-                    c = pts[k] && pts[k][1];
-                  if (!q || !c || q[0] > c[1] || q[0] < c[2]) return;
-                  const x = pa + sl * jOf(k),
-                    y = Y(q[0]);
-                  pth[tr(v)].moveTo(x - sl / 2, y);
-                  pth[tr(v)].lineTo(x + sl / 2, y);
-                  tag[s] = [q, x, tr(v)];
-                });
-                g.lineWidth = 2;
-                Object.keys(pth).forEach((c) => {
-                  g.strokeStyle = cols[c];
-                  g.stroke(pth[c]);
-                });
+                pth = { g: new Path2D(), r: new Path2D(),
+                  k: new Path2D() };
+              let tag = null;
+              ser.forEach((v, k) => {
+                const q = v && v[v.length - 1],
+                  c = pts[k] && pts[k][1];
+                if (!q || !c || q[0] > c[1] || q[0] < c[2]) return;
+                const x = pa + sl * jOf(k),
+                  y = Y(q[0]);
+                pth[tr(v)].moveTo(x - sl / 2, y);
+                pth[tr(v)].lineTo(x + sl / 2, y);
+                tag = [q, x, tr(v)];
               });
-              g.font = "bold 12px ui-monospace,Menlo,monospace";
-              g.textAlign = "left";
-              g.textBaseline = "middle";
-              tag.forEach((t) => {
-                if (!t) return;
-                const [[px, , n], x, c] = t;
+              g.lineWidth = 2;
+              Object.keys(pth).forEach((c) => {
+                g.strokeStyle = cols[c];
+                g.stroke(pth[c]);
+              });
+              if (tag) {
+                const [[px, , n], x, c] = tag;
+                g.font = "bold 12px ui-monospace,Menlo,monospace";
+                g.textAlign = "left";
+                g.textBaseline = "middle";
                 g.strokeStyle = "#fff";
                 g.lineWidth = 3;
                 g.strokeText(n, x + 4, Y(px) - 9);
                 g.fillStyle = cols[c];
                 g.fillText(n, x + 4, Y(px) - 9);
-              });
+              }
               g.textBaseline = "alphabetic";
               g.lineWidth = 1;
               /* green zone (with Gap), 3 bricks: green above the
