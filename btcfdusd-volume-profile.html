@@ -442,7 +442,7 @@
               </button>
               <button
                 id="ncTog"
-                class="a"
+                class=""
                 title="VBT: the normal curves from the TPO, in volume"
               >
                 NC
@@ -1268,7 +1268,7 @@
         schedule();
       }
       /* NC button: the TPO normal curves over the VBT */
-      let showNc = true;
+      let showNc = false;
       function setShowNc(v) {
         showNc = !!v;
         $("ncTog").className = showNc ? "a" : "";
@@ -8867,7 +8867,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 35;
+      const DEFAULTS_VER = 36;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -9017,7 +9017,9 @@
         if (typeof st.showYB === "boolean") setShowYB(st.showYB);
         if (st.dv >= 27 && typeof st.showVap === "boolean")
           setShowVap(st.showVap);
-        if (typeof st.showNc === "boolean") setShowNc(st.showNc);
+        /* NC off by default from 36 */
+        if (st.dv >= 36 && typeof st.showNc === "boolean")
+          setShowNc(st.showNc);
         /* DT on by default from 34 */
         if (st.dv >= 34 && typeof st.showDt === "boolean")
           setShowDt(st.showDt);
