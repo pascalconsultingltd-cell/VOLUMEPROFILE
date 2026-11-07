@@ -4723,12 +4723,20 @@
                   c = dk.length ? dk[dk.length - 1].c : null;
                 g.strokeStyle = g.fillStyle = o != null && c < o
                   ? "#000" : "#089981";
+                /* the wick, its high and low capped with a dash */
+                const yh = Y(Math.max(...P.ps.map((q) => q.h))),
+                  yl = Y(Math.min(...P.ps.map((q) => q.l)));
                 g.lineWidth = 1;
                 g.beginPath();
-                g.moveTo(cx0 - 1,
-                  Y(Math.max(...P.ps.map((q) => q.h))));
-                g.lineTo(cx0 - 1,
-                  Y(Math.min(...P.ps.map((q) => q.l))));
+                g.moveTo(cx0 - 1, yh);
+                g.lineTo(cx0 - 1, yl);
+                g.stroke();
+                g.lineWidth = 2;
+                g.beginPath();
+                g.moveTo(cx0 - 7, yh);
+                g.lineTo(cx0 + 5, yh);
+                g.moveTo(cx0 - 7, yl);
+                g.lineTo(cx0 + 5, yl);
                 g.stroke();
                 const yo = Y(Math.max(o, c)),
                   yc = Y(Math.min(o, c));
