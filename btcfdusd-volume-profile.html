@@ -8578,6 +8578,12 @@
               at = q;
               piv.push({ low: !dn, p: dn ? q.h : q.l, c: q });
             }
+            /* the extreme first: a big candle turning the leg
+               can wick past it (the pivot is then its wick) */
+            if (dn ? q.l < ext : q.h > ext) {
+              ext = dn ? q.l : q.h;
+              at = q;
+            }
             if (big) {
               seen = true;
               ht = q.h - q.l;
@@ -8588,10 +8594,6 @@
                 at = q;
               }
             } else if (!seen) ht = volOfDay(dayOf(q.t)) || volN;
-            if (dn ? q.l < ext : q.h > ext) {
-              ext = dn ? q.l : q.h;
-              at = q;
-            }
             if (!big && (dn ? q.c > ext + ht : q.c < ext - ht)) {
               piv.push({ low: dn, p: ext, c: at });
               dn = !dn;
