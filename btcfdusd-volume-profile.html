@@ -4822,6 +4822,19 @@
                Mass: real - perfect per row, a strip on the left,
                green extra, red missing */
             if (vs) {
+              /* DT: the bells' axis, day low to high; rk = the
+                 P's and D's ages (rank written at the end) */
+              const rk = [];
+              if (dt) {
+                g.strokeStyle = "#000";
+                g.lineWidth = 1;
+                g.beginPath();
+                g.moveTo(cx0 - 1,
+                  Y(Math.max(...P.ps.map((q) => q.h))));
+                g.lineTo(cx0 - 1,
+                  Y(Math.min(...P.ps.map((q) => q.l))));
+                g.stroke();
+              }
               /* DT: what a row lacks vs the curve (negative
                  delta), the black curve filled from its volume */
               if (dt) {
@@ -4868,6 +4881,13 @@
                   g.stroke();
                   g.setLineDash([]);
                 });
+                /* each bell's middle: P's right, D's left */
+                const wx = (m, X) =>
+                  (m.get(Math.floor(X.px / P.step)) || 0) * kv * vs;
+                sp.forEach((S) =>
+                  rk.push([ag(S), cx0 + wx(exp, S) / 2, S.px]));
+                (dc.ps || []).forEach((Q) =>
+                  rk.push([ag(Q), cx0 - 2 - wx(dc, Q) / 4, Q.px]));
               }
               if (showMass && !dt) {
                 g.strokeStyle = "#000";
@@ -4931,6 +4951,21 @@
                 });
               }
               drawYB(P, cx0, rowH, dt);
+              /* DT: P's and D's ranked by age together, 1 = oldest,
+                 in the middle of each bell */
+              g.save();
+              g.font = "bold 12px ui-monospace,Menlo,monospace";
+              g.textAlign = "center";
+              g.textBaseline = "middle";
+              g.strokeStyle = "#fff";
+              g.lineWidth = 3;
+              g.fillStyle = "#000";
+              rk.sort((a, b) => a[0] - b[0])
+                .forEach(([, x, px], i) => {
+                g.strokeText(i + 1, x, Y(px));
+                g.fillText(i + 1, x, Y(px));
+              });
+              g.restore();
               continue;
             }
             /* Mass: the perfect bricks the profile lacks, empty
