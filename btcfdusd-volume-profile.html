@@ -4412,8 +4412,9 @@
             const y = Y(S.px),
               pv = zPrev.get(P.dS + "|" + S.px),
               row = P.rows.get(Math.floor(S.px / P.step)),
-              c =
-                stCol && row && row.length
+              c = bare
+                ? "#000"
+                : stCol && row && row.length
                   ? tpoColor(Math.min(...row))
                   : pv == null
                   ? "#003366"
@@ -4632,6 +4633,8 @@
               g.fillText(tx, cx0, y + rd + 9);
             }
           };
+          /* DT: each day's last bell (by age), for the next day */
+          const rkEnd = new Map();
           for (let d = 0; d < cnt + ex; d++) {
             const Q = dayProf(tpoDays[d]),
               cx0 = 6 + (d - ex + tf) * (colW + gap),
@@ -4822,11 +4825,18 @@
                Mass: real - perfect per row, a strip on the left,
                green extra, red missing */
             if (vs) {
-              /* DT: the bells' axis, day low to high; rk = the
-                 P's and D's ages (rank written at the end) */
+              /* DT: the bells' axis = the day's candle, wick low
+                 to high, body open to close (today: live), green
+                 up, black down; rk = the P's and D's ages (rank
+                 written at the end) */
               const rk = [];
               if (dt) {
-                g.strokeStyle = "#000";
+                const dk = k15.filter((c) => okC(c) && c.t >= P.dS &&
+                    c.t < nextDay(P.dS)),
+                  o = dk.length ? dk[0].o : null,
+                  c = dk.length ? dk[dk.length - 1].c : null;
+                g.strokeStyle = g.fillStyle = o != null && c < o
+                  ? "#000" : "#089981";
                 g.lineWidth = 1;
                 g.beginPath();
                 g.moveTo(cx0 - 1,
@@ -4834,6 +4844,10 @@
                 g.lineTo(cx0 - 1,
                   Y(Math.min(...P.ps.map((q) => q.l))));
                 g.stroke();
+                const yo = Y(Math.max(o, c)),
+                  yc = Y(Math.min(o, c));
+                if (o != null)
+                  g.fillRect(cx0 - 4, yo, 6, Math.max(1, yc - yo));
               }
               /* DT: what a row lacks vs the curve (negative
                  delta), the black curve filled from its volume,
@@ -4855,23 +4869,15 @@
                 const dc = dCurve(P, vw, sp, kv, vf, exp);
                 perfLine(P, dc, cx0 - 2, (e) => (-e * kv * vs) / 2,
                   "#000");
-                /* its P's: a line to the curve (DT: no numbers) */
-                /* colour vs its nearest P, by age (average period
-                   of the row's bricks): D older, P - D; younger,
-                   D - P; green if positive, black else */
+                /* its P's: a black line to the curve; age = the
+                   average period of the row's bricks */
                 const ag = (X) => {
                   const w = P.rows.get(Math.floor(X.px / P.step));
                   return w && w.length ? rowAge(w) : 99;
                 };
                 (dc.ps || []).forEach((Q, k) => {
-                  const N = sp.reduce((a, b) => !a ||
-                      Math.abs(b.px - Q.px) < Math.abs(a.px - Q.px)
-                      ? b : a, null),
-                    v = !N ? 0 : ag(Q) <= ag(N) ? N.px - Q.px
-                      : Q.px - N.px,
-                    col = v > 0 ? "#089981" : "#000",
-                    y = Y(Q.px);
-                  g.strokeStyle = col;
+                  const y = Y(Q.px);
+                  g.strokeStyle = "#000";
                   g.lineWidth = 2;
                   g.setLineDash([[], [8, 4], [3, 3]][k]);
                   g.beginPath();
@@ -4953,19 +4959,24 @@
               }
               drawYB(P, cx0, rowH, dt);
               /* DT: P's and D's ranked by age together, 1 = oldest,
-                 in the middle of each bell */
+                 in the middle of each bell; green above the one
+                 before (1: the day before's last), red below */
               g.save();
               g.font = "bold 12px ui-monospace,Menlo,monospace";
               g.textAlign = "center";
               g.textBaseline = "middle";
               g.strokeStyle = "#fff";
               g.lineWidth = 3;
-              g.fillStyle = "#000";
+              let pb = rkEnd.get(prevDay(P.dS));
               rk.sort((a, b) => a[0] - b[0])
                 .forEach(([, x, px], i) => {
+                g.fillStyle = pb == null ? "#000"
+                  : px >= pb ? "#089981" : "#e53935";
                 g.strokeText(i + 1, x, Y(px));
                 g.fillText(i + 1, x, Y(px));
+                pb = px;
               });
+              if (rk.length) rkEnd.set(P.dS, pb);
               g.restore();
               continue;
             }
