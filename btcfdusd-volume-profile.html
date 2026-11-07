@@ -8569,8 +8569,11 @@
           for (let k = 0; k < arr.length; k++) {
             const q = arr[k];
             if (!okC(q)) continue;
-            const big =
-                k >= BIG_WIN - 1 && q.c !== q.o && isBig(arr, k),
+            /* the forming candle only extends the open leg: it
+               turns nothing until it closes (no repaint) */
+            const live = k === arr.length - 1,
+              big = !live && k >= BIG_WIN - 1 && q.c !== q.o &&
+                isBig(arr, k),
               way = q.c < q.o;
             if (dn === null) {
               dn = way;
@@ -8594,7 +8597,8 @@
                 at = q;
               }
             } else if (!seen) ht = volOfDay(dayOf(q.t)) || volN;
-            if (!big && (dn ? q.c > ext + ht : q.c < ext - ht)) {
+            if (!big && !live &&
+              (dn ? q.c > ext + ht : q.c < ext - ht)) {
               piv.push({ low: dn, p: ext, c: at });
               dn = !dn;
               ext = dn ? q.l : q.h;
