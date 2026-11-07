@@ -6994,7 +6994,9 @@
                 xb = xOf(z);
               if (view.ha)
                 view.ha.z.push({ x: xb, p: z.p, o: where.get(z.c) });
-              if (xb < x0 || xa > px0 || xa === xb) return;
+              /* both ends on one candle (it wicked and turned):
+                 drawn vertical */
+              if (xb < x0 || xa > px0) return;
               g.strokeStyle = z.low
                 ? "rgb(230,159,0)"
                 : "rgb(41,98,255)";
