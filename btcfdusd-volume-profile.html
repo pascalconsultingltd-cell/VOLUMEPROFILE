@@ -449,7 +449,7 @@
               </button>
               <button
                 id="dtTog"
-                class=""
+                class="a"
                 title="VBT: delta vs its normal curve only"
               >
                 DT
@@ -1268,7 +1268,7 @@
         schedule();
       }
       /* DT button: VBT shows only the delta vs its normal curve */
-      let showDt = false;
+      let showDt = true;
       function setShowDt(v) {
         showDt = !!v;
         $("dtTog").className = showDt ? "a" : "";
@@ -4500,6 +4500,8 @@
                     ncdf(((r + 1) * st - Q.px) / sg) -
                     ncdf((r * st - Q.px) / sg)));
               });
+              /* D1, D2..: ordered as the P's */
+              out.ps = byAge(P, ps);
             }
             vw.dc = [ck, out];
             return out;
@@ -4775,9 +4777,32 @@
                 });
               }
               /* DT: the delta's normal curve over its strip */
-              if (dt)
-                perfLine(P, dCurve(P, vw, sp, kv, vf, exp), cx0 - 2,
-                  (e) => (-e * kv * vs) / 2, "#000");
+              if (dt) {
+                const dc = dCurve(P, vw, sp, kv, vf, exp);
+                perfLine(P, dc, cx0 - 2, (e) => (-e * kv * vs) / 2,
+                  "#000");
+                /* its P's: a line across the strip, tagged D1.. */
+                g.font = "bold 11px ui-monospace,Menlo,monospace";
+                g.textAlign = "right";
+                (dc.ps || []).forEach((Q, k) => {
+                  const y = Y(Q.px),
+                    tx = "D" + (k + 1) + " " + Q.px.toFixed(DP) +
+                      " ·" + Q.born.toFixed(0);
+                  g.strokeStyle = "#000";
+                  g.lineWidth = 2;
+                  g.setLineDash([[], [8, 4], [3, 3]][k]);
+                  g.beginPath();
+                  g.moveTo(cx0 - 2, y);
+                  g.lineTo(cx0 - 2 - colW / 2, y);
+                  g.stroke();
+                  g.setLineDash([]);
+                  g.strokeStyle = "#fff";
+                  g.lineWidth = 3;
+                  g.strokeText(tx, cx0 - 4, y - 9);
+                  g.fillStyle = "#000";
+                  g.fillText(tx, cx0 - 4, y - 9);
+                });
+              }
               if (showMass && !dt) {
                 g.strokeStyle = "#000";
                 g.lineWidth = 1;
@@ -8703,7 +8728,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 33;
+      const DEFAULTS_VER = 34;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -8853,7 +8878,9 @@
         if (st.dv >= 27 && typeof st.showVap === "boolean")
           setShowVap(st.showVap);
         if (typeof st.showNc === "boolean") setShowNc(st.showNc);
-        if (typeof st.showDt === "boolean") setShowDt(st.showDt);
+        /* DT on by default from 34 */
+        if (st.dv >= 34 && typeof st.showDt === "boolean")
+          setShowDt(st.showDt);
         if (st.dv >= 31 && typeof st.showVw === "boolean")
           setShowVw(st.showVw);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
