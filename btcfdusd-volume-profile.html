@@ -1316,6 +1316,9 @@
        */
       const aggrT = new Map(),
         aggrBusy = new Set();
+      /* PF: its days once all in, so today's 5s top-ups (busy)
+         do not send it back to loading */
+      let pfSeen = "";
       async function loadAggr(dS) {
         const d0 = aggrT.get(dS);
         if (aggrBusy.has(dS) || (d0 && d0.end)) return;
@@ -6354,9 +6357,10 @@
                 const x = m.get(d);
                 return !!x && (x.end || (x.at > 0 && !b.has(d)));
               },
-              pfOk = pds.every((d) => inD(aggrT, aggrBusy, d) &&
-                (!(pfIc || pfVa) || (volOfDay(d) > 0 &&
-                  inD(usdtK, usdtBusy, d))));
+              pfOk = pfSeen === pds.join() ||
+                pds.every((d) => inD(aggrT, aggrBusy, d) &&
+                  (!(pfIc || pfVa) || (volOfDay(d) > 0 &&
+                    inD(usdtK, usdtBusy, d))));
             if (!pfOk) {
               g.font = "11px ui-monospace,Menlo,monospace";
               g.textAlign = "left";
@@ -6364,6 +6368,7 @@
               g.fillText("loading", pa + 6, top + 14);
               break pf;
             }
+            pfSeen = pds.join();
             const pfc = pfCols(pds);
             const nFit = pfN ||
                 Math.max(20, Math.round(pfc.length / 0.85)),
