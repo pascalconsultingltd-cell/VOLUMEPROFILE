@@ -4582,7 +4582,7 @@
            * PF: the VP age ranks (P's and D's together) as at the
            * close of period i of day dS, from its closed periods
            * only; frozen once its data is all in (no repaint).
-           * { two: the latest 2 [px, move, number], last: px }
+           * { all: [px, move, number] by age, last: px }
            */
           const rkAt = (dS, i) => {
             const fk = dS + "|" + i;
@@ -4629,7 +4629,7 @@
               q0 = px;
               return [px, mv, n + 1];
             });
-            const res = { two: out.slice(-2),
+            const res = { all: out,
               last: out.length ? out[out.length - 1][0] : null };
             if (rkFz.size > 2000) rkFz.clear();
             rkFz.set(fk, res);
@@ -6511,33 +6511,36 @@
                 });
                 g.stroke();
               });
-              /* the 2 latest VP age ranks as at each column's start
-                 (the last 30m close before it, no repaint): two
-                 step lines, both green when the latest is above the
-                 one before it, red below; numbers at the latest */
+              /* the latest swing: the 3 latest VP age ranks (over
+                 days) as at each column's start (the last 30m close
+                 before it, no repaint), 3 step lines; the latest
+                 inside the range of the 2 before: black, below it:
+                 red (break down), above: green; numbers at end */
               const rkM = new Map(),
                 rkC = (t) => {
                   const d = dayOf(t),
                     i = Math.floor((t - d) / TPO_MS) - 1,
                     k = d + "|" + i;
                   if (!rkM.has(k)) {
-                    const x = i < 0 ? rkAt(prevDay(d), 47)
-                      : rkAt(d, i);
-                    rkM.set(k, x && x.two);
+                    const d0 = i < 0 ? prevDay(d) : d,
+                      x = rkAt(d0, i < 0 ? 47 : i),
+                      pv = x && rkAt(prevDay(d0), 47);
+                    rkM.set(k, x &&
+                      [...(pv ? pv.all : []), ...x.all].slice(-3));
                   }
                   return rkM.get(k);
                 },
                 ser = cv2.map((c) => rkC(c.t0)),
                 cols = { g: "#089981", r: "#e53935", k: "#000" },
-                /* the trend: latest vs the one before */
-                tr = (v) => v.length > 1
-                  ? v[1][0] > v[0][0] ? "g" : "r"
-                  : !v[0][1] ? "k" : v[0][1] > 0 ? "g" : "r",
+                /* swing: the latest vs the range of the 2 before */
+                tr = (v) => v.length < 3 ? "k"
+                  : v[2][0] > Math.max(v[0][0], v[1][0]) ? "g"
+                  : v[2][0] < Math.min(v[0][0], v[1][0]) ? "r" : "k",
                 tag = [];
-              [0, 1].forEach((s) => {
+              [0, 1, 2].forEach((s) => {
                 const pth = { g: new Path2D(), r: new Path2D(),
                     k: new Path2D() },
-                  at = (v) => v && v[v.length - 2 + s];
+                  at = (v) => v && v[v.length - 3 + s];
                 let py = null;
                 ser.forEach((v, k) => {
                   const q = at(v);
