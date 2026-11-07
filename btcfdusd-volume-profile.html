@@ -1964,89 +1964,6 @@
         pcPf = !!v;
         schedule();
       }
-      /* PF drawn as bricks coloured like the profiles (Br
-         button); off = the column lines */
-      let pfBr = true;
-      function setPfBr(v) {
-        pfBr = !!v;
-        $("pfBrTog").className = pfBr ? "a" : "";
-        schedule();
-      }
-      /* Sg button: PF bricks above the top of the latest
-         green highlight green, below the bottom of the
-         latest black one black (Br view) */
-      /* Hl button: show the PF signal bricks and volume
-         dots (off: only the Sg colours) */
-      let pfHl = false;
-      /* Buy button: a seller dot (black) while the latest
-         PocStpCol brick is green = buy, a buyer dot while it
-         is red = sell */
-      let pfBy = false,
-        /* Act button: the red / grey activity boxes */
-        pfXb = false,
-        /* IC button: the vipoc channel */
-        pfIc = true,
-        /* IC% button: its 10% / 90% lines and tails */
-        pfIq = false,
-        /* Gap button: the IC's red line */
-        pfRl = false,
-        /* Bias button: the IC's bias arrows, big and small */
-        pfBs = false,
-        /* V95 button: the PF's volume-hot boxes */
-        pfVa = false;
-      function setPfVa(v) {
-        pfVa = !!v;
-        $("pfVaTog").className = pfVa ? "a" : "";
-        schedule();
-      }
-      function setPfBs(v) {
-        pfBs = !!v;
-        $("pfBsTog").className = pfBs ? "a" : "";
-        schedule();
-      }
-      function setPfRl(v) {
-        pfRl = !!v;
-        $("pfRlTog").className = pfRl ? "a" : "";
-        schedule();
-      }
-      function setPfIq(v) {
-        pfIq = !!v;
-        $("pfIqTog").className = pfIq ? "a" : "";
-        schedule();
-      }
-      function setPfIc(v) {
-        pfIc = !!v;
-        $("pfIcTog").className = pfIc ? "a" : "";
-        schedule();
-      }
-      function setPfXb(v) {
-        pfXb = !!v;
-        $("pfXbTog").className = pfXb ? "a" : "";
-        schedule();
-      }
-      function setPfBy(v) {
-        pfBy = !!v;
-        $("pfByTog").className = pfBy ? "a" : "";
-        schedule();
-      }
-      function setPfHl(v) {
-        pfHl = !!v;
-        $("pfHlTog").className = pfHl ? "a" : "";
-        schedule();
-      }
-      /* Sw button: the swing triangles (they need Colour) */
-      let pfSw = false;
-      function setPfSw(v) {
-        pfSw = !!v;
-        $("pfSwTog").className = pfSw ? "a" : "";
-        schedule();
-      }
-      let pfSg = false;
-      function setPfSg(v) {
-        pfSg = !!v;
-        $("pfSgTog").className = pfSg ? "a" : "";
-        schedule();
-      }
       /* own orders on the chart (O button) */
       let showOrders = false;
       function setShowOrders(v) {
@@ -4548,73 +4465,15 @@
             g.restore();
           };
           /*
-           * the PF columns in the DPoc panel, on the chart's
-           * price scale. Box colour by its delta (taker buys -
-           * sells). Each column is a line (green buyers, black
-           * sellers); a box whose |delta| tops the 95th
-           * percentile of the BIG_WIN boxes before it is drawn
-           * as a real brick, green buys, black sells. A column
-           * whose volume tops that of the BIG_WIN columns
-           * before it gets a dot: green below a buyer column,
-           * black above a seller one. Rolling, as on the
-           * candles (see pfHot).
+           * the PF columns on the chart's price scale: each box a
+           * brick, soft black (the time is the background, each
+           * half hour's colour, very light, as the main chart);
+           * the end bricks cut at the real high / low.
            */
           const drawPfCols = (all, shown, jOf, pa, sl) => {
-            /* Vc: the volume profile's colour for a brick
-               traded at time t on row r: same day, same
-               period (the last closed one while it forms),
-               same price, as the profile shows it */
-            const vcAt = (t, r, st) => {
-              const dS = dayOf(t);
-              let i = Math.floor((t - dS) / TPO_MS);
-              if (dS + (i + 1) * TPO_MS > Date.now()) i--;
-              if (i < 0) return "";
-              const m = stFor(dS, i);
-              const row = Math.floor(((r + 0.5) * st) / m.step);
-              return m.get(row) || "";
-            };
-            /* pfHot only for the hidden extras (slow on 3 days) */
-            const hs = pfSg || pfHl || pfXb || pfBy || pfVa
-                ? pfHot(all) : { hot: new Set(), exc: [], gTop: [],
-                  bBot: [], dot: new Set(), vh: new Set(),
-                  vd: new Map() },
-              ci = new Map(all.map((c, k) => [c, k])),
-              hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
-              /* hot box dot: blue buyers, orange sellers */
-              hotCol = (c, r) =>
-                (c.d.get(r) || 0) < 0 ? "#ff6d00" : "#2962ff";
-            /* Buy: the latest PocStpCol green (g) / red (r)
-               brick in time as at each column's end */
-            const by = new Map();
-            if (pfBy && shown.length) {
-              let last = null;
-              for (
-                let k = Math.max(0, ci.get(shown[0]) - 300);
-                k < all.length;
-                k++
-              ) {
-                const c = all[k];
-                [...c.tm]
-                  .sort((a, b) => a[1] - b[1])
-                  .forEach(([r, t]) => {
-                    const v = vcAt(t, r, c.st);
-                    if (v.startsWith("rgba(8,153,129")) last = "g";
-                    else if (v.startsWith("rgba(229,57,53"))
-                      last = "r";
-                  });
-                by.set(c, last);
-              }
-            }
-            /* Br: bw = brick width, bricks touch (+.5 hides
-               seams); hotB = highlighted boxes,
-               drawn last with a brick each side */
-            const bw = Math.max(3, sl) + 0.5,
-              hotB = [],
-              /* each shown column's x, for the swing marks */
-              xs = new Map();
-            /* background: each column's half hour colour, very
-               light, as the main chart's; a run of one period is
-               one rect */
+            /* bricks touch (+.5 hides seams) */
+            const bw = Math.max(3, sl) + 0.5;
+            /* a run of one period is one rect */
             let b0 = null;
             [...shown, null].forEach((c, i) => {
               const x = pa + sl * jOf(i) - sl / 2,
@@ -4626,220 +4485,20 @@
               }
               b0 = [x, p];
             });
+            g.fillStyle = "#434651";
             shown.forEach((c, i) => {
               const xm = pa + sl * jOf(i),
                 st = c.st;
               pfX.push([c.t0, xm]);
-              xs.set(c, xm);
-              /* excitement strip at the bottom: paler to redder by
-                 rank, no steps */
-              const q = hs.exc[ci.get(c)];
-              g.fillStyle = `rgba(242,54,69,${q ** 3})`;
-              if (pfXb) g.fillRect(xm - sl / 2, bot - 8, sl + 0.5, 8);
-              /* Br: every box a brick, soft black (the time is the
-                 background); the end bricks cut at the real high /
-                 low */
-              if (pfBr)
-                for (let r = c.lo; r <= c.hi; r++) {
-                  const yT = Y(Math.min((r + 1) * st, c.ph)),
-                    yB = Y(Math.max(r * st, c.pl)),
-                    solid = hot(c, r);
-                  /* Sg: green above the latest green signal,
-                     black below the latest black one, a thin
-                     neutral blue line in between */
-                  const k = ci.get(c),
-                    gT = hs.gTop[k],
-                    bB = hs.bBot[k],
-                    up = pfSg && gT != null && r * st >= gT,
-                    dn = pfSg && bB != null && (r + 1) * st <= bB,
-                    thin = pfSg && !up && !dn,
-                    w = thin ? 1.5 : bw;
-                  g.fillStyle = up
-                    ? "#089981"
-                    : dn
-                      ? "#000"
-                      : thin
-                        ? "#7f9fc8"
-                        : "#434651";
-                  g.fillRect(
-                    xm - w / 2,
-                    yT,
-                    w,
-                    Math.max(1, yB - yT) + 0.5,
-                  );
-                  if (solid && pfHl)
-                    hotB.push([xm, r, hotCol(c, r), st]);
-                }
-              /* the column as one line, buyers green / sellers
-                 black, then a small dot on the strongest boxes */
-              if (!pfBr) {
-                g.strokeStyle = c.up ? "#089981" : "#000";
-                g.lineWidth = 1;
-                g.beginPath();
-                g.moveTo(xm, Y(c.ph));
-                g.lineTo(xm, Y(c.pl));
-                g.stroke();
-                g.lineWidth = 1;
-                for (let r = c.lo; r <= c.hi; r++) {
-                  if (!pfHl || !hot(c, r)) continue;
-                  g.fillStyle = hotCol(c, r);
-                  g.beginPath();
-                  g.arc(xm, Y((r + 0.5) * st), 2, 0, 7);
-                  g.fill();
-                }
+              for (let r = c.lo; r <= c.hi; r++) {
+                const yT = Y(Math.min((r + 1) * st, c.ph)),
+                  yB = Y(Math.max(r * st, c.pl));
+                g.fillRect(xm - bw / 2, yT, bw,
+                  Math.max(1, yB - yT) + 0.5);
               }
-              pcGeo.push({
-                xa: xm - sl / 2,
-                xb: xm + sl / 2,
-                c: {
-                  o: c.pl,
-                  h: c.ph,
-                  l: c.pl,
-                  c: c.ph,
-                },
-              });
-              const dot = hs.dot.has(ci.get(c)),
-                b = by.get(c);
-              /* Buy: blue triangle under, sell: orange over */
-              if (dot && (c.up ? b === "r" : b === "g")) {
-                const y = c.up ? Y(c.ph) - 22 : Y(c.pl) + 22,
-                  h = c.up ? 7 : -7;
-                g.fillStyle = c.up ? "#ff6d00" : "#2962ff";
-                g.beginPath();
-                g.moveTo(xm - 6, y - h);
-                g.lineTo(xm + 6, y - h);
-                g.lineTo(xm, y + h);
-                g.fill();
-              }
-              if (!pfHl || !dot) return;
-              /* as the main chart's big-candle circles */
-              const y = c.up ? Y(c.pl) + 12 : Y(c.ph) - 12;
-              g.beginPath();
-              g.arc(xm, y, 5, 0, 7);
-              g.fillStyle = c.up ? "#4caf50" : "#000";
-              g.fill();
+              pcGeo.push({ xa: xm - sl / 2, xb: xm + sl / 2,
+                c: { o: c.pl, h: c.ph, l: c.pl, c: c.ph } });
             });
-            /* highlighted box: a small dot, coloured by hotCol */
-            hotB.forEach(([xm, r, col, st]) => {
-              g.fillStyle = col;
-              g.beginPath();
-              g.arc(xm, Y((r + 0.5) * st), 2, 0, 7);
-              g.fill();
-            });
-            /* V95: a box whose volume tops 95% of the 150 before,
-               a dot green / red by its delta, the delta written */
-            if (pfVa) {
-              g.font = "9px ui-monospace,Menlo,monospace";
-              g.textAlign = "left";
-              g.textBaseline = "middle";
-              const vb = new Map();
-              hs.vh.forEach((key) => {
-                const [k, r] = key.split("|").map(Number);
-                if (!vb.has(k)) vb.set(k, []);
-                vb.get(k).push([r, hs.vd.get(key) || 0]);
-              });
-              shown.forEach((c) => {
-                (vb.get(ci.get(c)) || []).forEach(([r, dl]) => {
-                  const x = xs.get(c),
-                    y = Y((r + 0.5) * c.st);
-                  /* size by |delta|: 3px, +2px a BTC (USDT: per
-                     10 BTC), 12px at most */
-                  const rd = Math.min(12,
-                    3 + (2 * Math.abs(dl)) / 10);
-                  g.fillStyle = dl >= 0 ? "#089981" : "#e53935";
-                  g.strokeStyle = "#000";
-                  g.lineWidth = 1.5;
-                  g.beginPath();
-                  g.arc(x, y, rd, 0, 7);
-                  g.fill();
-                  g.stroke();
-                  g.fillText((dl >= 0 ? "+" : "") + dl.toFixed(2),
-                    x + rd + 2, y);
-                });
-              });
-              g.textBaseline = "alphabetic";
-              g.lineWidth = 1;
-            }
-            /* excitement clusters: a box round each run of columns
-               whose smoothed rank is 0.8+ (red) or 0.25- (grey,
-               quiet), over its range (Act button) */
-            (pfXb ? [
-              ["#f23645", (q) => q >= 0.8],
-              ["#9e9e9e", (q) => q <= 0.25],
-            ] : []).forEach(([col, ok]) => {
-              let run = [];
-              shown.concat(null).forEach((c) => {
-                if (c && ok(hs.exc[ci.get(c)]))
-                  return void run.push(c);
-                if (!run.length) return;
-                const xa = xs.get(run[0]) - sl / 2,
-                  xb = xs.get(run[run.length - 1]) + sl / 2,
-                  yT = Y(Math.max(...run.map((q) => q.ph))) - 2,
-                  yB = Y(Math.min(...run.map((q) => q.pl))) + 2;
-                g.strokeStyle = col;
-                g.lineWidth = 1.5;
-                g.setLineDash([]);
-                g.strokeRect(xa, yT, xb - xa, yB - yT);
-                run = [];
-              });
-            });
-            /*
-             * PF swings (Colour on): the bricks in the order
-             * they traded, green / black by Sg (blue ignored).
-             * A black run that goes a brick under the lowest
-             * one of the black run before the last green run
-             * is a swing down, the mirror a swing up; a small
-             * triangle on the brick that breaks, once per run
-             */
-            if (pfSg && pfSw) {
-              const br = [];
-              all.forEach((c, k) => {
-                const gT = hs.gTop[k],
-                  bB = hs.bBot[k];
-                const st = c.st;
-                for (let r = c.lo; r <= c.hi; r++) {
-                  const z =
-                    gT != null && r * st >= gT
-                      ? 1
-                      : bB != null && (r + 1) * st <= bB
-                        ? -1
-                        : 0;
-                  const t = c.tm.has(r) ? c.tm.get(r) : c.t0;
-                  /* by the brick's bottom: rows differ by day */
-                  if (z) br.push([t, c, r * st, z]);
-                }
-              });
-              br.sort((a, b) => a[0] - b[0]);
-              const last = new Map();
-              let run = 0,
-                ext = 0,
-                done = false;
-              br.forEach(([, c, p, z]) => {
-                if (z !== run) {
-                  if (run) last.set(run, ext);
-                  [run, ext, done] = [z, p, false];
-                } else
-                  ext = z > 0 ? Math.max(ext, p) : Math.min(ext, p);
-                const L = last.get(z);
-                if (done || L == null || (z > 0 ? p <= L : p >= L))
-                  return;
-                done = true;
-                if (!xs.has(c)) return;
-                const x = xs.get(c),
-                  y = z > 0 ? Y(p) + 3 : Y(p + c.st) - 3,
-                  e = z > 0 ? 8 : -8;
-                g.beginPath();
-                g.moveTo(x, y);
-                g.lineTo(x - 5, y + e);
-                g.lineTo(x + 5, y + e);
-                g.closePath();
-                g.fillStyle = z > 0 ? "#089981" : "#000";
-                g.fill();
-                g.strokeStyle = "#fff";
-                g.lineWidth = 1;
-                g.stroke();
-              });
-            }
           };
           /* pcGeo: DPoc candles and their x, for the magnet */
           const pcGeo = [],
@@ -4856,19 +4515,17 @@
               bx = [...new Set(pds.map(pfStep))].join(" / ");
             pds.forEach((d) => {
               loadAggr(d);
-              if (pfIc || pfVa) loadUsdt(d);
+              loadUsdt(d);
             });
             /* drawn once its days are all in: trades (today: a
-               catch-up pass done), with IC / VA their USDT seconds
-               and vol */
+               catch-up pass done), their USDT seconds and vol */
             const inD = (m, b, d) => {
                 const x = m.get(d);
                 return !!x && (x.end || (x.at > 0 && !b.has(d)));
               },
               pfOk = pfSeen === pds.join() ||
                 pds.every((d) => inD(aggrT, aggrBusy, d) &&
-                  (!(pfIc || pfVa) || (volOfDay(d) > 0 &&
-                    inD(usdtK, usdtBusy, d))));
+                  volOfDay(d) > 0 && inD(usdtK, usdtBusy, d));
             if (!pfOk) {
               g.font = "11px ui-monospace,Menlo,monospace";
               g.textAlign = "left";
@@ -4906,171 +4563,72 @@
               cv2 = items.slice(k0, k1),
               jOf = (i) => nFit - items.length + k0 + i + pb + 0.5;
             drawPfCols(pfc, cv2, jOf, pa, sl);
-            /* IC: vipoc channel, each column as at its start (no
-               repaint): vipoc fat navy, edges thin */
-            if (pfIc) {
-              /* edges per vipoc (a new one: a move of 1 vol or more):
-                 they only widen, on a new high or low */
-              /* run arrow: the vipoc above (below) the day before's
-                 last, an up (down) column crossing a shoulder's
-                 bottom (top) edge, shoulders as the column began:
-                 tip at the edge (entry), target the far edge, stop
-                 2 bricks back; once per edge until a column starts
-                 3+ bricks from it; none in an excursion (a jump:
-                 price out of the channel) */
-              let hi, lo, pv = null, fe = [];
-              /* the day before's last vipoc, once per day (the
-                 oldest day's is never final: no USDT before it) */
-              const dy = new Map(),
-                yOf = (d) => dy.has(d) ? dy.get(d)
-                  : dy.set(d, icFor(d).ic).get(d);
-              const bd = items.slice(0, k1).map((c) => {
-                const m = icFor(c.t0);
-                if (!m.ic) return (pv = null), (fe = []);
-                const [p, h, l, v] = m.ic;
-                const rs = pv === null || Math.abs(p - pv) >= v - p;
-                if (rs) (hi = h), (lo = l);
-                else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
-                pv = p;
-                const exc = c.p0 > hi || c.p0 < lo,
-                  y = yOf(dayOf(c.t0)),
-                  d = y ? Math.sign(p - y[0]) : 0;
-                let f = 0;
-                fe = fe.filter((e) => Math.abs(c.p0 - e) < 3 * c.st);
-                if (d && !exc && m.sh && c.up === d > 0)
-                  m.sh.forEach((z) => {
-                    const e = z && z[+(d < 0)];
-                    if (z && (c.p0 - e) * d < 0 &&
-                      ((d > 0 ? c.ph : c.pl) - e) * d >= 0 &&
-                      !fe.some((u) => Math.abs(e - u) <= c.st))
-                      (f = [d, e]), fe.push(e);
-                  });
-                return [hi, lo, f, exc, rs];
-              });
-              /* alerts: a column (of the last 2) whose high first
-                 goes over the channel's upper line, or low under
-                 the lower one, edges as at its start */
-              if (k1 === items.length) {
-                const ev = [];
-                for (let k = Math.max(1, k1 - 2); k < k1; k++) {
-                  const b = bd[k],
-                    a = bd[k - 1],
-                    c = items[k],
-                    q = items[k - 1];
-                  if (!b || !b.length || !a || !a.length) continue;
-                  if (c.ph > b[0] && q.ph <= a[0])
-                    ev.push({ id: "icu" + c.t0, up: true,
-                      txt: "over " + b[0].toFixed(0) });
-                  if (c.pl < b[1] && q.pl >= a[1])
-                    ev.push({ id: "icd" + c.t0, up: false,
-                      txt: "under " + b[1].toFixed(0) });
-                }
-                /* V95: a new box in the last 4 columns, any side */
-                const hs = pfHot(items);
-                hs.vh.forEach((key) => {
-                  const [k, r] = key.split("|").map(Number),
-                    dl = hs.vd.get(key) || 0;
-                  if (k >= k1 - 4)
-                    ev.push({ id: "v95" + items[k].t0 + "|" + r,
-                      dir: "v95", up: dl >= 0,
-                      txt: "V95 " + (dl >= 0 ? "+" : "") +
-                        dl.toFixed(2) + " " +
-                        ((r + 0.5) * items[k].st).toFixed(0) });
-                });
-                pfEvS = { ctx: bx, ev };
+            /* IC: the vipoc channel, each column's edges as at
+               its start (no repaint); a new vipoc (a move of 1
+               vol or more) resets them, else they only widen */
+            let hi, lo, pv = null;
+            const bd = items.slice(0, k1).map((c) => {
+              const m = icFor(c.t0);
+              if (!m.ic) return (pv = null);
+              const [p, h, l, v] = m.ic,
+                rs = pv === null || Math.abs(p - pv) >= v - p;
+              if (rs) (hi = h), (lo = l);
+              else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
+              pv = p;
+              return [hi, lo, rs];
+            });
+            /* alerts: a column (of the last 2) whose high first
+               goes over the channel's upper line, or low under
+               the lower one, edges as at its start */
+            if (k1 === items.length) {
+              const ev = [];
+              for (let k = Math.max(1, k1 - 2); k < k1; k++) {
+                const b = bd[k],
+                  a = bd[k - 1],
+                  c = items[k],
+                  q = items[k - 1];
+                if (!b || !a) continue;
+                if (c.ph > b[0] && q.ph <= a[0])
+                  ev.push({ id: "icu" + c.t0, up: true,
+                    txt: "over " + b[0].toFixed(0) });
+                if (c.pl < b[1] && q.pl >= a[1])
+                  ev.push({ id: "icd" + c.t0, up: false,
+                    txt: "under " + b[1].toFixed(0) });
               }
-              const pts = cv2.map((c, k) => {
-                const m = icFor(c.t0);
-                return m.ic && [pa + sl * jOf(k),
-                  [m.ic[0], ...bd[k0 + k].slice(0, 2),
-                    ...m.ic.slice(3)],
-                  /* no zone in an excursion */
-                  !bd[k0 + k][3] && m.gl, m.sh, bd[k0 + k][2],
-                  bd[k0 + k][4]];
+              /* V95: a new box in the last 4 columns, any side */
+              const hs = pfHot(items);
+              hs.vh.forEach((key) => {
+                const [k, r] = key.split("|").map(Number),
+                  dl = hs.vd.get(key) || 0;
+                if (k >= k1 - 4)
+                  ev.push({ id: "v95" + items[k].t0 + "|" + r,
+                    dir: "v95", up: dl >= 0,
+                    txt: "V95 " + (dl >= 0 ? "+" : "") +
+                      dl.toFixed(2) + " " +
+                      ((r + 0.5) * items[k].st).toFixed(0) });
               });
-              g.fillStyle = "rgba(41,98,255,.07)";
-              pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
-                Y(q[1][1]), sl + 0.5, Y(q[1][2]) - Y(q[1][1])));
-              /* IC%: the 10% tails, darker */
-              g.fillStyle = "rgba(41,98,255,.1)";
-              if (pfIq) pts.forEach((q) => {
-                if (!q) return;
-                const [, t, u, h, l] = q[1];
-                if (h < t) g.fillRect(q[0] - sl / 2, Y(t), sl + 0.5,
-                  Y(h) - Y(t));
-                if (l > u) g.fillRect(q[0] - sl / 2, Y(l), sl + 0.5,
-                  Y(u) - Y(l));
-              });
-              /* channel edges only (no vipoc line) */
-              (pfIq ? [1, 2, 3, 4] : [1, 2]).forEach((j) => {
-                g.strokeStyle = "#2962ff";
-                g.lineWidth = j > 2 ? 0.5 : 1;
-                g.beginPath();
-                let on = false;
-                pts.forEach((q) => {
-                  /* new channel: no vertical join */
-                  if (!q || q[5]) on = false;
-                  if (!q) return;
-                  const y = Y(q[1][j]);
-                  g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
-                  g.lineTo(q[0] + sl / 2, y);
-                  on = true;
-                });
-                g.stroke();
-              });
-              /* green zone (with Gap), 3 bricks: green above the
-                 vipoc, red below */
-              if (pfRl) pts.forEach((q) => {
-                if (!q || !q[2]) return;
-                const [c, h] = q[2];
-                g.fillStyle = c > q[1][0] ? "rgba(8,153,129,.3)"
-                  : "rgba(229,57,53,.3)";
-                g.fillRect(q[0] - sl / 2, Y(c + h), sl + 0.5,
-                  Y(c - h) - Y(c + h));
-              });
-              /* Gap: each wing's red shoulder (volume), its edges */
-              if (pfRl) {
-                g.strokeStyle = "#e53935";
-                g.lineWidth = 1;
-                [0, 1].forEach((w) => [0, 1].forEach((j) => {
-                  g.beginPath();
-                  let on = false;
-                  pts.forEach((q) => {
-                    const v = q && q[3] && q[3][w];
-                    if (!v) return (on = false);
-                    const y = Y(v[j]);
-                    g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
-                    g.lineTo(q[0] + sl / 2, y);
-                    on = true;
-                  });
-                  g.stroke();
-                }));
-              }
-              /* run: at the shoulder edge it crosses */
-              if (pfBs) pts.forEach((q) => {
-                if (!q || !q[4]) return;
-                /* tip at the edge, white rim to stand out */
-                const u = q[4][0] > 0,
-                  y = Y(q[4][1]),
-                  d = u ? 1 : -1,
-                  w = Math.max(7, sl);
-                g.fillStyle = u ? "#089981" : "#e53935";
-                g.strokeStyle = "#fff";
-                g.lineWidth = 2;
-                g.beginPath();
-                g.moveTo(q[0], y + 2 * d);
-                g.lineTo(q[0] - w, y + 16 * d);
-                g.lineTo(q[0] - w / 3, y + 16 * d);
-                g.lineTo(q[0] - w / 3, y + 24 * d);
-                g.lineTo(q[0] + w / 3, y + 24 * d);
-                g.lineTo(q[0] + w / 3, y + 16 * d);
-                g.lineTo(q[0] + w, y + 16 * d);
-                g.closePath();
-                g.stroke();
-                g.fill();
-              });
-              g.lineWidth = 1;
+              pfEvS = { ctx: bx, ev };
             }
+            const pts = cv2.map((c, k) => bd[k0 + k] &&
+              [pa + sl * jOf(k), bd[k0 + k]]);
+            g.fillStyle = "rgba(41,98,255,.07)";
+            pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
+              Y(q[1][0]), sl + 0.5, Y(q[1][1]) - Y(q[1][0])));
+            /* its edges, thin; a new channel: no vertical join */
+            g.strokeStyle = "#2962ff";
+            [0, 1].forEach((j) => {
+              g.beginPath();
+              let on = false;
+              pts.forEach((q) => {
+                if (!q || q[1][2]) on = false;
+                if (!q) return;
+                const y = Y(q[1][j]);
+                g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
+                g.lineTo(q[0] + sl / 2, y);
+                on = true;
+              });
+              g.stroke();
+            });
             g.restore();
             /* framed, named, and says so when it is empty */
             panel(pa, pcW);
@@ -7199,17 +6757,6 @@
           v: 2,
           dv: DEFAULTS_VER,
           pcPf,
-          pfBr,
-          pfSg,
-          pfHl,
-          pfSw,
-          pfBy,
-          pfXb,
-          pfIc,
-          pfIq,
-          pfRl,
-          pfBs,
-          pfVa,
           showOrders,
           showLines,
           lines: lines.filter(
@@ -7251,11 +6798,6 @@
         /* PF: default changed in version 9 */
         if (st.dv >= 9 && typeof st.pcPf === "boolean")
           setPcPf(st.pcPf);
-        /* Br, Sw, Alrt: defaults changed in version 15;
-           Alrt, Buy off in version 22, Act in 23 */
-        /* PF: channel only for now, its other buttons hidden
-           at their defaults (session-coloured bricks) */
-        if (typeof st.pfIc === "boolean") setPfIc(st.pfIc);
         /* O / L: defaults changed in version 6 */
         const cur6 = st.dv >= 6;
         if (cur6 && typeof st.showOrders === "boolean")
@@ -7454,17 +6996,6 @@
       miniHome();
       mainChart.resetView();
       miniChart.resetView();
-      $("pfBrTog").onclick = () => setPfBr(!pfBr);
-      $("pfSgTog").onclick = () => setPfSg(!pfSg);
-      $("pfHlTog").onclick = () => setPfHl(!pfHl);
-      $("pfSwTog").onclick = () => setPfSw(!pfSw);
-      $("pfByTog").onclick = () => setPfBy(!pfBy);
-      $("pfXbTog").onclick = () => setPfXb(!pfXb);
-      $("pfIcTog").onclick = () => setPfIc(!pfIc);
-      $("pfIqTog").onclick = () => setPfIq(!pfIq);
-      $("pfRlTog").onclick = () => setPfRl(!pfRl);
-      $("pfBsTog").onclick = () => setPfBs(!pfBs);
-      $("pfVaTog").onclick = () => setPfVa(!pfVa);
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
       /* installable app: only when served over https */
