@@ -4737,6 +4737,14 @@
                  written at the end) */
               const rk = [];
               let dm = null;
+              /* DT: the curves only between the day's low and high
+                 rows (the fill under them is not cut) */
+              const rL = Math.floor(
+                  Math.min(...P.ps.map((q) => q.l)) / P.step),
+                rH = Math.floor(
+                  Math.max(...P.ps.map((q) => q.h)) / P.step),
+                cut = (m) => !dt ? m : new Map([...m]
+                  .filter(([r]) => r >= rL && r <= rH));
               if (dt) {
                 const dk = k15.filter((c) => okC(c) && c.t >= P.dS &&
                     c.t < nextDay(P.dS)),
@@ -4774,7 +4782,8 @@
               /* DT: the delta's normal curve over its strip */
               if (dt) {
                 const dc = dCurve(P, vw, sp, kv, vf, exp);
-                perfLine(P, dc, cx0 - 2, (e) => (-e * kv * vs) / 2,
+                perfLine(P, cut(dc), cx0 - 2,
+                  (e) => (-e * kv * vs) / 2,
                   "#000");
                 /* its P's: a black line to the curve; age = the
                    average period of the row's bricks */
@@ -4852,7 +4861,8 @@
                 }));
               }
               if (showPerf || dt)
-                perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
+                perfLine(P, cut(exp), cx0, (e) => e * kv * vs,
+                  "#000");
               /* NC: the same normal curves round the TPO sub POCs
                  (time) instead of the vipocs, in volume, orange */
               if (showNc)
