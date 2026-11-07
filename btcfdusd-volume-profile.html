@@ -448,6 +448,13 @@
                 NC
               </button>
               <button
+                id="dtTog"
+                class=""
+                title="VBT: delta vs its normal curve only"
+              >
+                DT
+              </button>
+              <button
                 id="vbTog"
                 class="a"
                 title="Profile bricks as wide as their traded volume"
@@ -1258,6 +1265,13 @@
       function setShowNc(v) {
         showNc = !!v;
         $("ncTog").className = showNc ? "a" : "";
+        schedule();
+      }
+      /* DT button: VBT shows only the delta vs its normal curve */
+      let showDt = false;
+      function setShowDt(v) {
+        showDt = !!v;
+        $("dtTog").className = showDt ? "a" : "";
         schedule();
       }
       function setShowVap(v) {
@@ -4642,8 +4656,12 @@
                 (mid != null ? mid : k15[k15.length - 1].c) / P.step,
               );
             }
-            const exp = showMass || showPerf ? expOf(P, sp, vf)
-              : new Map();
+            const dt = showDt && vs,
+              exp = showMass || showPerf || dt ? expOf(P, sp, vf)
+                : new Map(),
+              /* DT: x of the curve on row r */
+              kv = vs ? kvFor(P.dS, "BTCUSDT") : 0,
+              cX = (r) => cx0 + (exp.get(r) || 0) * kv * vs;
             P.rows.forEach((lst, r) => {
               const yT = Y((r + 1) * P.step);
               if (yT > bot || yT + rowH < top) return;
@@ -4656,6 +4674,15 @@
                    row): marked once every brick is drawn */
                 if (r === rNow && idx === iNow)
                   curB = [bx + (vs ? wv : lw) / 2, yT + rowH / 2];
+                /* DT: only what lies beyond the curve, in its
+                   session's colour */
+                if (dt) {
+                  const x0 = Math.max(bx, cX(r));
+                  if (bx + wv - x0 < 0.5) return;
+                  g.fillStyle = tpoColor(idx, 0.72);
+                  return void g.fillRect(x0, yT + 0.5,
+                    bx + wv - x0, Math.max(1, rowH - 1));
+                }
                 g.fillStyle = showUD && ud
                   ? ud
                   : stCol && shut(idx)
@@ -4684,8 +4711,20 @@
                Mass: real - perfect per row, a strip on the left,
                green extra, red missing */
             if (vs) {
-              const kv = kvFor(P.dS, "BTCUSDT");
-              if (showMass) {
+              /* DT: what a row lacks up to the curve, red */
+              if (dt) {
+                g.fillStyle = "#e53935";
+                const rs = new Set([...exp.keys(), ...vw.rw.keys()]);
+                rs.forEach((r) => {
+                  const x0 = cx0 + (vw.rw.get(r) || 0) * vs,
+                    yT = Y((r + 1) * P.step);
+                  if (cX(r) - x0 < 0.5 || yT > bot || yT + rowH < top)
+                    return;
+                  g.fillRect(x0, yT + 0.5, cX(r) - x0,
+                    Math.max(1, rowH - 1));
+                });
+              }
+              if (showMass && !dt) {
                 g.strokeStyle = "#000";
                 g.lineWidth = 1;
                 const rs = new Set([...exp.keys(), ...vw.rw.keys()]);
@@ -4707,7 +4746,7 @@
                       Math.max(1, rowH - 2));
                 });
               }
-              if (showPerf)
+              if (showPerf || dt)
                 perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
               /* NC: the same normal curves round the TPO sub POCs
                  (time) instead of the vipocs, in volume, orange */
@@ -8650,6 +8689,7 @@
           showYB,
           showVap,
           showNc,
+          showDt,
           showVw,
           showSO,
           showDO,
@@ -8759,6 +8799,7 @@
         if (st.dv >= 27 && typeof st.showVap === "boolean")
           setShowVap(st.showVap);
         if (typeof st.showNc === "boolean") setShowNc(st.showNc);
+        if (typeof st.showDt === "boolean") setShowDt(st.showDt);
         if (st.dv >= 31 && typeof st.showVw === "boolean")
           setShowVw(st.showVw);
         if (typeof st.showSO === "boolean") setShowSO(st.showSO);
@@ -8981,6 +9022,7 @@
       $("bzTog").onclick = () => setShowBZ(!showBZ);
       $("ybTog").onclick = () => setShowYB(!showYB);
       $("ncTog").onclick = () => setShowNc(!showNc);
+      $("dtTog").onclick = () => setShowDt(!showDt);
       $("vapTog").onclick = () => setShowVap(!showVap);
       /* VBT on: USDT by default (the real market) */
       $("vbTog").onclick = () => {
