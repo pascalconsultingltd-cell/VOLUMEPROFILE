@@ -831,7 +831,9 @@
         /* zigzag points per day (see the profiles) */
         zCache = new Map(),
         /* St colours of closed periods, frozen (see stAt) */
-        stFz = new Map();
+        stFz = new Map(),
+        /* PF columns' final IC by start time (see icFor) */
+        icT = new Map();
       /* first brick of the sub POC search: SUB_K x the vol
          step, whatever the view, so every device agrees */
       const SUB_K = 5;
@@ -1572,7 +1574,15 @@
        * column starts a new column: green = buyers pushing,
        * black = sellers. A column spans the bricks it visited.
        */
+      const pfC = new Map();
       function pfCols(days) {
+        /* same trades, same boxes: same columns (no rebuild) */
+        const key = days.map((d) => {
+          const a = aggrT.get(d);
+          return [d, a && a.tr.length, pfStep(d)];
+        }).join();
+        if (pfC.has(key)) return pfC.get(key);
+        if (pfC.size > 8) pfC.clear();
         const cols = [];
         let st = 0,
           cur = null,
@@ -1652,6 +1662,7 @@
         });
         /* the brick being traded now counts too */
         fin();
+        pfC.set(key, cols);
         return cols;
       }
       /*
@@ -4198,7 +4209,12 @@
             return { px: (Math.floor(P.px / step) + 0.5) * step };
           };
           const icFor = (t) => {
-            let dS = dayOf(t),
+            /* a column's IC once final: no rebuild of its key */
+            const d0 = dayOf(t),
+              fk = t + "|" + volFor(t < d0 + 9e5 ? prevDay(d0) : d0) +
+                "|" + dVol.BTCUSDT.size;
+            if (icT.has(fk)) return icT.get(fk);
+            let dS = d0,
               cut = Math.floor(t / 9e5) * 9e5,
               x = null,
               te = t;
@@ -4214,7 +4230,10 @@
               tp = Math.floor(te / TPO_MS) * TPO_MS,
               key = ["ic", dS, cut, vf, step, x, te, kv].join();
             /* volume only on a miss: it rebuilds out of order */
-            if (stFz.has(key)) return stFz.get(key);
+            if (stFz.has(key)) {
+              if (icT.size > 3e4) icT.clear();
+              return icT.set(fk, stFz.get(key)).get(fk);
+            }
             const zv = kv ? zoneVol(dS, te, step) : null,
               pz = zv && tp > dS ? zoneVol(dS, tp, step, pCur) : null;
             const per = new Map(),
@@ -4320,7 +4339,9 @@
             if (zv && k15.length && k15[0].t <= dS &&
               k15[k15.length - 1].t >= cut - 9e5) {
               if (stFz.size > 3e4) stFz.clear();
+              if (icT.size > 3e4) icT.clear();
               stFz.set(key, m);
+              icT.set(fk, m);
             }
             return m;
           };
@@ -5543,7 +5564,11 @@
               const row = Math.floor(((r + 0.5) * st) / m.step);
               return m.get(row) || "";
             };
-            const hs = pfHot(all),
+            /* pfHot only for the hidden extras (slow on 3 days) */
+            const hs = pfSg || pfHl || pfXb || pfBy || pfVa
+                ? pfHot(all) : { hot: new Set(), exc: [], gTop: [],
+                  bBot: [], dot: new Set(), vh: new Set(),
+                  vd: new Map() },
               ci = new Map(all.map((c, k) => [c, k])),
               hot = (c, r) => hs.hot.has(ci.get(c) + "|" + r),
               /* hot box dot: blue buyers, orange sellers */
@@ -6068,6 +6093,11 @@
                  3+ bricks from it; none in an excursion (a jump:
                  price out of the channel) */
               let hi, lo, pv = null, fe = [];
+              /* the day before's last vipoc, once per day (the
+                 oldest day's is never final: no USDT before it) */
+              const dy = new Map(),
+                yOf = (d) => dy.has(d) ? dy.get(d)
+                  : dy.set(d, icFor(d).ic).get(d);
               const bd = items.slice(0, k1).map((c) => {
                 const m = icFor(c.t0);
                 if (!m.ic) return (pv = null), (fe = []);
@@ -6077,7 +6107,7 @@
                 else (hi = Math.max(hi, h)), (lo = Math.min(lo, l));
                 pv = p;
                 const exc = c.p0 > hi || c.p0 < lo,
-                  y = icFor(dayOf(c.t0)).ic,
+                  y = yOf(dayOf(c.t0)),
                   d = y ? Math.sign(p - y[0]) : 0;
                 let f = 0;
                 fe = fe.filter((e) => Math.abs(c.p0 - e) < 3 * c.st);
@@ -8232,13 +8262,11 @@
           const c = arr[k],
             five = arr === k5;
           if (!c || c.h == null) return false;
-          /* volume from BTCUSDT: not big until it is loaded */
-          const us = [];
-          for (let j = k - BIG_WIN + 1; j <= k; j++) {
-            const u = uOf(arr[j], five);
-            if (u === undefined) return false;
-            us.push(u);
-          }
+          /* volume from BTCUSDT: not big until it is loaded;
+             the window's ends are enough for the key (cheap) */
+          const uk = uOf(c, five),
+            u0 = uOf(arr[k - BIG_WIN + 1], five);
+          if (uk === undefined || u0 === undefined) return false;
           const key =
             (cfg.main ? TF : "") +
             mode +
@@ -8249,11 +8277,17 @@
             "|" +
             c.c +
             "|" +
-            us[BIG_WIN - 1] +
+            uk +
             "|" +
             arr[k - BIG_WIN + 1].t;
           let f = fcache.get(key);
           if (f === undefined) {
+            const us = [];
+            for (let j = k - BIG_WIN + 1; j <= k; j++) {
+              const u = uOf(arr[j], five);
+              if (u === undefined) return false;
+              us.push(u);
+            }
             const r = Math.ceil(BIG_PERC * BIG_WIN) - 1,
               bs = new Float64Array(BIG_WIN),
               vs = new Float64Array(BIG_WIN);
