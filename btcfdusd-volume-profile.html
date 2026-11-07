@@ -4785,11 +4785,24 @@
                 /* its P's: a line across the strip, tagged D1.. */
                 g.font = "bold 11px ui-monospace,Menlo,monospace";
                 g.textAlign = "right";
+                /* colour vs its nearest P, by age (average period
+                   of the row's bricks): D older, P - D; younger,
+                   D - P; green if positive, black else */
+                const ag = (X) => {
+                  const w = P.rows.get(Math.floor(X.px / P.step));
+                  return w && w.length ? rowAge(w) : 99;
+                };
                 (dc.ps || []).forEach((Q, k) => {
-                  const y = Y(Q.px),
+                  const N = sp.reduce((a, b) => !a ||
+                      Math.abs(b.px - Q.px) < Math.abs(a.px - Q.px)
+                      ? b : a, null),
+                    v = !N ? 0 : ag(Q) <= ag(N) ? N.px - Q.px
+                      : Q.px - N.px,
+                    col = v > 0 ? "#089981" : "#000",
+                    y = Y(Q.px),
                     tx = "D" + (k + 1) + " " + Q.px.toFixed(DP) +
                       " ·" + Q.born.toFixed(0);
-                  g.strokeStyle = "#000";
+                  g.strokeStyle = col;
                   g.lineWidth = 2;
                   g.setLineDash([[], [8, 4], [3, 3]][k]);
                   g.beginPath();
@@ -4802,7 +4815,7 @@
                   g.strokeStyle = "#fff";
                   g.lineWidth = 3;
                   g.strokeText(tx, cx0 - 4, y - 9);
-                  g.fillStyle = "#000";
+                  g.fillStyle = col;
                   g.fillText(tx, cx0 - 4, y - 9);
                 });
               }
