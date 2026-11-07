@@ -4836,9 +4836,10 @@
                 g.stroke();
               }
               /* DT: what a row lacks vs the curve (negative
-                 delta), the black curve filled from its volume */
+                 delta), the black curve filled from its volume,
+                 orange */
               if (dt) {
-                g.fillStyle = "rgba(0,0,0,.45)";
+                g.fillStyle = "rgba(255,109,0,.6)";
                 exp.forEach((e, r) => {
                   const x0 = cx0 + (vw.rw.get(r) || 0) * vs,
                     yT = Y((r + 1) * P.step);
