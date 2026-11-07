@@ -4071,14 +4071,6 @@
             }
             return m;
           };
-          /* each POC's previous one (the day before's last for
-             a day's first), for its colour */
-          const zPrev = new Map(
-            zp.map((q, i) => [
-              q.ds + "|" + q.p,
-              i ? zp[i - 1].p : null,
-            ]),
-          );
           /* Alt+R: prices centred on the previous day's last
              sub POC (the ladder's 0; else the latest POC), 6
              vol steps above and below, once the POCs are in */
@@ -4098,48 +4090,21 @@
           g.clip();
           g.font = "10px ui-monospace,Menlo,monospace";
           g.textBaseline = "middle";
-          /* sub POCs: P1 solid, P2 dashed, P3 dotted, each
-             tagged with its price and its birth brick; green
-             above the POC before it, black below (navy with
-             none before it); St: the earliest session in
-             its row */
-          /* xe(S): where its line stops (DT: at the curve);
-             bare: lines only, no tags (DT) */
-          const drawPs = (P, sp, cx0, xe, bare) =>
+          /* a day's vipocs: black lines from the axis to xe(S),
+             the curve; P1 solid, P2 dashed, P3 dotted */
+          const drawPs = (P, sp, cx0, xe) =>
             sp.forEach((S, k) => {
-            const y = Y(S.px),
-              pv = zPrev.get(P.dS + "|" + S.px),
-              row = P.rows.get(Math.floor(S.px / P.step)),
-              c = bare
-                ? "#000"
-                : stCol && row && row.length
-                  ? tpoColor(Math.min(...row))
-                  : pv == null
-                  ? "#003366"
-                  : S.px < pv
-                    ? "#000"
-                    : "#089981",
-              tx = "P" + (k + 1) + " " + S.px.toFixed(DP) +
-                " ·" + S.born.toFixed(0);
-            g.strokeStyle = c;
-            g.lineWidth = 3;
-            g.setLineDash([[], [8, 4], [3, 3]][k]);
-            g.beginPath();
-            g.moveTo(cx0 - 2, y);
-            g.lineTo(xe ? xe(S) : cx0 + colW, y);
-            g.stroke();
-            g.setLineDash([]);
-            if (bare) return;
-            /* white halo so the tag reads over bricks */
-            g.font = "bold 11px ui-monospace,Menlo,monospace";
-            g.textAlign = "left";
-            g.strokeStyle = "#fff";
-            g.lineWidth = 3;
-            g.strokeText(tx, cx0, y - 9);
-            g.fillStyle = c;
-            g.fillText(tx, cx0, y - 9);
-          });
-          /* a day's vipocs, earliest first (AG: by age) */
+              const y = Y(S.px);
+              g.strokeStyle = "#000";
+              g.lineWidth = 3;
+              g.setLineDash([[], [8, 4], [3, 3]][k]);
+              g.beginPath();
+              g.moveTo(cx0 - 2, y);
+              g.lineTo(xe(S), y);
+              g.stroke();
+              g.setLineDash([]);
+            });
+          /* a day's vipocs' prices, earliest first (by age) */
           const vipocs = (q) =>
             q.ps.length
               ? subPocs(
@@ -4151,7 +4116,7 @@
                   .map((S) => {
                     const w = q.rows.get(Math.floor(S.px / q.step));
                     return [
-                      !w ? 99 : ageOrd ? rowAge(w) : Math.min(...w),
+                      !w ? 99 : rowAge(w),
                       S.px,
                     ];
                   })
@@ -4298,42 +4263,6 @@
             g.stroke();
             g.restore();
           };
-          /* YB: the yellow bricks' (21:00 UTC on) barycentre,
-             green above the day's latest vipoc, black below */
-          const drawYB = (P, cx0, rowH, bare) => {
-            if (!showYB) return;
-            const last = vipocs(P).pop();
-            let sum = 0,
-              n = 0;
-            P.rows.forEach((l, r) =>
-              l.forEach((i) => {
-                if (i < 42) return;
-                sum += (r + 0.5) * P.step;
-                n++;
-              }),
-            );
-            if (n && last != null) {
-              const b = sum / n,
-                y = Y(b),
-                c = b > last ? "#089981" : "#000",
-                dv = b - last,
-                tx = "B " + b.toFixed(DP) + " " +
-                  (dv > 0 ? "+" : "") + dv.toFixed(DP);
-              /* a plain circle about 4 bricks across */
-              const rd = Math.max(3, 2 * rowH);
-              g.fillStyle = c;
-              g.beginPath();
-              g.arc(cx0 + rd, y, rd, 0, 7);
-              g.fill();
-              if (bare) return;
-              g.font = "bold 11px ui-monospace,Menlo,monospace";
-              g.textAlign = "left";
-              g.strokeStyle = "#fff";
-              g.lineWidth = 3;
-              g.strokeText(tx, cx0, y + rd + 9);
-              g.fillText(tx, cx0, y + rd + 9);
-            }
-          };
           /* DT: each day's last bell (by age), for the next day */
           const rkEnd = new Map();
           for (let d = 0; d < cnt + ex; d++) {
@@ -4346,100 +4275,34 @@
                 Q,
               );
             profs.push(P);
-            /* VAP on: the day's volume per row instead of its
-               profile, from its left edge, 5 biggest green / red
-               by delta (written), the top row darker; trades
-               loaded on demand */
-            if (showVap) {
-              loadUsdt(P.dS);
-              const v = usdtOf(P.dS);
-              if (v) {
-                const t5 = new Set([...v.rows]
-                  .sort((a, b) => b[1] - a[1]).slice(0, 5)
-                  .map(([r]) => r));
-                g.save();
-                g.font = "9px ui-monospace,Menlo,monospace";
-                g.textAlign = "left";
-                v.rows.forEach((u, r) => {
-                  const dl = v.dl.get(r) || 0,
-                    a = r === v.poc ? ".8" : ".5",
-                    y = Y((r + 1) * v.st),
-                    h = Y(r * v.st) - y - 0.5,
-                    bw = (colW * u) / v.mx;
-                  g.fillStyle = !t5.has(r) ? "rgba(103,58,183,.3)"
-                    : dl >= 0 ? "rgba(8,153,129," + a + ")"
-                    : "rgba(229,57,53," + a + ")";
-                  g.fillRect(cx0, y, bw, h);
-                  if (!t5.has(r)) return;
-                  g.fillStyle = dl >= 0 ? "#089981" : "#e53935";
-                  g.fillText((dl >= 0 ? "+" : "") + dl.toFixed(2),
-                    cx0 + bw + 3, y + h / 2);
-                });
-                g.restore();
-              }
-              continue;
-            }
             if (P.poc == null) continue;
-            /* UD: the whole day black when its last vipoc in time
-               is under its first (one vipoc: under the day
-               before's last), else green */
-            let ud = null;
-            if (showUD || udZz) {
-              const o = vipocs(P),
-                ref = o.length > 1
-                  ? o[0]
-                  : vipocs(dayProf(prevDay(P.dS))).pop();
-              if (o.length && ref != null)
-                ud = o[o.length - 1] < ref ? "#000" : "#089981";
-            }
-            P.ud = ud;
-            /* VBT on: each brick as wide as the volume traded in
-               it (its row, its period), the widest row filling
-               the column, nothing else of the profile; classic
-               until trades load */
+            /* each day once its data is all in (past: every USDT
+               second and FDUSD trade; today: to 2 min ago), with
+               its vol and kv; no partial draw first */
             loadAggr(P.dS);
             loadUsdt(P.dS);
-            const vw = showVw ? vwOf(P.dS, P.step) : null,
-              vs = vw && vw.mx ? (colW - 2) / vw.mx : 0;
-            /* VBT: a day shows once its data is all in (past: every
-               USDT second and FDUSD trade; today: to 2 min ago),
-               with its vol and kv; no TPO or partial draw first */
-            if (showVw) {
-              const uk = usdtK.get(P.dS),
-                at = aggrT.get(P.dS),
-                z = uk && uk.k[uk.k.length - 1],
-                full = uk && at && (P.dS === dayOf(Date.now())
-                  ? z && z[0] >= Date.now() - 12e4
-                  : uk.end && at.end);
-              if (!full || !vs || !(volOfDay(P.dS) > 0) ||
-                !(kvFor(P.dS, "BTCUSDT") > 0)) {
-                g.font = "11px ui-monospace,Menlo,monospace";
-                g.textAlign = "left";
-                g.fillStyle = "#787b86";
-                g.fillText("loading", cx0 + 4, top + 14);
-                continue;
-              }
+            const vw = vwOf(P.dS, P.step),
+              vs = vw && vw.mx ? (colW - 2) / vw.mx : 0,
+              uk = usdtK.get(P.dS),
+              at = aggrT.get(P.dS),
+              z = uk && uk.k[uk.k.length - 1],
+              full = uk && at && (P.dS === dayOf(Date.now())
+                ? z && z[0] >= Date.now() - 12e4
+                : uk.end && at.end);
+            if (!full || !vs || !(volOfDay(P.dS) > 0) ||
+              !(kvFor(P.dS, "BTCUSDT") > 0)) {
+              g.font = "11px ui-monospace,Menlo,monospace";
+              g.textAlign = "left";
+              g.fillStyle = "#787b86";
+              g.fillText("loading", cx0 + 4, top + 14);
+              continue;
             }
             /* for the hover: its volume per brick and scale */
             Object.assign(P, { vw, vs });
-            for (let r = P.a; r <= P.b && !vs; r++) {
-              if (!showVA && r !== P.poc) continue;
-              g.fillStyle =
-                r === P.poc
-                  ? "rgba(" + pocRgb(prevDay(tpoDays[d])) + ",.25)"
-                  : "rgba(47,128,200,.08)";
-              g.fillRect(
-                cx0 - 2,
-                Y((r + 1) * P.step),
-                colW + 2,
-                rowH,
-              );
-            }
             const vf = volFor(P.dS) > 0 ? volFor(P.dS) : P.step * 10;
             const sp = byAge(P, subPocs(P.dS, P.ps, vf, P.step)),
-              /* St, no repaint: a closed period's bricks keep
-                 the colours they had at its close (stFor); the
-                 forming period shows its time colour */
+              /* St, no repaint: a closed period's colours as at
+                 its close (stFor), for the VP alert */
               shut = (i) => P.dS + (i + 1) * TPO_MS <= Date.now(),
               stAt = (i) => stFor(P.dS, i);
             /*
@@ -4487,609 +4350,161 @@
               }
               vpEv = { ctx: [vf, P.step].join(), ev };
             }
-            let iNow = -1,
-              rNow = null,
-              curB = null;
-            if (P.dS === dayOf(Date.now()) && k15.length) {
-              P.rows.forEach((l) =>
-                l.forEach((i) => (iNow = Math.max(iNow, i))),
-              );
-              rNow = Math.floor(
-                (mid != null ? mid : k15[k15.length - 1].c) / P.step,
-              );
-            }
-            const dt = showDt && vs,
-              exp = showMass || showPerf || dt || showBf
-                ? expOf(P, sp, vf)
-                : new Map(),
-              /* DT: x of the curve on row r */
-              kv = vs ? kvFor(P.dS, "BTCUSDT") : 0,
+            /* the vipocs' normal curves in volume, a brick's
+               worth = the mean volume / bricks of the 5 finished
+               days before (fixed all day: no repaint) */
+            const exp = expOf(P, sp, vf),
+              kv = kvFor(P.dS, "BTCUSDT"),
               cX = (r) => cx0 + (exp.get(r) || 0) * kv * vs;
-            P.rows.forEach((lst, r) => {
-              const yT = Y((r + 1) * P.step);
-              if (yT > bot || yT + rowH < top) return;
-              let xv = cx0;
-              lst.forEach((idx, k) => {
-                const wv = vs ? (vw.get(r + "|" + idx) || 0) * vs : 0,
-                  bx = vs ? xv : cx0 + k * lw;
-                xv += wv;
-                /* today's latest brick (current period, price
-                   row): marked once every brick is drawn */
-                if (r === rNow && idx === iNow)
-                  curB = [bx + (vs ? wv : lw) / 2, yT + rowH / 2];
-                /* DT: no bricks, curves only */
-                if (dt) return;
-                g.fillStyle = showUD && ud
-                  ? ud
-                  : stCol && shut(idx)
-                    ? stAt(idx).get(
-                        Math.floor(
-                          ((r + 0.5) * P.step) / stAt(idx).step,
-                        ),
-                      ) || SGREY
-                    : tpoColor(idx, 0.72);
-                const bw = vs ? Math.max(0.5, wv - 0.5)
-                    : Math.max(1, lw - 1),
-                  bh = Math.max(1, rowH - 1);
-                g.fillRect(bx, yT + 0.5, bw, bh);
-                /* Mass: a brick the perfect mass has, faded; the
-                   extra ones keep their colour */
-                if (vs || !showMass ||
-                  k >= Math.round(exp.get(r) || 0))
-                  return;
-                g.fillStyle = "rgba(255,255,255,.7)";
-                g.fillRect(bx, yT + 0.5, bw, bh);
-              });
-            });
-            /* VBT: the perfect curve in volume, a brick's worth =
-               the mean volume / bricks of the 5 finished days
-               before (fixed all day: no repaint); Perf: its line,
-               Mass: real - perfect per row, a strip on the left,
-               green extra, red missing */
-            if (vs) {
-              /* DT: the bells' axis = the day's candle, wick low
-                 to high, body open to close (today: live), green
-                 up, black down; rk = the P's and D's ages (rank
-                 written at the end) */
-              const rk = [];
-              let dm = null;
-              if (dt) {
-                const dk = k15.filter((c) => okC(c) && c.t >= P.dS &&
-                    c.t < nextDay(P.dS)),
-                  o = dk.length ? dk[0].o : null,
-                  c = dk.length ? dk[dk.length - 1].c : null;
-                g.strokeStyle = g.fillStyle = o != null && c < o
-                  ? "#000" : "#089981";
-                /* the wick, its high and low capped with a dash */
-                const yh = Y(Math.max(...P.ps.map((q) => q.h))),
-                  yl = Y(Math.min(...P.ps.map((q) => q.l)));
-                g.lineWidth = 1;
-                g.beginPath();
-                g.moveTo(cx0 - 1, yh);
-                g.lineTo(cx0 - 1, yl);
-                g.stroke();
-                g.lineWidth = 2;
-                g.beginPath();
-                g.moveTo(cx0 - 7, yh);
-                g.lineTo(cx0 + 5, yh);
-                g.moveTo(cx0 - 7, yl);
-                g.lineTo(cx0 + 5, yl);
-                g.stroke();
-                const yo = Y(Math.max(o, c)),
-                  yc = Y(Math.min(o, c));
-                if (o != null)
-                  g.fillRect(cx0 - 4, yo, 6, Math.max(1, yc - yo));
-              }
-              /* DT: the delta's normal curve over its strip */
-              if (dt) {
-                const dc = dCurve(P, vw, sp, kv, vf, exp);
-                perfLine(P, dc, cx0 - 2, (e) => (-e * kv * vs) / 2,
-                  "#000");
-                /* its P's: a black line to the curve; age = the
-                   average period of the row's bricks */
-                const ag = (X) => {
-                  const w = P.rows.get(Math.floor(X.px / P.step));
-                  return w && w.length ? rowAge(w) : 99;
-                };
-                (dc.ps || []).forEach((Q, k) => {
-                  const y = Y(Q.px);
-                  g.strokeStyle = "#000";
-                  g.lineWidth = 2;
-                  g.setLineDash([[], [8, 4], [3, 3]][k]);
-                  g.beginPath();
-                  /* to the delta's curve */
-                  g.moveTo(cx0 - 2, y);
-                  g.lineTo(cx0 - 2 - ((dc.get(Math.floor(Q.px /
-                    P.step)) || 0) * kv * vs) / 2, y);
-                  g.stroke();
-                  g.setLineDash([]);
-                });
-                /* each bell's middle: P's right, D's left */
-                const wx = (m, X) =>
-                  (m.get(Math.floor(X.px / P.step)) || 0) * kv * vs;
-                sp.forEach((S) =>
-                  rk.push([ag(S), cx0 + wx(exp, S) / 2, S.px, 0, S,
-                    1]));
-                (dc.ps || []).forEach((Q) =>
-                  rk.push([ag(Q), cx0 - 2 - wx(dc, Q) / 4, Q.px, 0, 0,
-                    -1]));
-                /* by age; each one's move vs the one before (1: the
-                   day before's last bell, else its last vipoc): its
-                   number's colour and, for a P, its BF lead side */
-                let q0 = rkEnd.has(prevDay(P.dS))
-                  ? rkEnd.get(prevDay(P.dS))
-                  : vipocs(dayProf(prevDay(P.dS))).pop();
-                rk.sort((a, b) => a[0] - b[0]).forEach((e) => {
-                  e[3] = q0 == null ? 0 : e[2] >= q0 ? 1 : -1;
-                  q0 = e[2];
-                });
-                dm = new Map(rk.filter((e) => e[4])
-                  .map((e) => [e[4], e[3]]));
-                /* each bell shaded as its number, very light: a row
-                   goes to its nearest P (right) / D (left) */
-                const shade = (sd, m, x0, wf) => {
-                  const bs = rk.filter((e) => e[5] === sd);
-                  if (bs.length) m.forEach((v, r) => {
-                    const c = (r + 0.5) * P.step,
-                      b = bs.reduce((a, e) => Math.abs(e[2] - c) <
-                        Math.abs(a[2] - c) ? e : a),
-                      w = wf(v),
-                      yT = Y((r + 1) * P.step);
-                    if (Math.abs(w) < 0.5 || !b[3]) return;
-                    g.fillStyle = b[3] > 0 ? "rgba(8,153,129,.12)"
-                      : "rgba(229,57,53,.12)";
-                    g.fillRect(Math.min(x0, x0 + w), yT, Math.abs(w),
-                      Y(r * P.step) - yT);
-                  });
-                };
-                shade(1, exp, cx0, (v) => v * kv * vs);
-                shade(-1, dc, cx0 - 2, (v) => (-v * kv * vs) / 2);
-                /* what a row lacks vs the curve (negative delta),
-                   the black curve filled from its volume, in its
-                   nearest P's number colour (black: soft black) */
-                const bp = rk.filter((e) => e[5] === 1);
-                exp.forEach((e, r) => {
-                  const x0 = cx0 + (vw.rw.get(r) || 0) * vs,
-                    yT = Y((r + 1) * P.step),
-                    c = (r + 0.5) * P.step,
-                    b = bp.length && bp.reduce((a, q) =>
-                      Math.abs(q[2] - c) < Math.abs(a[2] - c)
-                        ? q : a);
-                  if (cX(r) - x0 < 0.25 || yT > bot ||
-                    yT + rowH < top)
-                    return;
-                  g.fillStyle = !b || !b[3] ? "rgba(67,70,81,.45)"
-                    : b[3] > 0 ? "rgba(8,153,129,.6)"
-                      : "rgba(229,57,53,.6)";
-                  g.fillRect(x0, yT + 0.5, cX(r) - x0,
-                    Math.max(1, rowH - 1));
-                });
-              }
-              if (showMass && !dt) {
-                g.strokeStyle = "#000";
-                g.lineWidth = 1;
-                const rs = new Set([...exp.keys(), ...vw.rw.keys()]);
-                rs.forEach((r) => {
-                  const d = (vw.rw.get(r) || 0) -
-                      (exp.get(r) || 0) * kv,
-                    yT = Y((r + 1) * P.step);
-                  if (Math.abs(d * vs) < 0.5 || yT > bot ||
-                    yT + rowH < top) return;
-                  g.fillStyle = d > 0 ? "#089981" : "#e53935";
-                  const dw = (Math.abs(d) * vs) / 2;
-                  g.fillRect(cx0 - 2 - dw, yT + 0.5, dw,
-                    Math.max(1, rowH - 1));
-                  /* the volume the row lacks: an empty black box
-                     from its bricks to the curve */
-                  if (d < 0)
-                    g.strokeRect(cx0 + (vw.rw.get(r) || 0) * vs + 0.5,
-                      yT + 1, Math.max(1, -d * vs - 1),
-                      Math.max(1, rowH - 2));
-                });
-              }
-              /* BF: the lead wing's empty part, from its closed
-                 volume to the curve, dark blue, over the other
-                 fills */
-              const bf = showBf && kv
-                ? bellFill(P, sp, vw, kv, vf, dm) : null;
-              if (bf) {
-                g.fillStyle = "rgba(13,71,161,.85)";
-                bf.ps.forEach((F) => F.lead.forEach((r) => {
-                  const x0 = cx0 + (bf.rw.get(r) || 0) * vs,
-                    yT = Y((r + 1) * P.step);
-                  if (cX(r) - x0 > 0.5)
-                    g.fillRect(x0, yT + 0.5, cX(r) - x0,
-                      Math.max(1, rowH - 1));
-                }));
-              }
-              if (showPerf || dt)
-                perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
-              /* NC: the same normal curves round the TPO sub POCs
-                 (time) instead of the vipocs, in volume, orange */
-              if (showNc)
-                perfLine(P, expOf(P, subPocs(P.dS, P.ps, vf, P.step,
-                  1), vf), cx0, (e) => e * kv * vs, "#ff6d00");
-              /* VBT too: its vipocs and YB (they went with it) */
-              drawPs(P, sp, cx0,
-                dt && ((S) => cX(Math.floor(S.px / P.step))), dt);
-              /* BF tag over each P: belly, trail, lead fill % */
-              if (bf && !dt) {
-                g.font = "bold 10px ui-monospace,Menlo,monospace";
-                g.textAlign = "left";
-                bf.ps.forEach((F) => {
-                  const tx = "B " + F.b + (F.dir ? " · T " + F.t +
-                      " · L " + F.l : "") + "%",
-                    y = Y(F.S.px) - 22;
-                  g.strokeStyle = "#fff";
-                  g.lineWidth = 3;
-                  g.strokeText(tx, cx0, y);
-                  g.fillStyle = "#2f80c8";
-                  g.fillText(tx, cx0, y);
-                });
-              }
-              drawYB(P, cx0, rowH, dt);
-              /* DT: P's and D's ranked by age together, 1 = oldest,
-                 in the middle of each bell; green above the one
-                 before (1: the day before's last), red below */
-              g.save();
-              g.font = "bold 12px ui-monospace,Menlo,monospace";
-              g.textAlign = "center";
-              g.textBaseline = "middle";
-              g.strokeStyle = "#fff";
-              g.lineWidth = 3;
-              rk.forEach(([, x, px, mv], i) => {
-                g.fillStyle = !mv ? "#000"
-                  : mv > 0 ? "#089981" : "#e53935";
-                g.strokeText(i + 1, x, Y(px));
-                g.fillText(i + 1, x, Y(px));
-              });
-              if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
-              g.restore();
-              continue;
-            }
-            /* Mass: the perfect bricks the profile lacks, empty
-               black squares; per row real - perfect as a strip
-               left of the profile, green extra, red missing */
-            if (showMass) {
-              g.strokeStyle = "#000";
+            /* the bells' axis = the day's candle, wick low to high,
+               body open to close (today: live), green up, black
+               down; rk = the P's and D's ages (rank written at the
+               end) */
+            const rk = [];
+            {
+              const dk = k15.filter((c) => okC(c) && c.t >= P.dS &&
+                  c.t < nextDay(P.dS)),
+                o = dk.length ? dk[0].o : null,
+                c = dk.length ? dk[dk.length - 1].c : null;
+              g.strokeStyle = g.fillStyle = o != null && c < o
+                ? "#000" : "#089981";
+              /* the wick, its high and low capped with a dash */
+              const yh = Y(Math.max(...P.ps.map((q) => q.h))),
+                yl = Y(Math.min(...P.ps.map((q) => q.l)));
               g.lineWidth = 1;
-              exp.forEach((e, r) => {
-                const yT = Y((r + 1) * P.step);
-                if (yT > bot || yT + rowH < top) return;
-                for (let k = (P.rows.get(r) || []).length;
-                  k < Math.round(e); k++)
-                  g.strokeRect(cx0 + k * lw + 0.5, yT + 1,
-                    Math.max(1, lw - 2), Math.max(1, rowH - 2));
-              });
-              const dl = new Map(exp);
-              dl.forEach((e, r) => dl.set(r, -Math.round(e)));
-              P.rows.forEach((l, r) =>
-                dl.set(r, (dl.get(r) || 0) + l.length));
-              dl.forEach((v, r) => {
-                const yT = Y((r + 1) * P.step);
-                if (!v || yT > bot || yT + rowH < top) return;
-                g.fillStyle = v > 0 ? "#089981" : "#e53935";
-                g.fillRect(cx0 - 2 - (Math.abs(v) * lw) / 2, yT + 0.5,
-                  (Math.abs(v) * lw) / 2, Math.max(1, rowH - 1));
-              });
-            }
-            /* Perf: the perfect profile's edge, black */
-            if (showPerf)
-              perfLine(P, exp, cx0, (e) => e * lw, "#000");
-            /* around it, an empty 15px square in the last price
-               colour, never tighter than the brick */
-            if (curB) {
-              const s = Math.max(15, Math.max(lw, rowH) + 4);
-              g.strokeStyle = "#434651";
-              g.lineWidth = 3;
-              g.strokeRect(curB[0] - s / 2, curB[1] - s / 2, s, s);
-            }
-            drawPs(P, sp, cx0);
-            /* LC button: a day's candle, open = yesterday's latest
-               vipoc, close = its own, wick = its range; today's is
-               hollow until the day ends */
-            if (showLC && P.ps.length) {
-              const c = vipocs(P).pop(),
-                o = vipocs(dayProf(prevDay(P.dS))).pop();
-              if (c != null && o != null) {
-                const rgb = c >= o ? "8,153,129" : "0,0,0",
-                  y0 = Y(Math.max(o, c)),
-                  h = Math.max(1, Y(Math.min(o, c)) - y0),
-                  xm = cx0 + colW / 2;
-                g.save();
-                g.setLineDash([]);
-                g.lineWidth = 1;
-                g.strokeStyle = `rgba(${rgb},.6)`;
-                g.beginPath();
-                g.moveTo(xm, Y(Math.max(...P.ps.map((q) => q.h))));
-                g.lineTo(xm, Y(Math.min(...P.ps.map((q) => q.l))));
-                g.stroke();
-                if (P.full) {
-                  g.fillStyle = `rgba(${rgb},.22)`;
-                  g.fillRect(cx0, y0, colW, h);
-                }
-                g.strokeRect(cx0, y0, colW, h);
-                g.restore();
-              }
-            }
-            drawYB(P, cx0, rowH);
-          }
-          /*
-           * UD zigzag (ZZ on): the shown days' colours set the
-           * way, the prices set the pivots. Seeking a top (green
-           * days) any day's higher high moves it, a black day's
-           * too; the first black day then starts the bottom
-           * from its low, which any lower low moves, a green
-           * day's too; and so on
-           */
-          if (udZz) {
-            const piv = [];
-            profs.forEach((P) => {
-              if (!P.ud || !P.ps.length) return;
-              const up = P.ud !== "#000",
-                h = Math.max(...P.ps.map((q) => q.h)),
-                l = Math.min(...P.ps.map((q) => q.l)),
-                /* on the profile's own axis, where its bricks
-                   start */
-                x = P.cx0,
-                z = piv[piv.length - 1];
-              if (!z) return piv.push({ up, px: up ? h : l, x });
-              if (z.up ? h > z.px : l < z.px)
-                [z.px, z.x] = [z.up ? h : l, x];
-              if (z.up !== up) piv.push({ up, px: up ? h : l, x });
-            });
-            g.strokeStyle = "#7b1fa2";
-            g.lineWidth = 2.5;
-            g.setLineDash([]);
-            g.beginPath();
-            piv.forEach((q, i) =>
-              i ? g.lineTo(q.x, Y(q.px)) : g.moveTo(q.x, Y(q.px)),
-            );
-            g.stroke();
-            piv.forEach((q) => {
-              g.fillStyle = q.up ? "#089981" : "#000";
               g.beginPath();
-              g.arc(q.x, Y(q.px), 4, 0, 7);
-              g.fill();
-            });
-            g.lineWidth = 1;
-          }
-          /* BZ button: a day's barycentre sets what is looked for
-             next: green the highest point, black the lowest. From
-             its yellow bricks, then any day's high / low moves
-             it, until a barycentre of the other colour. Over
-             every day loaded, whatever the profiles show */
-          const now = dayOf(Date.now()),
-            look = (dS) => {
-                const key = [dS, volFor(dS), ageOrd].join(),
-                  old = dS < now && bzDays.get(key);
-                if (old) return old;
-                const Q = dayProf(dS);
-                if (!Q.ps.length || (!Q.full && dS !== now))
-                  return null;
-                const last = subPocs(
-                    dS,
-                    Q.ps,
-                    volFor(dS) > 0 ? volFor(dS) : Q.step * 10,
-                    Q.step,
-                  )
-                    .map((S) => {
-                      const w = Q.rows.get(
-                        Math.floor(S.px / Q.step),
-                      );
-                      return [
-                        !w ? 99 : ageOrd ? rowAge(w) : Math.min(...w),
-                        S.px,
-                      ];
-                    })
-                    .sort((x, y) => x[0] - y[0])
-                    .map((x) => x[1])
-                    .pop();
-                let sum = 0,
-                  n = 0,
-                  yh = -Infinity,
-                  yl = Infinity;
-                Q.rows.forEach((l, r) =>
-                  l.forEach((i) => {
-                    if (i < 42) return;
-                    sum += (r + 0.5) * Q.step;
-                    n++;
-                    yh = Math.max(yh, (r + 1) * Q.step);
-                    yl = Math.min(yl, r * Q.step);
-                  }),
-                );
-                const o = {
-                  b: n ? sum / n : null,
-                  by:
-                    n && last != null ? (sum / n > last ? 1 : -1) : 0,
-                  yh,
-                  yl,
-                  h: Math.max(...Q.ps.map((q) => q.h)),
-                  l: Math.min(...Q.ps.map((q) => q.l)),
-                };
-                if (dS < now && subPocs(dS, Q.ps,
-                  volFor(dS) > 0 ? volFor(dS) : Q.step * 10,
-                  Q.step).vol) bzDays.set(key, o);
-                return o;
-              };
-          if (showBZ && k15.length) {
-            const piv = [],
-              /* where a day's column is, on screen or not */
-              xOf = (dS) =>
-                x6 +
-                (Math.round((dS - tpoDays[0]) / DAY) - ex + tf) *
-                  (colW + gap);
-            for (let d = dayOf(k15[0].t); d <= now; d += DAY) {
-              if (!volOfDay(d)) continue;
-              const o = look(d);
-              if (!o) continue;
-              const z = piv[piv.length - 1];
-              if (z && (z.up ? o.h > z.px : o.l < z.px))
-                [z.px, z.x] = [z.up ? o.h : o.l, xOf(d)];
-              if (!o.by) continue;
-              const up = o.by > 0;
-              if (!z || z.up !== up)
-                piv.push({
-                  up,
-                  px: up ? o.yh : o.yl,
-                  x: xOf(d) + (colW * 21) / 24,
-                });
-            }
-            g.strokeStyle = "#0277bd";
-            g.lineWidth = 2.5;
-            g.setLineDash([]);
-            g.beginPath();
-            piv.forEach((q, i) =>
-              i ? g.lineTo(q.x, Y(q.px)) : g.moveTo(q.x, Y(q.px)),
-            );
-            g.stroke();
-            piv.forEach((q) => {
-              g.fillStyle = "#0277bd";
-              g.beginPath();
-              g.arc(q.x, Y(q.px), 4, 0, 7);
-              g.fill();
-            });
-            g.lineWidth = 1;
-          }
-          /* swing zigzag over the days' POCs; dashed = open */
-          const zs = swings(zp),
-            /* a leg ending past the swing before it of the same
-               kind (a new high or a new low): green / red, else
-               golden */
-            legCol = (from, to, prev) =>
-              prev && to.p > from.p && to.p > prev.p
-                ? "#089981"
-                : prev && to.p < from.p && to.p < prev.p
-                  ? "#e53935"
-                  : "rgba(230,159,0,.9)";
-          g.lineWidth = 3.5;
-          g.lineJoin = "round";
-          g.lineCap = "round";
-          zs.forEach(({ q }, i) => {
-            if (!i || !showIZ) return;
-            g.strokeStyle = legCol(
-              zs[i - 1].q,
-              q,
-              i > 1 && zs[i - 2].q,
-            );
-            g.beginPath();
-            g.moveTo(zs[i - 1].q.zx, zs[i - 1].q.y);
-            g.lineTo(q.zx, q.y);
-            g.stroke();
-          });
-          /* nested zigzags (see nests), thinner per level */
-          (showIZ ? nests(zp, 4).slice(1) : []).forEach((z0, k) => {
-            g.lineWidth = 2 * 0.7 ** k;
-            z0.forEach(({ q }, i) => {
-              if (!i) return;
-              g.strokeStyle = legCol(
-                z0[i - 1].q,
-                q,
-                i > 1 && z0[i - 2].q,
-              );
-              g.beginPath();
-              g.moveTo(z0[i - 1].q.zx, z0[i - 1].q.y);
-              g.lineTo(q.zx, q.y);
+              g.moveTo(cx0 - 1, yh);
+              g.lineTo(cx0 - 1, yl);
               g.stroke();
+              g.lineWidth = 2;
+              g.beginPath();
+              g.moveTo(cx0 - 7, yh);
+              g.lineTo(cx0 + 5, yh);
+              g.moveTo(cx0 - 7, yl);
+              g.lineTo(cx0 + 5, yl);
+              g.stroke();
+              const yo = Y(Math.max(o, c)),
+                yc = Y(Math.min(o, c));
+              if (o != null)
+                g.fillRect(cx0 - 4, yo, 6, Math.max(1, yc - yo));
+            }
+            /* the delta's normal curve, left of the axis */
+            const dc = dCurve(P, vw, sp, kv, vf, exp);
+            perfLine(P, dc, cx0 - 2, (e) => (-e * kv * vs) / 2,
+              "#000");
+            /* its P's: a black line to the curve; age = the
+               average period of the row's bricks */
+            const ag = (X) => {
+              const w = P.rows.get(Math.floor(X.px / P.step));
+              return w && w.length ? rowAge(w) : 99;
+            };
+            (dc.ps || []).forEach((Q, k) => {
+              const y = Y(Q.px);
+              g.strokeStyle = "#000";
+              g.lineWidth = 2;
+              g.setLineDash([[], [8, 4], [3, 3]][k]);
+              g.beginPath();
+              /* to the delta's curve */
+              g.moveTo(cx0 - 2, y);
+              g.lineTo(cx0 - 2 - ((dc.get(Math.floor(Q.px /
+                P.step)) || 0) * kv * vs) / 2, y);
+              g.stroke();
+              g.setLineDash([]);
             });
-          });
-          /* zo = where the open leg ends */
-          let zo = null;
-          if (zs.length && zp.length - 1 > zs[zs.length - 1].i) {
-            /* the open leg runs to the extreme since the last
-               pivot: highest after a low, lowest after a high */
-            const L = zs[zs.length - 1],
-              a = L.q,
-              hiNext = L.up !== true,
-              z = zp
-                .slice(L.i + 1)
-                .reduce((m, q) =>
-                  hiNext ? (q.p >= m.p ? q : m) : q.p <= m.p ? q : m,
-                );
-            g.setLineDash([6, 5]);
-            g.lineWidth = 2;
-            g.strokeStyle = legCol(
-              a,
-              z,
-              zs.length > 1 && zs[zs.length - 2].q,
-            );
-            g.beginPath();
-            g.moveTo(a.zx, a.y);
-            g.lineTo(z.zx, z.y);
-            if (showIZ) g.stroke();
-            g.setLineDash([]);
-            zo = z;
+            /* each bell's middle: P's right, D's left */
+            const wx = (m, X) =>
+              (m.get(Math.floor(X.px / P.step)) || 0) * kv * vs;
+            sp.forEach((S) =>
+              rk.push([ag(S), cx0 + wx(exp, S) / 2, S.px, 0, S,
+                1]));
+            (dc.ps || []).forEach((Q) =>
+              rk.push([ag(Q), cx0 - 2 - wx(dc, Q) / 4, Q.px, 0, 0,
+                -1]));
+            /* by age; each one's move vs the one before (1: the
+               day before's last bell, else its last vipoc): its
+               number's colour and, for a P, its BF lead side */
+            let q0 = rkEnd.has(prevDay(P.dS))
+              ? rkEnd.get(prevDay(P.dS))
+              : vipocs(dayProf(prevDay(P.dS))).pop();
+            rk.sort((a, b) => a[0] - b[0]).forEach((e) => {
+              e[3] = q0 == null ? 0 : e[2] >= q0 ? 1 : -1;
+              q0 = e[2];
+            });
+            const dm = new Map(rk.filter((e) => e[4])
+              .map((e) => [e[4], e[3]]));
+            /* each bell shaded as its number, very light: a row
+               goes to its nearest P (right) / D (left) */
+            const shade = (sd, m, x0, wf) => {
+              const bs = rk.filter((e) => e[5] === sd);
+              if (bs.length) m.forEach((v, r) => {
+                const c = (r + 0.5) * P.step,
+                  b = bs.reduce((a, e) => Math.abs(e[2] - c) <
+                    Math.abs(a[2] - c) ? e : a),
+                  w = wf(v),
+                  yT = Y((r + 1) * P.step);
+                if (Math.abs(w) < 0.5 || !b[3]) return;
+                g.fillStyle = b[3] > 0 ? "rgba(8,153,129,.12)"
+                  : "rgba(229,57,53,.12)";
+                g.fillRect(Math.min(x0, x0 + w), yT, Math.abs(w),
+                  Y(r * P.step) - yT);
+              });
+            };
+            shade(1, exp, cx0, (v) => v * kv * vs);
+            shade(-1, dc, cx0 - 2, (v) => (-v * kv * vs) / 2);
+            /* what a row lacks vs the curve (negative delta),
+               the black curve filled from its volume, in its
+               nearest P's number colour (black: soft black) */
+            const bp = rk.filter((e) => e[5] === 1);
+            exp.forEach((e, r) => {
+              const x0 = cx0 + (vw.rw.get(r) || 0) * vs,
+                yT = Y((r + 1) * P.step),
+                c = (r + 0.5) * P.step,
+                b = bp.length && bp.reduce((a, q) =>
+                  Math.abs(q[2] - c) < Math.abs(a[2] - c)
+                    ? q : a);
+              if (cX(r) - x0 < 0.25 || yT > bot ||
+                yT + rowH < top)
+                return;
+              g.fillStyle = !b || !b[3] ? "rgba(67,70,81,.45)"
+                : b[3] > 0 ? "rgba(8,153,129,.6)"
+                  : "rgba(229,57,53,.6)";
+              g.fillRect(x0, yT + 0.5, cX(r) - x0,
+                Math.max(1, rowH - 1));
+            });
+            /* BF: the lead wing's empty part, from its closed
+               volume to the curve, dark blue, over the other
+               fills */
+            const bf = bellFill(P, sp, vw, kv, vf, dm);
+            g.fillStyle = "rgba(13,71,161,.85)";
+            bf.ps.forEach((F) => F.lead.forEach((r) => {
+              const x0 = cx0 + (bf.rw.get(r) || 0) * vs,
+                yT = Y((r + 1) * P.step);
+              if (cX(r) - x0 > 0.5)
+                g.fillRect(x0, yT + 0.5, cX(r) - x0,
+                  Math.max(1, rowH - 1));
+            }));
+            perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
+            /* its vipocs: black lines to the curve */
+            drawPs(P, sp, cx0, (S) => cX(Math.floor(S.px / P.step)));
+            /* P's and D's ranked by age together, 1 = oldest, in
+               the middle of each bell; green above the one before
+               (1: the day before's last), red below */
+            g.save();
+            g.font = "bold 12px ui-monospace,Menlo,monospace";
+            g.textAlign = "center";
+            g.textBaseline = "middle";
+            g.strokeStyle = "#fff";
+            g.lineWidth = 3;
+            rk.forEach(([, x, px, mv], i) => {
+              g.fillStyle = !mv ? "#000"
+                : mv > 0 ? "#089981" : "#e53935";
+              g.strokeText(i + 1, x, Y(px));
+              g.fillText(i + 1, x, Y(px));
+            });
+            if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
+            g.restore();
           }
           g.restore();
-          /* POC bands from both ends of the last solid leg, the
-             open leg's end, and every P1 / P2 / P3 of yesterday
-             and today, right across DPoc and the chart, price
-             tagged; each in its POC's colour (green above the
-             POC before it, black below) */
-          const today0 = dayOf(Date.now());
-          (!pocBand ? [] : [
-            ...new Set(
-              (zs.length > 1 ? zs.slice(-2).map(({ q }) => q) : [])
-                .concat(zo ? [zo] : [])
-                .concat(
-                  zp.filter(
-                    (z) =>
-                      z.ds === today0 || z.ds === prevDay(today0),
-                  ),
-                ),
-            ),
-          ]).forEach((q) => {
-              if (q.y < top || q.y > bot) return;
-              const pv = zPrev.get(q.ds + "|" + q.p),
-                rc =
-                  pv == null
-                    ? "#003366"
-                    : q.p < pv
-                      ? "#000"
-                      : "#089981";
-              g.save();
-              g.beginPath();
-              g.rect(0, top, px0, bot - top);
-              g.clip();
-              /*
-               * a band 3 bricks tall (no line), so it reads as a
-               * POC, not a drawing: the outer bricks faint in its
-               * colour, the middle one as the profile shows the
-               * POC row (its latest brick: St colour once
-               * closed, else its time colour)
-               */
-              const P = dayProf(q.ds),
-                bs = P.step,
-                xa = Math.max(0, q.x),
-                band = (a, b, col) => {
-                  const y1 = Y(q.p + a * bs);
-                  g.fillStyle = col;
-                  g.fillRect(xa, y1, px0 - xa, Y(q.p + b * bs) - y1);
-                },
-                row = P.rows.get(Math.floor(q.p / bs)) || [],
-                li = row.length ? Math.max(...row) : null,
-                done =
-                  li != null &&
-                  q.ds + (li + 1) * TPO_MS <= Date.now(),
-                m = stCol && done ? stFor(q.ds, li) : null,
-                mid =
-                  li == null
-                    ? SGREY
-                    : m
-                      ? m.get(Math.floor(q.p / m.step)) || SGREY
-                      : tpoColor(li, 0.45),
-                out =
-                  rc === "#000"
-                    ? "rgba(0,0,0,.12)"
-                    : rc === "#089981"
-                      ? "rgba(8,153,129,.18)"
-                      : "rgba(0,51,102,.14)";
-              band(1.5, 0.5, out);
-              band(-0.5, -1.5, out);
-              band(0.5, -0.5, mid);
-              g.restore();
-              ptag(q.y, q.p.toFixed(DP), rc);
-            });
           /*
            * 15m history needed: three days before the oldest
            * day on the chart (its previous day, plus the two
@@ -5187,9 +4602,10 @@
             });
           if (segs.length) segs[segs.length - 1].xb = px0;
           /*
-           * HL off: one fixed ladder for every day, from the
-           * latest day's reference (yesterday's POC); HL on:
-           * each day from its own day before's POC
+           * Vol ladder, one for every day: 0 = the latest day's
+           * reference, purple, then a dashed step every vol,
+           * +1, -1, +2...; the last day's run across the VP and
+           * are written in the axis
            */
           const zDay = segs.length
               ? prevDay(segs[segs.length - 1].dS)
@@ -5203,186 +4619,39 @@
               : zR && zR.poc != null && zR.full
                 ? (zR.poc + 0.5) * zR.step
                 : null;
-          segs.forEach((sg, i) => {
-            const R = dayProf(prevDay(sg.dS));
-            if (R.poc == null || !R.full) return;
-            const pRgb = pocRgb(prevDay(sg.dS)),
-              pCol = "rgb(" + pRgb + ")";
-            /*
-             * the last day on the chart also runs its POC band
-             * and vol lines across the TPO profiles, and is the
-             * one whose prices are written in the axis
-             */
-            const last = i === segs.length - 1,
-              own = [sg.xa, sg.xb],
-              spans = last ? [[0, x0 - 5], own] : [own],
-              pT = (R.poc + 1) * R.step,
-              pB = R.poc * R.step,
-              pc = (pT + pB) / 2,
-              vah = (R.b + 1) * R.step,
-              val = R.a * R.step,
-              fx = zFix != null,
-              z0 = fx ? zFix : pc,
-              v = volN,
-              /* kS thins the ladder below 16px spacing */
-              kS = Math.max(
-                1,
-                Math.ceil(16 / ((v * ch) / (hi - lo))),
-              ),
-              inK = (k) =>
-                k < 5000 && (z0 + k * v <= hi || z0 - k * v >= lo);
+          if (volN > 0 && zFix != null) {
+            /* kS thins the ladder below 16px spacing */
+            const v = volN,
+              kS = Math.max(1,
+                Math.ceil(16 / ((v * ch) / (hi - lo)))),
+              lv = [[zFix, "0", "#8e44ad"]];
+            for (let k = kS; k < 5000 &&
+              (zFix + k * v <= hi || zFix - k * v >= lo); k += kS)
+              lv.push([zFix + k * v, "+" + k, "#000000"],
+                [zFix - k * v, "−" + k, "#000000"]);
             g.save();
             g.beginPath();
             g.rect(0, top, px0, bot - top);
             g.clip();
-            /* value area: light blue, chart only */
-            g.fillStyle = "rgba(47,128,200,.25)";
-            if (showVA)
-              g.fillRect(
-                sg.xa,
-                Y(vah),
-                sg.xb - sg.xa,
-                Y(val) - Y(vah),
-              );
-            /* POC: a band 3 TPO rows tall (the POC row and one
-               each side), coloured by pocRgb */
-            g.fillStyle = "rgba(" + pRgb + ",.3)";
-            (showPOC ? spans : []).forEach(([xa, xb]) =>
-              g.fillRect(
-                xa,
-                Y(pT + R.step),
-                xb - xa,
-                Y(pB - R.step) - Y(pT + R.step),
-              ),
-            );
-            /* a finished day also shows its own POC over its
-               own candles, solid; carried to the next day it is
-               shaded, so each POC covers its day and the next */
-            const Q = dayProf(sg.dS),
-              done = sg.dS < dayOf(arr[arr.length - 1].t);
-            if (showPOC && done && Q.poc != null && Q.full) {
-              const qT = Y((Q.poc + 2) * Q.step);
-              g.fillStyle = "rgb(" + pocRgb(sg.dS) + ")";
-              g.fillRect(
-                sg.xa,
-                qT,
-                sg.xb - sg.xa,
-                Y((Q.poc - 1) * Q.step) - qT,
-              );
-            }
-            /* today: the developing POC, gold, stepping as it
-               moved through the day */
-            const devP = [];
-            if (!done && Q.dev.length)
-              geo.forEach((o) => {
-                if (dayOf(o.c.t) !== sg.dS) return;
-                let k = Math.floor((o.c.t - sg.dS) / TPO_MS);
-                while (k > 0 && Q.dev[k] == null) k--;
-                const p = Q.dev[k],
-                  r = devP[devP.length - 1];
-                if (p == null) return;
-                if (r && r.p === p) r.xb = o.x + o.w;
-                else devP.push({ p, xa: o.x, xb: o.x + o.w });
-              });
-            if (devP.length) devP[devP.length - 1].xb = sg.xb;
-            g.fillStyle = "rgba(212,160,23,.55)";
-            (showPOC ? devP : []).forEach(({ p, xa, xb }) =>
-              g.fillRect(
-                xa,
-                Y((p + 2) * Q.step),
-                xb - xa,
-                Y((p - 1) * Q.step) - Y((p + 2) * Q.step),
-              ),
-            );
+            segs.forEach((sg, i) => {
+              (i === segs.length - 1 ? [[0, x0 - 5], [sg.xa, sg.xb]]
+                : [[sg.xa, sg.xb]]).forEach(([xa, xb]) =>
+                lv.forEach(([p, , col]) =>
+                  hseg(p, xa, xb, col === "#000000"
+                    ? "rgba(0,0,0,.5)" : col, [3, 3], 1)));
+            });
             g.restore();
-            /*
-             * Vol ladder. It starts on the previous day's
-             * POC: solid navy zero, then a dashed step every
-             * 1x, 2x, 3x... With the HL button the reference
-             * can move. The day's running high and low are
-             * both followed: a close more than 2 steps below
-             * the high makes that high the reference (black,
-             * steps going down), a close more than 2 steps
-             * above the low makes that low the reference
-             * (green, steps going up), whichever comes first.
-             * After that only the other side is followed,
-             * counted from that candle, and they alternate.
-             * ref = the high / low in use (null = the POC),
-             * up = side followed (null = both), runs =
-             * stretches of the day with one reference.
-             */
-            const lv = ({ ref, refUp }) => {
-              const a = [];
-              if (ref == null) {
-                a.push([z0, "0", "#8e44ad", 1]); /* purple zero */
-                for (let k = kS; inK(k); k += kS)
-                  a.push(
-                    [z0 + k * v, "+" + k, "#000000"],
-                    [z0 - k * v, "−" + k, "#000000"],
-                  );
-                return a;
-              }
-              const s = refUp ? -1 : 1,
-                n = refUp ? "H−" : "L+",
-                col = refUp ? "#000000" : "#089981",
-                at = (k) => ref + s * k * v,
-                inV = (p) => (refUp ? p >= lo : p <= hi);
-              /* 4th value: solid line, on even steps */
-              for (let k = 0; k < 5000 && inV(at(k)); k += kS)
-                a.push([at(k), k ? n + k : n[0], col, k % 2 === 0]);
-              return a;
-            };
-            const runs = [{ ref: null, xa: sg.xa, xb: sg.xb }];
-            /* last day: its latest levels cross the TPO area */
-            const end = runs[runs.length - 1],
-              tpoRun = Object.assign({}, end, { xa: 0, xb: x0 - 5 });
-            if (volN > 0)
-              (last ? [tpoRun].concat(runs) : runs).forEach((r) =>
-                /* "0": no line under the POC band, dashed when
-                   the band is off */
-                lv(r).forEach(([p, t, col, solid]) =>
-                  t === "0" && showPOC ? 0 : hseg(
-                    p,
-                    r.xa,
-                    r.xb,
-                    col === "#000000" ? "rgba(0,0,0,.5)" : col,
-                    solid && t !== "0" ? [] : [3, 3],
-                    t.length > 1 || t === "0" ? 1 : 1.5,
-                  ),
-                ),
-              );
-            if (!last) return;
-            /* prices in the axis column, on white patches */
-            const tag = (p, col) => {
+            /* the latest day's steps, named and in the axis */
+            g.textAlign = "right";
+            g.textBaseline = "middle";
+            lv.forEach(([p, t, col]) => {
               const y = Y(p);
-              if (y >= top && y <= bot)
-                ptag(y, p.toFixed(DP), "#fff", col);
-            };
-            if (showPOC) tag(pc, pCol);
-            /* developing POC price, mid-brick */
-            if (showPOC && devP.length) {
-              const dp = devP[devP.length - 1].p;
-              tag((dp + 0.5) * Q.step, "#b8860b");
-            }
-            if (showVA) {
-              tag(vah, "#2f80c8");
-              tag(val, "#2f80c8");
-            }
-            if (volN > 0) {
-              const name = (p, t, col) => {
-                const y = Y(p);
-                if (y < top || y > bot) return;
-                g.fillStyle = col;
-                g.textAlign = "right";
-                g.textBaseline = "middle";
-                g.fillText(t, px0 - 4, y - 7);
-              };
-              lv(end).forEach(([p, t, col]) => {
-                name(p, t, col);
-                tag(p, col);
-              });
-            }
-          });
+              if (y < top || y > bot) return;
+              g.fillStyle = col;
+              g.fillText(t, px0 - 4, y - 7);
+              ptag(y, p.toFixed(DP), "#fff", col);
+            });
+          }
 
           /*
            * POC candles (PC button), over every loaded day.
