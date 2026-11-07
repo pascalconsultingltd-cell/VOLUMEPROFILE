@@ -428,7 +428,7 @@
               </button>
               <button
                 id="ybTog"
-                class="a"
+                class=""
                 title="Yellow bricks' barycentre vs the latest vipoc"
               >
                 YB
@@ -1293,7 +1293,7 @@
         $("vapTog").className = showVap ? "a" : "";
         schedule();
       }
-      let showYB = true;
+      let showYB = false;
       function setShowYB(v) {
         showYB = !!v;
         $("ybTog").className = showYB ? "a" : "";
@@ -3567,6 +3567,8 @@
         }
         function drawInner() {
           g.clearRect(0, 0, W, H);
+          /* VP age ranks per day [px, move, number], for the PF */
+          const rkDays = new Map();
           const arr = mode === "lb" ? lbBars(src()) : src();
           arrLen = arr.length;
           /*
@@ -4037,10 +4039,14 @@
           };
           /* the TPO profiles drawn at the left of the chart */
           /* 62px kept clear on the right for the last price tag */
-          const colW = Math.max(
+          /* DT: room on the left for the first day's delta bell
+             (0.35 of a column), x6 = the first column's axis */
+          const lmK = showDt && showVw ? 0.35 : 0,
+            colW = Math.max(
               1,
-              (tpoW - 6 - 62 - (nTpo - 1) * gap) / nTpo,
+              (tpoW - 6 - 62 - (nTpo - 1) * gap) / (nTpo + lmK),
             ),
+            x6 = 6 + lmK * colW,
             cnt = cfg.tpo && tpoW > 0 ? nTpo : 0;
           profs = [];
           /* tb whole days back, tf = the slide in between; one
@@ -4105,7 +4111,7 @@
               zCache.set(key, zc);
             }
             const d = cnt + ex - 1 - Math.round((lastD - dS) / DAY),
-              cx0 = 6 + (d - ex + tf) * (colW + gap);
+              cx0 = x6 + (d - ex + tf) * (colW + gap);
             zc.forEach((z) =>
               zp.push({
                 x: cx0 + (z.n - 0.5) * Math.min(11, (colW - 2) / z.m),
@@ -4299,10 +4305,8 @@
               if (vpC.size > 500) vpC.clear();
               vpC.set(pk, volPoc(pz, vf, step, pp));
             }
-            /* tp: the latest TPO P (time), for PF's orange line */
             const T = byAge({ rows, step }, sps).pop(),
               S = (pz && vpC.get(pk)) || T;
-            if (T) m.tp = (Math.floor(T.px / step) + 0.5) * step;
             if (pz && S && (!hp || hp.t < tp))
               volHys.set(dS, { t: tp, px: S.px });
             if (S) {
@@ -4636,7 +4640,7 @@
           const rkEnd = new Map();
           for (let d = 0; d < cnt + ex; d++) {
             const Q = dayProf(tpoDays[d]),
-              cx0 = 6 + (d - ex + tf) * (colW + gap),
+              cx0 = x6 + (d - ex + tf) * (colW + gap),
               rowH = (ch * Q.step) / (hi - lo),
               lw = Math.min(11, (colW - 2) / Q.maxC),
               P = Object.assign(
@@ -5005,6 +5009,7 @@
                 g.fillText(i + 1, x, Y(px));
               });
               if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
+              rkDays.set(P.dS, rk.map((e, i) => [e[2], e[3], i + 1]));
               g.restore();
               continue;
             }
@@ -5177,7 +5182,7 @@
             const piv = [],
               /* where a day's column is, on screen or not */
               xOf = (dS) =>
-                6 +
+                x6 +
                 (Math.round((dS - tpoDays[0]) / DAY) - ex + tf) *
                   (colW + gap);
             for (let d = dayOf(k15[0].t); d <= now; d += DAY) {
@@ -6418,7 +6423,7 @@
                     ...m.ic.slice(3)],
                   /* no zone in an excursion */
                   !bd[k0 + k][3] && m.gl, m.sh, bd[k0 + k][2],
-                  bd[k0 + k][4], m.tp];
+                  bd[k0 + k][4]];
               });
               g.fillStyle = "rgba(41,98,255,.07)";
               pts.forEach((q) => q && g.fillRect(q[0] - sl / 2,
@@ -6450,20 +6455,32 @@
                 });
                 g.stroke();
               });
-              /* TPO P (time): orange, as the vipoc's line */
-              g.strokeStyle = "#ff6d00";
-              g.lineWidth = 2;
-              g.beginPath();
-              let on = false;
-              pts.forEach((q) => {
-                if (!q || q[5] || q[6] == null) on = false;
-                if (!q || q[6] == null) return;
-                const y = Y(q[6]);
-                g[on ? "lineTo" : "moveTo"](q[0] - sl / 2, y);
-                g.lineTo(q[0] + sl / 2, y);
-                on = true;
-              });
-              g.stroke();
+              /* the 2 latest VP age ranks (today's, else with the
+                 day before's last): a level across the PF each,
+                 green / red as their number (as they are now) */
+              const td = dayOf(Date.now());
+              g.font = "bold 12px ui-monospace,Menlo,monospace";
+              g.textAlign = "right";
+              g.textBaseline = "middle";
+              [...(rkDays.get(prevDay(td)) || []),
+                ...(rkDays.get(td) || [])].slice(-2)
+                .forEach(([px, mv, n]) => {
+                  const col = !mv ? "#000"
+                      : mv > 0 ? "#089981" : "#e53935",
+                    y = Y(px);
+                  g.strokeStyle = col;
+                  g.lineWidth = 2;
+                  g.beginPath();
+                  g.moveTo(pa, y);
+                  g.lineTo(pa + pcW, y);
+                  g.stroke();
+                  g.strokeStyle = "#fff";
+                  g.lineWidth = 3;
+                  g.strokeText(n, pa + pcW - 4, y - 9);
+                  g.fillStyle = col;
+                  g.fillText(n, pa + pcW - 4, y - 9);
+                });
+              g.textBaseline = "alphabetic";
               g.lineWidth = 1;
               /* green zone (with Gap), 3 bricks: green above the
                  vipoc, red below */
@@ -6572,11 +6589,12 @@
             });
           /*
            * circles: green below bullish bars, black above
-           * bearish bars; the 15s window gets its own
+           * bearish bars; the 15s window gets its own; none in
+           * HA (it shows only the big candles already)
            */
           geo.forEach((o) => {
             const f = bigs.get(o.c);
-            if (!f || side) return;
+            if (!f || side || ha) return;
             const c = o.c;
             if (c.c === c.o) return;
             const bull = c.c > c.o,
@@ -8922,7 +8940,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 37;
+      const DEFAULTS_VER = 38;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -9069,7 +9087,9 @@
         /* BZ: off by default from 37 */
         if (st.dv >= 37 && typeof st.showBZ === "boolean")
           setShowBZ(st.showBZ);
-        if (typeof st.showYB === "boolean") setShowYB(st.showYB);
+        /* YB off by default from 38 */
+        if (st.dv >= 38 && typeof st.showYB === "boolean")
+          setShowYB(st.showYB);
         if (st.dv >= 27 && typeof st.showVap === "boolean")
           setShowVap(st.showVap);
         /* NC off by default from 36 */
