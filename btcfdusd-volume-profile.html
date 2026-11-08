@@ -4735,7 +4735,7 @@
             /* a bell not out of its curve yet (no start): thin
                light grey from its birth, "wait"; D = a DT bell */
             scores.forEach((b) => {
-              const y = Y(b.px),
+              const y = Y(b.fin && b.xpx != null ? b.xpx : b.px),
                 w = b.start == null;
               if ((!w && b.end < tF) || y < top || y > bot) return;
               const a = geoAt(w ? b.birth : b.start),
@@ -4749,7 +4749,7 @@
                 d = b.kind === "D" ? "D " : "";
               g.strokeStyle = g.fillStyle = col;
               g.lineWidth = w ? 1 : 2;
-              /* over: only its circle, no line */
+              /* over: only its diamond, no line */
               if (!b.fin) {
                 g.setLineDash(w ? [2, 3] : [5, 3]);
                 g.beginPath();
@@ -4760,14 +4760,16 @@
               }
               const tx = d + (w ? "wait"
                 : v == null ? "" : f(v) + " #1 " + f(b.n1));
-              /* over: a circle at its end, the score before it */
+              /* over: only a diamond (HA has circles) where it
+                 ended, at the price then (the next bell's exit) */
               if (b.fin && v != null) {
                 g.beginPath();
-                g.arc(xe, y, 4, 0, 2 * Math.PI);
+                g.moveTo(xe, y - 5);
+                g.lineTo(xe + 4, y);
+                g.lineTo(xe, y + 5);
+                g.lineTo(xe - 4, y);
+                g.closePath();
                 g.fill();
-                g.textAlign = "right";
-                g.fillText(tx, xe - 6, y - 2);
-                g.textAlign = "left";
               } else if (tx) g.fillText(tx, xs + 2, y - 2);
             });
             g.restore();
