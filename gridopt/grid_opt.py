@@ -24,7 +24,7 @@ Rolling: each bell from the R-th on, with the N best shapes of the R bells befor
 it (no look ahead): #1 alone, and the N averaged.
 
 Usage: python grid_opt.py [bells.json] [--top 5] [--free] [--max-step 0.5]
-       [--min-sells 2] [--max-first 1] [--sizes flat] [--roll 10] [--roll-top 10]
+       [--min-sells 2] [--max-first 1] [--min-first 0] [--sizes flat] [--roll 10] [--roll-top 10]
 """
 import io, json, sys, zipfile, datetime as dt
 from pathlib import Path
@@ -41,7 +41,7 @@ DAY = 86_400_000
 # constraints (see the docstring); set from the command line in main()
 STOP = [None]  # --stop X: live exit, X sigma out of the curve ("next": none)
 PAGE = ["results.html"]  # --free writes results_free.html
-CON = dict(max_step=0.5, min_sells=2, max_first=1.0, sizes=["flat"])
+CON = dict(max_step=0.5, min_sells=2, max_first=1.0, min_first=-99, sizes=["flat"])
 
 
 def day_secs(day):
@@ -198,7 +198,8 @@ def optimise(b, a, top=5):
                 s = st * sg
                 levels = np.arange(B + s, T + 1e-9, s)  # sells; their buy back is one step lower
                 if (len(levels) < max(1, CON["min_sells"]) or st > CON["max_step"]
-                        or (levels[0] - P) / sg > CON["max_first"] + 1e-9):
+                        or (levels[0] - P) / sg > CON["max_first"] + 1e-9
+                        or (levels[0] - P) / sg < CON["min_first"] - 1e-9):
                     continue
                 for al in CON["sizes"] if len(levels) > 1 else ["flat"]:  # one level: sizing is moot
                     pnl, dd, tr, op = simulate(levels, weights(len(levels), al), s, pa, mins, mhi)
@@ -235,6 +236,7 @@ def main():
     CON.update(max_step=opt("--max-step", float, CON["max_step"]),
                min_sells=opt("--min-sells", int, CON["min_sells"]),
                max_first=opt("--max-first", float, CON["max_first"]),
+               min_first=opt("--min-first", float, CON["min_first"]),
                sizes=opt("--sizes", lambda x: x.split(","), CON["sizes"]))
     print("constraints:", CON)
     path = Path(next((x for x in args if x.endswith(".json")), HERE / "bells.json"))
