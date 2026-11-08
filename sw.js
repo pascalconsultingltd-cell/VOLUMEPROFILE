@@ -5,7 +5,7 @@
  * the saved copy is used when the phone is offline.
  * Binance requests are never touched.
  */
-const CACHE = "btcfdusd-app-v1";
+const CACHE = "btcfdusd-app-v2";
 const SHELL = [
   "./btcfdusd-volume-profile.html",
   "./manifest.webmanifest",
@@ -48,7 +48,8 @@ self.addEventListener("fetch", (e) => {
   /* the orders and vol files are local: never cached */
   if (/\/(orders|vol)\.js$/.test(u.pathname)) return;
   e.respondWith(
-    fetch(e.request)
+    /* revalidate: never an HTTP-cached old version */
+    fetch(e.request, { cache: "no-cache" })
       .then((r) => {
         if (r.ok) {
           const copy = r.clone();
