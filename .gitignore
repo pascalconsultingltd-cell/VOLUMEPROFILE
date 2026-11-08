@@ -8,3 +8,8 @@ grid2.js
 grid2.js.tmp
 grid3.js
 grid3.js.tmp
+
+# grid optimiser data cache
+gridopt/data/
+.claude/
+gridopt/results.json
