@@ -174,9 +174,17 @@ def optimise(b, a, top=5):
                     pnl, dd, tr, op = simulate(levels, weights(len(levels), al), s, pa, mins, mhi)
                     res.append(dict(B=round((B - P) / sg, 2), T=round((T - P) / sg, 2), step=st, alloc=al,
                                     lv=len(levels), trips=tr, open=op, pnl=round(pnl, 2), dd=round(dd, 2),
-                                    romad=round(pnl / max(dd, DD_FLOOR), 2)))
+                                    romad=round(pnl / max(dd, DD_FLOOR), 2), bp=B, tp=T))
     res.sort(key=lambda r: -r["romad"])
-    return res[:top], res
+    # the best grid's levels and fills, and the window by the minute, for the page
+    r, s = res[0], res[0]["step"] * sg
+    lv = np.arange(r["bp"] + s, r["tp"] + 1e-9, s)
+    t = a[:, 0]
+    fills = [[float(t[i]), float(L), None if j is None else float(t[j]), float(L - s)]
+             for L in lv for i, j in pa.trips(L, s)]
+    path = [[float(t[i]), float(mhi[k]), float(np.min(a[i:(mins[k + 1] if k + 1 < len(mins) else len(a)), 2])),
+             float(a[(mins[k + 1] if k + 1 < len(mins) else len(a)) - 1, 3])] for k, i in enumerate(mins)]
+    return res[:top], res, dict(levels=[float(L) for L in lv], step=float(s), fills=fills, path=path)
 
 
 def main():
@@ -196,11 +204,11 @@ def main():
             continue
         a = a[:e]
         hrs = (a[-1, 0] - a[0, 0]) / 3.6e6
-        best, allr = optimise(b, a, top)
+        best, allr, show = optimise(b, a, top)
         print(f"\n{tag}  window {hrs:.1f}h  range {b['lo']}-{b['hi']}  grids {len(allr)}")
         for r in best:
-            print("  ", r)
-        out.append(dict(bell=b, hours=round(hrs, 2), best=best, all=allr))
+            print("  ", {k: v for k, v in r.items() if k not in ("bp", "tp")})
+        out.append(dict(bell=b, hours=round(hrs, 2), end=float(a[-1, 0]), best=best, all=allr, show=show))
     (HERE / "results.json").write_text(json.dumps(out))
     # the same sell levels in sigma units (first one to 0.25 sigma, step, count)
     # over every bell
@@ -221,6 +229,20 @@ def main():
               f"  RoMaD {np.mean([r['romad'] for r in v]):.2f}"
               f"  PnL {sum(r['pnl'] for r in v):.1f}  DD {max(r['dd'] for r in v):.1f}"
               f"  won {sum(r['pnl'] > 0 for r in v)}/{len(v)}")
+    summary = [dict(first=L1, step=st, lv=nl, alloc=al, romad=round(float(np.mean([r["romad"] for r in v])), 2),
+                    pnl=round(sum(r["pnl"] for r in v), 1), dd=round(max(r["dd"] for r in v), 1),
+                    won=int(sum(r["pnl"] > 0 for r in v)), n=len(v)) for (L1, st, nl, al), v in rows[:15]]
+    page(out, summary)
+
+
+def page(out, summary):
+    """results.html: settings, best grids over all bells, a card per bell."""
+    cards = [dict(bell=o["bell"], hours=o["hours"], end=o["end"], show=o["show"],
+                  best=[{k: v for k, v in r.items() if k not in ("bp", "tp")} for r in o["best"]]) for o in out]
+    data = json.dumps(dict(cards=cards, summary=summary, cap=CAP,
+                           made=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")))
+    (HERE / "results.html").write_text((HERE / "page.html").read_text().replace("/*DATA*/null", data))
+    print(f"\nresults.html written ({len(cards)} bells)")
 
 
 if __name__ == "__main__":
