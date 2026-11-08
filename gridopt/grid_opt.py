@@ -245,11 +245,23 @@ def main():
     bells = [b for b in bells if all(abs(b["px"] - px0(b["birth"])) <= abs(o["px"] - px0(b["birth"]))
                                      for o in bells if o["birth"] == b["birth"] and o is not b)]
     now = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
+    if "--at-exit" in args:  # each grid starts at its bell's first close out of the curve
+        PAGE[0] = PAGE[0].replace(".html", "_atexit" + "_down" * ("--down-only" in args) + ".html")
+        for b in bells:
+            t, b["start"] = b["birth"], None
+            while t < now and b["start"] is None:
+                a = secs(t, min(t + DAY, now))
+                o = np.flatnonzero((a[:, 3] > b["hi"]) | (a[:, 3] < b["lo"])) if len(a) else []
+                if len(o): b["start"], b["up"] = float(a[o[0], 0]) + 1000, bool(a[o[0], 3] > b["hi"])
+                t += DAY
+        bells = sorted([dict(b, born=b["birth"], birth=b["start"]) for b in bells if b["start"]], key=lambda x: x["birth"])
     out = []
     for k, b in enumerate(bells):
         nxt = bells[k + 1]["birth"] if k + 1 < len(bells) else None
         a = secs(b["birth"], nxt or now)
         e = window(b, nxt, a)
+        if "--down-only" in args and b.get("up"):
+            continue  # an up exit ends the grid before it, no grid of its own
         tag = f'{b["day"]} P{b["n"]} {b["px"]:.0f} ({"green" if b["mv"] > 0 else "red" if b["mv"] < 0 else "black"})'
         if e is None:
             print(f"{tag}: still inside its bell, skipped")
@@ -394,7 +406,7 @@ def page(out, summary, loo, roll, R, N, cmp):
     cards = [dict(bell=o["bell"], hours=o["hours"], end=o["end"], path=o["path"], grids=o["grids"],
                   best=[{k: v for k, v in r.items() if k not in ("bp", "tp")} for r in o["best"]]) for o in out]
     con = {k: v for k, v in CON.items()}
-    data = json.dumps(dict(cards=cards, summary=summary, loo=loo, roll=roll, R=R, N=N, cmp=cmp, con=con, cap=CAP, page=PAGE[0], stop=STOP[0],
+    data = json.dumps(dict(cards=cards, summary=summary, loo=loo, roll=roll, R=R, N=N, cmp=cmp, con=con, cap=CAP, page=PAGE[0], stop=STOP[0], atexit="_atexit" in PAGE[0],
                            made=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")))
     (HERE / PAGE[0]).write_text((HERE / "page.html").read_text().replace("/*DATA*/null", data))
     print(f"\n{PAGE[0]} written ({len(cards)} bells)")

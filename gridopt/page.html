@@ -49,7 +49,7 @@
         (DD at each minute's high). Built ${D.made}.</div>
         <div class="mu">Grids allowed: step ≤ ${D.con.max_step}σ, ${D.con.min_sells}+ sells,
         first sell ≤ +${D.con.max_first}σ, size ${D.con.sizes.join(" / ")}.
-        ${D.stop == null ? "" : `<b>Live bells</b> (a P counts from the 30m close it first shows), exit ${D.stop === "next" ? "at the next bell" : `${D.stop}σ out of the curve or the next bell`}.`}
+        ${D.stop == null ? "" : `<b>Live bells</b> (a P counts from the 30m close it first shows), exit ${D.stop === "next" ? "at the next bell" : `${D.stop}σ out of the curve or the next bell`}.`}${D.atexit ? " <b>Each grid starts at its bell's first close out of the curve</b> (until the next bell's)." : ""}${D.page.includes("_down") ? " Only after a down exit." : ""}
         ${D.page === "results.html" ? `<a href="results_free.html">free run</a>` : `<a href="results.html">constrained run</a>`}</div></div>`));
       /* best grids over every bell; a row clicked: that grid on every bell */
       const n = D.cards.length;
