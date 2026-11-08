@@ -6124,7 +6124,20 @@
             key = [arr.length, arr[0] && arr[0].t, z && z.t,
               z && z.o, z && z.h, z && z.l, z && z.c, uv5.size,
               volDays.size, volN].join();
-          if (zfbC && zfbC.key === key)
+          /* only while its pivots are still these candles (a
+             refresh replaces candle objects with equal ones: the
+             drawing finds them by object) */
+          const has = (c) => {
+            let a = 0, b = arr.length;
+            while (a < b) {
+              const m = (a + b) >> 1;
+              if (arr[m].t < c.t) a = m + 1;
+              else b = m;
+            }
+            return arr[a] === c;
+          };
+          if (zfbC && zfbC.key === key &&
+            zfbC.piv.every((o) => has(o.c)))
             return zfbC.piv.map((o) => ({ ...o }));
           const piv = [];
           let dn = null,
