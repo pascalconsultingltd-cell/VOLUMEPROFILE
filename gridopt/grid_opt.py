@@ -38,6 +38,7 @@ STEPS = [0.1, 0.15, 0.2, 0.25, 0.33, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 ALLOCS = ["flat", "top", "bottom"]
 DAY = 86_400_000
 # constraints (see the docstring); set from the command line in main()
+STOP = [None]  # --stop X: live exit, X sigma out of the curve ("next": none)
 PAGE = ["results.html"]  # --free writes results_free.html
 CON = dict(max_step=0.5, min_sells=2, max_first=1.0, sizes=["flat"])
 
@@ -83,8 +84,14 @@ def secs(t0, t1):
 
 def window(b, nxt, a):
     """Exit index: the end of the last time inside the curve before the next
-    bell's birth (no re-entry after it); None when still inside at the end."""
+    bell's birth (no re-entry after it); None when still inside at the end.
+    With STOP[0] (live): the first close X sigma out of the curve, else the next
+    birth ("next": the next birth only)."""
     c = a[:, 3]
+    if STOP[0] is not None:
+        x = (STOP[0] if STOP[0] != "next" else 1e9) * b["sigma"]
+        out = np.flatnonzero((c > b["hi"] + x) | (c < b["lo"] - x))
+        return int(out[0]) + 1 if len(out) else (None if nxt is None else len(c))
     inside = (c >= b["lo"]) & (c <= b["hi"])
     if not inside.any():
         return 1
@@ -229,6 +236,14 @@ def main():
     print("constraints:", CON)
     path = Path(next((x for x in args if x.endswith(".json")), HERE / "bells.json"))
     bells = sorted(json.loads(path.read_text()), key=lambda x: x["birth"])
+    if "--stop" in args:
+        v = args[args.index("--stop") + 1]
+        STOP[0] = v if v == "next" else float(v)
+        PAGE[0] = PAGE[0].replace(".html", f"_{path.stem}_stop{v}.html")
+    # bells born together: the one nearest the price at their birth runs
+    px0 = lambda t: secs(t, t + 60_000)[0, 3]
+    bells = [b for b in bells if all(abs(b["px"] - px0(b["birth"])) <= abs(o["px"] - px0(b["birth"]))
+                                     for o in bells if o["birth"] == b["birth"] and o is not b)]
     now = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
     out = []
     for k, b in enumerate(bells):
@@ -379,7 +394,7 @@ def page(out, summary, loo, roll, R, N, cmp):
     cards = [dict(bell=o["bell"], hours=o["hours"], end=o["end"], path=o["path"], grids=o["grids"],
                   best=[{k: v for k, v in r.items() if k not in ("bp", "tp")} for r in o["best"]]) for o in out]
     con = {k: v for k, v in CON.items()}
-    data = json.dumps(dict(cards=cards, summary=summary, loo=loo, roll=roll, R=R, N=N, cmp=cmp, con=con, cap=CAP, page=PAGE[0],
+    data = json.dumps(dict(cards=cards, summary=summary, loo=loo, roll=roll, R=R, N=N, cmp=cmp, con=con, cap=CAP, page=PAGE[0], stop=STOP[0],
                            made=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")))
     (HERE / PAGE[0]).write_text((HERE / "page.html").read_text().replace("/*DATA*/null", data))
     print(f"\n{PAGE[0]} written ({len(cards)} bells)")
