@@ -3791,15 +3791,16 @@
             });
             nb.fill();
             /* BF: the lead wing's empty part, from its closed
-               volume to the curve, dark blue, over the other
-               fills */
+               volume to the curve, over the other fills: very dark
+               green on a green bell, very dark red on a red one */
             const bf = bellFill(P, sp, vw, kv, vf, dm);
             const lb = batch();
             bf.ps.forEach((F) => F.lead.forEach((r) => {
               const x0 = cx0 + (bf.rw.get(r) || 0) * vs,
                 yT = Y((r + 1) * P.step);
               if (cX(r) - x0 > 0.5)
-                lb.rect("rgba(13,71,161,.85)", x0, yT + 0.5,
+                lb.rect(F.dir > 0 ? "rgba(0,77,64,.9)"
+                  : "rgba(127,0,0,.9)", x0, yT + 0.5,
                   cX(r) - x0, Math.max(1, rowH - 1));
             }));
             lb.fill();
