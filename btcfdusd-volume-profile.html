@@ -4721,9 +4721,10 @@
            * as thick as its quantity; dot = filled,
            * cancelled just stops, open orders run to the edge
            */
-          /* BS: a line at each bell's P over its window, green
-             / red by the 10 best's PnL (grey: not ranked yet),
-             dashed while running; label: 10 best, then #1 */
+          /* BS: a line at each bell's P over its window, blue
+             / red (0 too) by the 10 best's PnL (grey: not
+             ranked yet), dashed while running; label: 10 best,
+             then #1 */
           if (cfg.main && showScores && scores.length && geo.length) {
             const tF = geo[0].c.t;
             g.save();
@@ -4743,8 +4744,8 @@
                 xs = a ? a.x + a.w / 2 : x0,
                 xe = e ? e.x + e.w / 2 : px0,
                 v = b.n10,
-                col = w ? "#a7b0ba" : v == null || v === 0
-                  ? "#6b7684" : v > 0 ? "#089981" : "#e53935",
+                col = w ? "#a7b0ba" : v == null ? "#6b7684"
+                  : v > 0 ? "#2962ff" : "#e53935",
                 f = (x) => (x > 0 ? "+" : "") + x.toFixed(1),
                 d = b.kind === "D" ? "D " : "";
               g.strokeStyle = g.fillStyle = col;
