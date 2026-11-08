@@ -137,8 +137,9 @@ class Walk:
         return out
 
 
-def simulate(levels, w, s, pa, mins, mhi):
-    """PnL, max DD (minute highs), trips, open shorts at the end."""
+def simulate(levels, w, s, pa, mins, mhi, curve=False):
+    """PnL, max DD (minute highs), trips, open shorts at the end; curve: also the
+    equity per minute (realized at the minute's end + open shorts at its high)."""
     close = pa.c
     n = len(close)
     real = np.zeros(n)
@@ -149,19 +150,21 @@ def simulate(levels, w, s, pa, mins, mhi):
         for i, j in pa.trips(L, s):
             mi = np.searchsorted(mins, i, "right") - 1
             if j is None:
+                # bought back at market at the exit (last second), taker fee
                 opn += 1
-                unreal_hi[mi:] += q * (L - mhi[mi:])
+                unreal_hi[mi:-1] += q * (L - mhi[mi:-1])
                 real[-1] += q * (L - close[-1]) - TAKER * q * close[-1]
                 continue
             trips += 1
             real[j] += q * s
             mj = np.searchsorted(mins, j, "right") - 1
             unreal_hi[mi:mj] += q * (L - mhi[mi:mj])
-    eq_real = np.cumsum(real)[mins]
-    eq = eq_real + unreal_hi
-    eq[-1] = eq_real[-1] if opn else eq[-1]
-    dd = float(np.max(np.maximum.accumulate(eq) - eq))
-    return float(np.cumsum(real)[-1]), dd, trips, opn
+    cr = np.cumsum(real)
+    eq = cr[np.r_[mins[1:] - 1, n - 1]] + unreal_hi
+    dd = float(np.max(np.maximum.accumulate(np.r_[0.0, eq]) - np.r_[0.0, eq]))
+    if curve:
+        return float(cr[-1]), dd, trips, opn, eq
+    return float(cr[-1]), dd, trips, opn
 
 
 def weights(n, kind):
@@ -196,7 +199,7 @@ def optimise(b, a, top=5):
     end = lambda k: mins[k + 1] if k + 1 < len(mins) else len(a)
     path = [[float(a[i, 0]), float(mhi[k]), float(np.min(a[i:end(k), 2])), float(a[end(k) - 1, 3])]
             for k, i in enumerate(mins)]
-    return res[:top], res, path, pa
+    return res[:top], res, path, (pa, mins, mhi)
 
 
 def grid_of(pa, t, sg, r):
@@ -239,15 +242,15 @@ def main():
             continue
         a = a[:e]
         hrs = (a[-1, 0] - a[0, 0]) / 3.6e6
-        best, allr, path, pa = optimise(b, a, top)
+        best, allr, path, (pa, mins, mhi) = optimise(b, a, top)
         print(f"\n{tag}  window {hrs:.1f}h  range {b['lo']}-{b['hi']}  grids {len(allr)}")
         for r in best:
             print("  ", {k: v for k, v in r.items() if k not in ("bp", "tp")})
         out.append(dict(bell=b, hours=round(hrs, 2), end=float(a[-1, 0]), best=best, all=allr, path=path,
                         grids={f"b{i}": grid_of(pa, a[:, 0], b["sigma"], r) for i, r in enumerate(best)},
-                        pa=pa, t=a[:, 0]))
+                        pa=pa, t=a[:, 0], mins=mins, mhi=mhi))
     (HERE / "results.json").write_text(json.dumps(
-        [{k: v for k, v in o.items() if k not in ("pa", "t", "grids", "path")} for o in out]))
+        [{k: v for k, v in o.items() if k not in ("pa", "t", "grids", "path", "mins", "mhi", "seen")} for o in out]))
     # the same sell levels in sigma units (first one to 0.25 sigma, step, count)
     # over every bell
     agg = {}
@@ -305,30 +308,63 @@ def main():
             continue
         rs = [out[i]["seen"][k] for k in ranked]
         (L1, st, nl, al) = ranked[0]
-        out[i]["grids"]["r"] = grid_of(out[i]["pa"], out[i]["t"], out[i]["bell"]["sigma"], rs[0])
+        o = out[i]
+        out[i]["grids"]["r"] = grid_of(o["pa"], o["t"], o["bell"]["sigma"], rs[0])
+        # the N best together: each on 1500 / N, their minute equity added
+        eq1 = curve_of(o, rs[0])
+        eqN = sum(curve_of(o, r) for r in rs) / len(rs)
+        ddN = float(np.max(np.maximum.accumulate(np.r_[0.0, eqN]) - np.r_[0.0, eqN]))
+        pnlN = float(eqN[-1])
         roll.append(dict(k=i, first=L1, step=st, lv=nl, alloc=al, pnl=rs[0]["pnl"], dd=rs[0]["dd"],
                          romad=rs[0]["romad"], trips=rs[0]["trips"], open=rs[0]["open"],
-                         pnlN=round(float(np.mean([r["pnl"] for r in rs])), 2),
+                         pnlN=round(pnlN, 2), ddN=round(ddN, 2), romadN=round(pnlN / max(ddN, DD_FLOOR), 2),
                          wonN=int(sum(r["pnl"] > 0 for r in rs)), n=len(rs),
                          shapes=[f"{k[2]} from {k[0]:+.2f} every {k[1]}" for k in ranked]))
+        o["eq1"], o["eqN"] = eq1, eqN
+    # both strategies chained over the forward bells (their windows do not
+    # overlap): total PnL, overall DD, RoMaD, won, worst bell; equity every 5 min
+    cmp = {}
+    for nm, key, pk in (("#1", "eq1", "pnl"), (f"{N} best", "eqN", "pnlN")):
+        if not roll:
+            break
+        parts, off, ts = [], 0.0, []
+        for x in roll:
+            o = out[x["k"]]
+            parts.append(o[key] + off)
+            ts.append(o["t"][o["mins"]])
+            off += float(o[key][-1])
+        eq, t = np.concatenate(parts), np.concatenate(ts)
+        dd = float(np.max(np.maximum.accumulate(np.r_[0.0, eq]) - np.r_[0.0, eq]))
+        pn = [x[pk] for x in roll]
+        cmp[nm] = dict(pnl=round(off, 1), dd=round(dd, 1), romad=round(off / max(dd, DD_FLOOR), 2),
+                       won=int(sum(p > 0 for p in pn)), n=len(pn), worst=round(min(pn), 2),
+                       mean=round(float(np.mean(pn)), 2), curve=[[float(a), round(float(b), 2)]
+                                                                 for a, b in zip(t[::5], eq[::5])])
     if roll:
-        print(f"\nRolling ({R} bells before, {N} best shapes): #1 PnL {sum(x['pnl'] for x in roll):.1f}"
-              f"  won {sum(x['pnl'] > 0 for x in roll)}/{len(roll)}  worst DD {max(x['dd'] for x in roll):.1f}"
-              f"  |  {N} best averaged PnL {sum(x['pnlN'] for x in roll):.1f}"
-              f"  won {sum(x['pnlN'] > 0 for x in roll)}/{len(roll)}")
+        print(f"\nRolling ({R} bells before, {N} best shapes), forward over {len(roll)} bells:")
+        for nm, c in cmp.items():
+            print(f"  {nm:8} PnL {c['pnl']:7.1f}  overall DD {c['dd']:5.1f}  RoMaD {c['romad']:5.2f}"
+                  f"  won {c['won']}/{c['n']}  worst bell {c['worst']}  mean {c['mean']}")
         for x in roll:
             b = out[x["k"]]["bell"]
             print(f"  {b['day']} P{b['n']}: #1 {x['shapes'][0]}  PnL {x['pnl']}  DD {x['dd']}"
-                  f"  | {x['n']} best: PnL {x['pnlN']}  {x['wonN']}/{x['n']} won")
-    page(out, summary, loo, roll, R, N)
+                  f"  | {x['n']} best: PnL {x['pnlN']}  DD {x['ddN']}  {x['wonN']}/{x['n']} won")
+    page(out, summary, loo, roll, R, N, cmp)
 
 
-def page(out, summary, loo, roll, R, N):
+def curve_of(o, r):
+    """A grid record's minute equity on its bell."""
+    s = r["step"] * o["bell"]["sigma"]
+    lv = np.arange(r["bp"] + s, r["tp"] + 1e-9, s)
+    return simulate(lv, weights(len(lv), r["alloc"]), s, o["pa"], o["mins"], o["mhi"], curve=True)[4]
+
+
+def page(out, summary, loo, roll, R, N, cmp):
     """results.html: settings, best grids over all bells, held out, rolling, a card per bell."""
     cards = [dict(bell=o["bell"], hours=o["hours"], end=o["end"], path=o["path"], grids=o["grids"],
                   best=[{k: v for k, v in r.items() if k not in ("bp", "tp")} for r in o["best"]]) for o in out]
     con = {k: v for k, v in CON.items()}
-    data = json.dumps(dict(cards=cards, summary=summary, loo=loo, roll=roll, R=R, N=N, con=con, cap=CAP,
+    data = json.dumps(dict(cards=cards, summary=summary, loo=loo, roll=roll, R=R, N=N, cmp=cmp, con=con, cap=CAP,
                            made=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")))
     (HERE / "results.html").write_text((HERE / "page.html").read_text().replace("/*DATA*/null", data))
     print(f"\nresults.html written ({len(cards)} bells)")

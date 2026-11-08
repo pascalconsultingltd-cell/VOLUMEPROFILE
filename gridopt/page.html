@@ -76,6 +76,44 @@
           <th>${Math.max(...L.map((x) => x.dd)).toFixed(1)}</th>
           <th>${(L.reduce((a, x) => a + x.romad, 0) / L.length).toFixed(2)}</th></tr></table></div></div>`));
       }
+      /* the two rolling strategies chained over the forward bells */
+      if (D.roll.length) {
+        const C = D.cmp, ks = Object.keys(C);
+        $m.appendChild(el(`<div><h2>Rolling: #1 vs ${D.N} best, chained over ${D.roll.length} forward bells</h2>
+          <div class="mu">Each bell's grid picked on the ${D.R} bells before it; the bells' equity
+          chained in time (their windows do not overlap). DD over the whole run, open shorts at
+          each minute's high.</div>
+          <div class="card wrap"><table><tr><th></th>${ks.map((k) => `<th>${k}</th>`).join("")}</tr>
+          ${[["Total PnL", "pnl", 1], ["Overall DD", "dd", 1], ["RoMaD", "romad", 2], ["Mean per bell", "mean", 2],
+             ["Worst bell", "worst", 2]].map(([t, f, d]) => `<tr><td>${t}</td>${ks.map((k) =>
+               `<td>${C[k][f].toFixed(d)}</td>`).join("")}</tr>`).join("")}
+          <tr><td>Bells won</td>${ks.map((k) => `<td>${C[k].won}/${C[k].n}</td>`).join("")}</tr></table>
+          <canvas id="cmpcv"></canvas>
+          <div class="mu">equity: ${ks.map((k, i) => `<span style="color:${["#2962ff", "#ff6d00"][i]}">${k}</span>`).join(" · ")}</div></div></div>`));
+        drawCmp(document.getElementById("cmpcv"), C);
+      }
+      function drawCmp(cv, C) {
+        const ks = Object.keys(C), dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+        cv.width = W * dpr; cv.height = H * dpr;
+        const g = cv.getContext("2d");
+        g.scale(dpr, dpr);
+        const all = ks.flatMap((k) => C[k].curve), n = Math.max(...ks.map((k) => C[k].curve.length)),
+          hi = Math.max(0, ...all.map((q) => q[1])), lo = Math.min(0, ...all.map((q) => q[1])),
+          L = 48, Rr = W - 6, X = (i) => L + (i / (n - 1)) * (Rr - L),
+          Y = (v) => 6 + ((hi - v) / (hi - lo || 1)) * (H - 24);
+        g.font = "10px ui-monospace,Menlo,monospace"; g.fillStyle = "#6b7684"; g.textAlign = "right";
+        [hi, 0, lo].forEach((v) => g.fillText(v.toFixed(0), L - 4, Y(v) + 3));
+        g.strokeStyle = "#c5ccd5"; g.beginPath(); g.moveTo(L, Y(0)); g.lineTo(Rr, Y(0)); g.stroke();
+        ks.forEach((k, j) => {
+          g.strokeStyle = ["#2962ff", "#ff6d00"][j]; g.lineWidth = 1.5; g.beginPath();
+          C[k].curve.forEach((q, i) => g[i ? "lineTo" : "moveTo"](X(i), Y(q[1])));
+          g.stroke();
+        });
+        g.textAlign = "left"; g.fillStyle = "#6b7684";
+        g.fillText(tm(C[ks[0]].curve[0][0]), L, H - 4);
+        g.textAlign = "right";
+        g.fillText(tm(C[ks[0]].curve[C[ks[0]].curve.length - 1][0]), Rr, H - 4);
+      }
       /* rolling: each bell with the best shapes of the bells before it */
       if (D.roll.length) {
         const L = D.roll, t1 = L.reduce((a, x) => a + x.pnl, 0), tn = L.reduce((a, x) => a + x.pnlN, 0);
@@ -84,16 +122,17 @@
           next. #1 = the best of them alone; ${D.N} best = their average (about the ${D.cap} split over
           them). Click a row to draw #1 on that bell.</div>
           <div class="card wrap"><table><tr><th>Bell</th><th>#1 shape (σ from the P)</th><th>Trips</th>
-          <th>PnL #1</th><th>DD #1</th><th>PnL ${D.N} best</th><th>Won of ${D.N}</th></tr>
+          <th>PnL #1</th><th>DD #1</th><th>PnL ${D.N} best</th><th>DD ${D.N} best</th><th>Won of ${D.N}</th></tr>
           ${L.map((x) => { const b = D.cards[x.k].bell; return `<tr data-id="r" data-k="${x.k}">
             <td><span class="tag ${col(b.mv)}">${b.day} ${b.n}</span></td>
             <td>${x.lv} from ${sg(x.first)} every ${x.step}σ</td><td>${x.trips}</td>
             <td class="${x.pnl >= 0 ? "g" : "r"}">${f2(x.pnl)}</td><td>${f2(x.dd)}</td>
-            <td class="${x.pnlN >= 0 ? "g" : "r"}">${f2(x.pnlN)}</td><td>${x.wonN}/${x.n}</td></tr>`; }).join("")}
+            <td class="${x.pnlN >= 0 ? "g" : "r"}">${f2(x.pnlN)}</td><td>${f2(x.ddN)}</td><td>${x.wonN}/${x.n}</td></tr>`; }).join("")}
           <tr><th>Total</th><th>won ${L.filter((x) => x.pnl > 0).length}/${L.length}</th><th></th>
           <th class="${t1 >= 0 ? "g" : "r"}">${t1.toFixed(1)}</th>
           <th>${Math.max(...L.map((x) => x.dd)).toFixed(1)}</th>
           <th class="${tn >= 0 ? "g" : "r"}">${tn.toFixed(1)}</th>
+          <th>${Math.max(...L.map((x) => x.ddN)).toFixed(1)}</th>
           <th>won ${L.filter((x) => x.pnlN > 0).length}/${L.length}</th></tr></table></div></div>`));
       }
       $m.appendChild(el(`<h2>Each bell</h2>`));
