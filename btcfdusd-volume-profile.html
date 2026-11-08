@@ -338,6 +338,34 @@
       body.fs #mini {
         display: none !important;
       }
+      /* phone: one chart per tab; the toggles of that chart
+         only; the 15s window over the whole screen */
+      #tabs {
+        display: none !important;
+      }
+      body.phone #tabs {
+        display: inline-flex !important;
+        gap: 4px;
+      }
+      body.phone .ctl .grp {
+        display: none;
+      }
+      body.phone[data-tab="main"] .ctl .grp[title="Main chart"],
+      body.phone[data-tab="tpo"] .ctl .grp[title="Volume profile"] {
+        display: inline-flex;
+      }
+      body.t15 #mini {
+        display: flex !important;
+        left: 0 !important;
+        top: var(--hd) !important;
+        width: 100vw !important;
+        height: calc(100vh - var(--hd)) !important;
+        z-index: 40;
+      }
+      body.t15 #mini .grip,
+      body.t15 #mx {
+        display: none;
+      }
       main {
         user-select: none;
         flex: 1;
@@ -364,6 +392,7 @@
       >
       <span id="volTx" title="Today's vol"></span>
       <button id="ctlTog" title="Hide / show the toggles">▾</button>
+      <span id="tabs"></span>
       <span class="clr"
         ><button
           id="alClr"
@@ -2551,6 +2580,8 @@
            "press Esc" notice; Esc or the icon leaves it */
         function setFull(k) {
           full = k;
+          if (cfg.main)
+            dispatchEvent(new CustomEvent("full", { detail: k }));
           document.body.classList.toggle("fs", !!k);
           requestAnimationFrame(() =>
             charts.forEach((h) => h.size()),
@@ -6333,6 +6364,7 @@
           pfEv: () => pfEvS,
           newCandle,
           size,
+          full: (k) => setFull(k),
           resetView: () => {
             /* main 5m: 3 days, from the Asia open (00:00 UTC) 2 days
                back to now; VP 6 days; PF all its 3 days (pfN 0) */
@@ -6769,6 +6801,44 @@
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
       $("bsTog").onclick = () => setShowScores(!showScores);
+      /* phone: tabs Main / VP / PF / 15s, each its chart full
+         screen (15s: the floating window over everything) */
+      if (matchMedia("(pointer: coarse)").matches &&
+        Math.min(screen.width, screen.height) < 600) {
+        const tb = $("tabs"),
+          hd = document.querySelector("header"),
+          sz = () => {
+            document.body.style.setProperty("--hd",
+              hd.offsetHeight + "px");
+            requestAnimationFrame(() =>
+              charts.forEach((c) => c.size()));
+          },
+          lit = (k) => [...tb.children].forEach((b) =>
+            (b.className = b.dataset.k === k ? "a" : "")),
+          go = (k) => {
+            document.body.classList.toggle("t15", k === "m15");
+            document.body.dataset.tab = k;
+            if (k !== "m15") mainChart.full(k);
+            lit(k);
+            sz();
+          };
+        document.body.classList.add("phone");
+        [["main", "Main"], ["tpo", "VP"], ["pc", "PF"],
+          ["m15", "15s"]].forEach(([k, l]) => {
+          const b = document.createElement("button");
+          b.textContent = l;
+          b.dataset.k = k;
+          b.onclick = () => go(k);
+          tb.appendChild(b);
+        });
+        addEventListener("full", (e) => {
+          if (document.body.dataset.tab === "m15") return;
+          document.body.dataset.tab = e.detail || "";
+          lit(e.detail);
+        });
+        new ResizeObserver(sz).observe(hd);
+        go("main");
+      }
       /* installable app: only when served over https */
       if (
         "serviceWorker" in navigator &&
