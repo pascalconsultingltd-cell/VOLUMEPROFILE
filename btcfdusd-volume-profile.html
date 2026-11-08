@@ -1674,6 +1674,8 @@
          to the next bell's, its rolling short grid PnL */
       let showScores = true,
         scores = [];
+      /* each day's VP numbers (P's and D's by age) and moves */
+      const rkDay = new Map();
       function setShowScores(v) {
         showScores = !!v;
         $("bsTog").className = showScores ? "a" : "";
@@ -3902,6 +3904,9 @@
               g.fillText(i + 1, x, Y(px));
             });
             if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
+            /* for the BS diamonds: its P's numbers and moves */
+            rkDay.set(P.dS, rk.map((e, i) =>
+              ({ px: e[2], n: i + 1, mv: e[3], p: e[5] === 1 })));
             g.restore();
           }
           g.restore();
@@ -4735,10 +4740,6 @@
             g.textBaseline = "bottom";
             /* a bell not out of its curve yet (no start): thin
                light grey from its birth, "wait"; D = a DT bell */
-            const pv = new Map();
-            scores.slice().sort((a, b) => a.birth - b.birth)
-              .forEach((b, i, a) =>
-                pv.set(b, i ? a[i - 1].px : null));
             scores.forEach((b) => {
               const y = Y(b.fin && b.xpx != null ? b.xpx : b.px),
                 w = b.start == null;
@@ -4775,17 +4776,20 @@
                 g.lineTo(xe - 4, y);
                 g.closePath();
                 g.fill();
-                /* its number in its day, under it (over it at
-                   the bottom edge) */
-                if (b.n) {
-                  /* coloured as in VP: its move from the bell
-                     before (green up / same, red down) */
-                  const q = pv.get(b);
-                  g.fillStyle = q == null ? "#000"
-                    : b.px >= q ? "#089981" : "#e53935";
+                /* its number under it (over it at the bottom
+                   edge), number and colour from VP: its day's P
+                   nearest the bell; a day VP has not drawn: none */
+                const L = (rkDay.get(dayOf(b.birth - 1)) || [])
+                    .filter((e) => e.p),
+                  r = L.length ? L.reduce((a, e) =>
+                    Math.abs(e.px - b.px) < Math.abs(a.px - b.px)
+                      ? e : a) : null;
+                if (r) {
+                  g.fillStyle = !r.mv ? "#000"
+                    : r.mv > 0 ? "#089981" : "#e53935";
                   g.textAlign = "center";
                   g.textBaseline = y + 18 > bot ? "bottom" : "top";
-                  g.fillText(b.n, xe, y + (y + 18 > bot ? -6 : 6));
+                  g.fillText(r.n, xe, y + (y + 18 > bot ? -6 : 6));
                   g.textAlign = "left";
                   g.textBaseline = "bottom";
                 }
