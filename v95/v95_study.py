@@ -87,6 +87,43 @@ def run(ev, keep, kind):
         eq[i], ef[i] = real + op, real + op - fee
     return mins, eq, ef, trades, len(pos)
 
+def fade(ev, keep, kind, ttl=60):
+    """Fade each V95 with a maker limit at its box's edge (green: sell at its top, red: buy at its bottom; at the minute's
+    close if price is already past it), good for ttl minutes; filled when a second trades through it. The last `keep`
+    fills held, the oldest closed at market (taker). Same output as run()."""
+    days = sorted({V.iso(e[0]) for e in ev} | {V.iso(e[0] + ttl * 60000 + 60000) for e in ev})
+    f = np.concatenate([V.kl('BTCFDUSD', '1s', d) for d in days])
+    scale, fills = UNIT / np.mean([e[3] for e in ev]), []
+    for t, r, st, q, d in ev:
+        a = np.searchsorted(f[:, 0], t + 60000)
+        b = np.searchsorted(f[:, 0], t + 60000 + ttl * 60000)
+        c = f[a - 1, 4]
+        s = -1 if d >= 0 else 1  # fade: green sells, red buys
+        px = max((r + 1) * st, c) if s < 0 else min(r * st, c)
+        w = f[a:b]
+        hit = np.flatnonzero(w[:, 2] > px) if s < 0 else np.flatnonzero(w[:, 3] < px)
+        if len(hit): fills.append((int(w[hit[0], 0]) // 60000 * 60000, px, s, (UNIT if kind == 'flat' else q * scale) / px))
+    fills.sort()
+    m = f[:, 0] // 60000 * 60000
+    last = np.r_[np.flatnonzero(np.diff(m)), len(m) - 1]
+    mins, cl = m[last].astype(np.int64), f[last, 4]
+    pos, trades, real, fee, k = [], [], 0.0, 0.0, 0
+    eq, ef = np.zeros(len(mins)), np.zeros(len(mins))
+    for i, t in enumerate(mins):
+        while k < len(fills) and fills[k][0] == t:
+            tt, px, s, qq = fills[k]
+            pos.append(dict(t=t, px=px, s=s, q=qq))
+            if len(pos) > keep:
+                p = pos.pop(0)
+                g = p['s'] * p['q'] * (cl[i] - p['px'])
+                real += g; fee += TAKER * p['q'] * cl[i]
+                trades.append(dict(t0=int(p['t']), t1=int(t), s=p['s'], pnl=g))
+            k += 1
+        op = sum(p['s'] * p['q'] * (cl[i] - p['px']) for p in pos)
+        eq[i], ef[i] = real + op, real + op - fee
+    print(f"  fade {kind}: {len(fills)} of {len(ev)} limits filled")
+    return mins, eq, ef, trades, len(pos)
+
 def stats(mins, eq, trades, name):
     dd = float(np.max(np.maximum.accumulate(np.r_[0, eq]) - np.r_[0, eq]))
     day = mins // V.DAY
@@ -109,9 +146,21 @@ if __name__ == '__main__':
     keep = int(sys.argv[sys.argv.index('--keep') + 1]) if '--keep' in sys.argv else 25
     d0, d1 = (a + ['2026-03-20', '2026-11-07'])[:2]
     days = [V.iso(t) for t in range(V.day0(d0), V.day0(d1) + 1, V.DAY)]
-    ev = v95(days)
-    ev = [e for e in ev if e[0] >= V.day0(days[0]) + VH_MS]
-    json.dump([[int(e[0]), int(e[1]), int(e[2]), float(e[3]), float(e[4])] for e in ev], open(HERE / 'v95_events.json', 'w'))
+    if '--cached' in sys.argv: ev = json.load(open(HERE / 'v95_events.json'))
+    else:
+        ev = v95(days)
+        ev = [e for e in ev if e[0] >= V.day0(days[0]) + VH_MS]
+        json.dump([[int(e[0]), int(e[1]), int(e[2]), float(e[3]), float(e[4])] for e in ev], open(HERE / 'v95_events.json', 'w'))
+    if '--fade' in sys.argv:
+        print(f"\n{len(ev)} V95 boxes; fade with maker limits at the box edge (60 min), last {keep} held, closed at market")
+        for kind in ('flat', 'real'):
+            mins, eq, ef, tr, n = fade(ev, keep, kind)
+            print(f"{kind}: {len(tr)} closed, {n} open, won {sum(t['pnl'] > 0 for t in tr)}/{len(tr)}")
+            stats(mins, eq, tr, kind + ' gross'); stats(mins, ef, tr, kind + ' net')
+            mo = {}
+            for t in tr: mo[V.iso(t['t1'])[:7]] = mo.get(V.iso(t['t1'])[:7], 0) + t['pnl']
+            print('   by month (gross):', '  '.join(f'{m} {v:+.0f}' for m, v in sorted(mo.items())))
+        sys.exit()
     up = sum(e[4] >= 0 for e in ev)
     print(f"\n{len(ev)} V95 boxes ({up} up, {len(ev) - up} down), {len(ev) / len(days):.1f} a day; follow, last {keep} held")
     for kind in ('flat', 'real'):
