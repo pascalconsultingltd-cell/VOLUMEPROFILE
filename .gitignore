@@ -14,3 +14,5 @@ gridopt/data/
 .claude/
 gridopt/results.json
 bellgrid.js
+bellscore.js
+bellscore.js.tmp

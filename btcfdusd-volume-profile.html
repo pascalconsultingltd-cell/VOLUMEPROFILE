@@ -421,6 +421,13 @@
                     title="Order lines; off = executions only"
                   >
                     L
+                  </button>
+                  <button
+                    id="bsTog"
+                    class="a"
+                    title="Bell grid scores (bellscore.js)"
+                  >
+                    BS
                   </button></span
                 ></span
               ></span
@@ -1632,6 +1639,30 @@
       function setPcPf(v) {
         pcPf = !!v;
         schedule();
+      }
+      /* bell scores (BS button, bellscore.js from GRID-TRADING/
+         bellscore.py): each live vipoc bell from its first exit
+         to the next bell's, its rolling short grid PnL */
+      let showScores = true,
+        scores = [];
+      function setShowScores(v) {
+        showScores = !!v;
+        $("bsTog").className = showScores ? "a" : "";
+        schedule();
+      }
+      function loadScores() {
+        const s = document.createElement("script");
+        window.BELLSCORE = undefined;
+        s.onload = s.onerror = () => {
+          s.remove();
+          if (Array.isArray(window.BELLSCORE)) {
+            scores = window.BELLSCORE;
+            schedule();
+          }
+          setTimeout(loadScores, 30000);
+        };
+        s.src = "bellscore.js?t=" + Date.now();
+        document.head.appendChild(s);
       }
       /* own orders on the chart (O button) */
       let showOrders = false;
@@ -4630,6 +4661,41 @@
            * as thick as its quantity; dot = filled,
            * cancelled just stops, open orders run to the edge
            */
+          /* BS: a line at each bell's P over its window, green
+             / red by the 10 best's PnL (grey: not ranked yet),
+             dashed while running; label: 10 best, then #1 */
+          if (cfg.main && showScores && scores.length && geo.length) {
+            const tF = geo[0].c.t;
+            g.save();
+            g.beginPath();
+            g.rect(x0, top, px0 - x0, bot - top);
+            g.clip();
+            g.font = "10px ui-monospace,Menlo,monospace";
+            g.textBaseline = "bottom";
+            scores.forEach((b) => {
+              const y = Y(b.px);
+              if (b.end < tF || y < top || y > bot) return;
+              const a = geoAt(b.start),
+                e = b.fin ? geoAt(b.end) : null,
+                xs = a ? a.x + a.w / 2 : x0,
+                xe = e ? e.x + e.w / 2 : px0,
+                v = b.n10,
+                col = v == null || v === 0 ? "#6b7684"
+                  : v > 0 ? "#089981" : "#e53935",
+                f = (x) => (x > 0 ? "+" : "") + x.toFixed(1);
+              g.strokeStyle = g.fillStyle = col;
+              g.lineWidth = 2;
+              g.setLineDash(b.fin ? [] : [5, 3]);
+              g.beginPath();
+              g.moveTo(xs, y);
+              g.lineTo(xe, y);
+              g.stroke();
+              g.setLineDash([]);
+              if (v != null)
+                g.fillText(f(v) + " #1 " + f(b.n1), xs + 2, y - 2);
+            });
+            g.restore();
+          }
           /* my orders (O) */
           const ords = showOrders ? orders : [];
           if (ords.length) {
@@ -6433,7 +6499,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 38;
+      const DEFAULTS_VER = 39;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -6459,6 +6525,7 @@
           pcPf,
           showOrders,
           showLines,
+          showScores,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -6504,6 +6571,9 @@
           setShowOrders(st.showOrders);
         if (cur6 && typeof st.showLines === "boolean")
           setShowLines(st.showLines);
+        /* BS: new in version 39, on by default */
+        if (st.dv >= 39 && typeof st.showScores === "boolean")
+          setShowScores(st.showScores);
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -6698,6 +6768,7 @@
       miniChart.resetView();
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
+      $("bsTog").onclick = () => setShowScores(!showScores);
       /* installable app: only when served over https */
       if (
         "serviceWorker" in navigator &&
@@ -6706,6 +6777,7 @@
         navigator.serviceWorker.register("sw.js").catch(() => {});
       loadOrders();
       loadVol();
+      loadScores();
       connect();
       hist(IV, () => seedIv(IV));
       hist("15m", () => seedIv("15m"));
