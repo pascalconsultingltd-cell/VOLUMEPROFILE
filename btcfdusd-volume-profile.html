@@ -1679,7 +1679,24 @@
         $("bsTog").className = showScores ? "a" : "";
         schedule();
       }
+      /* GitHub Pages: bellscore.py pushes the file to the
+         repo's scores branch every 5 min, read from raw */
+      const RAW_BS = "https://raw.githubusercontent.com/" +
+        "pascalconsultingltd-cell/VOLUMEPROFILE/scores/" +
+        "bellscore.js?t=";
+      async function loadRawScores() {
+        try {
+          const t = await (await fetch(RAW_BS + Date.now(),
+            { cache: "no-store" })).text();
+          const a = JSON.parse(t.slice(t.indexOf("["),
+            t.lastIndexOf("]") + 1));
+          if (Array.isArray(a)) (scores = a), schedule();
+        } catch (e) {}
+        setTimeout(loadRawScores, 60000);
+      }
       function loadScores() {
+        if (location.hostname.endsWith("github.io"))
+          return loadRawScores();
         const s = document.createElement("script");
         window.BELLSCORE = undefined;
         s.onload = s.onerror = () => {
@@ -4643,18 +4660,30 @@
             /* legs' times for the crosshair; the open one runs on */
             zLegs = piv.slice(1).map((z, i) =>
               [piv[i].c.t, i === nP - 2 ? Infinity : z.c.t]);
-            /* pivots off screen: just past the chart's edge */
+            /* pivots off screen: where their candle would be,
+               a slot each from the first one shown, so a leg
+               keeps its true slope (the clip cuts it) */
+            const iOf = (t) => {
+              let a = 0, b = arr.length;
+              while (a < b) {
+                const m = (a + b) >> 1;
+                if (arr[m].t < t) a = m + 1;
+                else b = m;
+              }
+              return a;
+            };
+            const i0 = iOf(geo[0].c.t),
+              gx0 = geo[0].x + geo[0].w / 2;
             const xOf = (z) => {
               const o = where.get(z.c);
-              return o
-                ? o.x + o.w / 2
-                : z.c.t < geo[0].c.t
-                  ? x0 - 40
-                  : px0 + 40;
+              return o ? o.x + o.w / 2
+                : gx0 + (iOf(z.c.t) - i0) * sw;
             };
+            /* clipped at the candles' edge: nothing in the
+               margin for candles panned out of view */
             g.save();
             g.beginPath();
-            g.rect(x0, top, px0 - x0, bot - top);
+            g.rect(x0, top, x1 - x0, bot - top);
             g.clip();
             g.lineWidth = 2;
             piv.forEach((z, i) => {
