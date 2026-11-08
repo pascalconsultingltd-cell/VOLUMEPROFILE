@@ -4749,12 +4749,15 @@
                 d = b.kind === "D" ? "D " : "";
               g.strokeStyle = g.fillStyle = col;
               g.lineWidth = w ? 1 : 2;
-              g.setLineDash(w ? [2, 3] : b.fin ? [] : [5, 3]);
-              g.beginPath();
-              g.moveTo(xs, y);
-              g.lineTo(xe, y);
-              g.stroke();
-              g.setLineDash([]);
+              /* over: only its circle, no line */
+              if (!b.fin) {
+                g.setLineDash(w ? [2, 3] : [5, 3]);
+                g.beginPath();
+                g.moveTo(xs, y);
+                g.lineTo(xe, y);
+                g.stroke();
+                g.setLineDash([]);
+              }
               const tx = d + (w ? "wait"
                 : v == null ? "" : f(v) + " #1 " + f(b.n1));
               /* over: a circle at its end, the score before it */
