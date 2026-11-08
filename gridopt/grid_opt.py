@@ -32,6 +32,7 @@ import numpy as np, requests
 
 HERE = Path(__file__).parent
 DATA = HERE / "data"
+KL = Path(r"C:\Users\sebas\Documents\FILEROOT\WORK\BINANCE\src\simplified\data\kl")
 CAP, TAKER = 1500.0, 0.001
 DD_FLOOR = 5.0  # RoMaD = PnL / max(DD, this): a near-zero DD does not win alone
 STEPS = [0.1, 0.15, 0.2, 0.25, 0.33, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
@@ -49,6 +50,8 @@ def day_secs(day):
     f = DATA / f"BTCFDUSD-1s-{day}.npy"
     if f.exists():
         return np.load(f)
+    if KL.joinpath(f.name).exists():  # the bot's cache (GRID-TRADING/vipoc.py): t, open, high, low, close, volume
+        return np.load(KL / f.name)[:, [0, 2, 3, 4]]
     url = f"https://data.binance.vision/data/spot/daily/klines/BTCFDUSD/1s/BTCFDUSD-1s-{day}.zip"
     r = requests.get(url, timeout=60)
     if r.ok:
@@ -62,7 +65,7 @@ def day_secs(day):
     t0 = int(dt.datetime.fromisoformat(day).replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
     out, t = [], t0
     while t < min(t0 + DAY, int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)):
-        j = requests.get("https://api.binance.com/api/v3/klines", timeout=30, params=dict(
+        j = requests.get("https://data-api.binance.vision/api/v3/klines", timeout=30, params=dict(
             symbol="BTCFDUSD", interval="1s", limit=1000, startTime=t, endTime=t0 + DAY - 1)).json()
         if not j:
             break
@@ -365,6 +368,24 @@ def main():
         o["eq1"], o["eqN"] = eq1, eqN
     # both strategies chained over the forward bells (their windows do not
     # overlap): total PnL, overall DD, RoMaD, won, worst bell; equity every 5 min
+    if "--split" in args:  # one fixed shape picked on the bells before the date, chained on the bells after
+        cut = int(dt.datetime.fromisoformat(args[args.index("--split") + 1]).replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
+        tr, te = [o for o in out if o["bell"]["birth"] < cut], [o for o in out if o["bell"]["birth"] >= cut]
+        keys = [k for k in tr[0]["seen"] if all(k in o["seen"] for o in out)]
+        print(f"\nSplit at {args[args.index('--split') + 1]}: picked on {len(tr)} bells, scored on {len(te)}")
+        for nm, f in (("mean RoMaD", lambda k: np.mean([o["seen"][k]["romad"] for o in tr])),
+                      ("total PnL", lambda k: sum(o["seen"][k]["pnl"] for o in tr))):
+            k = max(keys, key=f)
+            eq, off = [], 0.0
+            for o in te:
+                e = curve_of(o, o["seen"][k])
+                eq.append(e + off); off += float(e[-1])
+            eq = np.concatenate(eq)
+            dd = float(np.max(np.maximum.accumulate(np.r_[0.0, eq]) - np.r_[0.0, eq]))
+            pn = [o["seen"][k]["pnl"] for o in te]
+            ptr = sum(o["seen"][k]["pnl"] for o in tr)
+            print(f"  best {nm}: {k}  before: PnL {ptr:.1f} | after: PnL {off:.1f}  DD {dd:.1f}  RoMaD {off / max(dd, DD_FLOOR):.2f}"
+                  f"  won {sum(p > 0 for p in pn)}/{len(pn)}")
     cmp = {}
     for nm, key, pk in (("#1", "eq1", "pnl"), (f"{N} best", "eqN", "pnlN")):
         if not roll:
