@@ -4732,27 +4732,33 @@
             g.clip();
             g.font = "10px ui-monospace,Menlo,monospace";
             g.textBaseline = "bottom";
+            /* a bell not out of its curve yet (no start): thin
+               light grey from its birth, "wait"; D = a DT bell */
             scores.forEach((b) => {
-              const y = Y(b.px);
-              if (b.end < tF || y < top || y > bot) return;
-              const a = geoAt(b.start),
+              const y = Y(b.px),
+                w = b.start == null;
+              if ((!w && b.end < tF) || y < top || y > bot) return;
+              const a = geoAt(w ? b.birth : b.start),
                 e = b.fin ? geoAt(b.end) : null,
                 xs = a ? a.x + a.w / 2 : x0,
                 xe = e ? e.x + e.w / 2 : px0,
                 v = b.n10,
-                col = v == null || v === 0 ? "#6b7684"
-                  : v > 0 ? "#089981" : "#e53935",
-                f = (x) => (x > 0 ? "+" : "") + x.toFixed(1);
+                col = w ? "#a7b0ba" : v == null || v === 0
+                  ? "#6b7684" : v > 0 ? "#089981" : "#e53935",
+                f = (x) => (x > 0 ? "+" : "") + x.toFixed(1),
+                d = b.kind === "D" ? "D " : "";
               g.strokeStyle = g.fillStyle = col;
-              g.lineWidth = 2;
-              g.setLineDash(b.fin ? [] : [5, 3]);
+              g.lineWidth = w ? 1 : 2;
+              g.setLineDash(w ? [2, 3] : b.fin ? [] : [5, 3]);
               g.beginPath();
               g.moveTo(xs, y);
               g.lineTo(xe, y);
               g.stroke();
               g.setLineDash([]);
-              if (v != null)
-                g.fillText(f(v) + " #1 " + f(b.n1), xs + 2, y - 2);
+              if (w) g.fillText(d + "wait", xs + 2, y - 2);
+              else if (v != null)
+                g.fillText(d + f(v) + " #1 " + f(b.n1), xs + 2,
+                  y - 2);
             });
             g.restore();
           }
