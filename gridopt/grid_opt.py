@@ -176,15 +176,23 @@ def optimise(b, a, top=5):
                                     lv=len(levels), trips=tr, open=op, pnl=round(pnl, 2), dd=round(dd, 2),
                                     romad=round(pnl / max(dd, DD_FLOOR), 2), bp=B, tp=T))
     res.sort(key=lambda r: -r["romad"])
-    # the best grid's levels and fills, and the window by the minute, for the page
-    r, s = res[0], res[0]["step"] * sg
+    # the window by the minute (high, low, close), for the page
+    end = lambda k: mins[k + 1] if k + 1 < len(mins) else len(a)
+    path = [[float(a[i, 0]), float(mhi[k]), float(np.min(a[i:end(k), 2])), float(a[end(k) - 1, 3])]
+            for k, i in enumerate(mins)]
+    return res[:top], res, path, pa
+
+
+def grid_of(pa, t, sg, r):
+    """A grid's sells, their sizes (FDUSD) and fills [t sell, price, t buy back or
+    None, price], for the page."""
+    s = r["step"] * sg
     lv = np.arange(r["bp"] + s, r["tp"] + 1e-9, s)
-    t = a[:, 0]
-    fills = [[float(t[i]), float(L), None if j is None else float(t[j]), float(L - s)]
-             for L in lv for i, j in pa.trips(L, s)]
-    path = [[float(t[i]), float(mhi[k]), float(np.min(a[i:(mins[k + 1] if k + 1 < len(mins) else len(a)), 2])),
-             float(a[(mins[k + 1] if k + 1 < len(mins) else len(a)) - 1, 3])] for k, i in enumerate(mins)]
-    return res[:top], res, dict(levels=[float(L) for L in lv], step=float(s), fills=fills, path=path)
+    w = weights(len(lv), r["alloc"])
+    return dict(levels=[float(L) for L in lv], sizes=[round(float(x), 1) for x in w], step=float(s),
+                fills=[[float(t[i]), float(L), None if j is None else float(t[j]), float(L - s), round(float(x), 1)]
+                       for L, x in zip(lv, w) for i, j in pa.trips(L, s)],
+                **{k: r[k] for k in ("B", "T", "alloc", "pnl", "dd", "romad", "trips", "open")})
 
 
 def main():
@@ -204,12 +212,15 @@ def main():
             continue
         a = a[:e]
         hrs = (a[-1, 0] - a[0, 0]) / 3.6e6
-        best, allr, show = optimise(b, a, top)
+        best, allr, path, pa = optimise(b, a, top)
         print(f"\n{tag}  window {hrs:.1f}h  range {b['lo']}-{b['hi']}  grids {len(allr)}")
         for r in best:
             print("  ", {k: v for k, v in r.items() if k not in ("bp", "tp")})
-        out.append(dict(bell=b, hours=round(hrs, 2), end=float(a[-1, 0]), best=best, all=allr, show=show))
-    (HERE / "results.json").write_text(json.dumps(out))
+        out.append(dict(bell=b, hours=round(hrs, 2), end=float(a[-1, 0]), best=best, all=allr, path=path,
+                        grids={f"b{i}": grid_of(pa, a[:, 0], b["sigma"], r) for i, r in enumerate(best)},
+                        pa=pa, t=a[:, 0]))
+    (HERE / "results.json").write_text(json.dumps(
+        [{k: v for k, v in o.items() if k not in ("pa", "t", "grids", "path")} for o in out]))
     # the same sell levels in sigma units (first one to 0.25 sigma, step, count)
     # over every bell
     agg = {}
@@ -232,12 +243,16 @@ def main():
     summary = [dict(first=L1, step=st, lv=nl, alloc=al, romad=round(float(np.mean([r["romad"] for r in v])), 2),
                     pnl=round(sum(r["pnl"] for r in v), 1), dd=round(max(r["dd"] for r in v), 1),
                     won=int(sum(r["pnl"] > 0 for r in v)), n=len(v)) for (L1, st, nl, al), v in rows[:15]]
+    # each summary shape on each bell (agg lists follow the bells' order)
+    for j, (_, v) in enumerate(rows[:15]):
+        for o, r in zip(out, v):
+            o["grids"][f"s{j}"] = grid_of(o["pa"], o["t"], o["bell"]["sigma"], r)
     page(out, summary)
 
 
 def page(out, summary):
     """results.html: settings, best grids over all bells, a card per bell."""
-    cards = [dict(bell=o["bell"], hours=o["hours"], end=o["end"], show=o["show"],
+    cards = [dict(bell=o["bell"], hours=o["hours"], end=o["end"], path=o["path"], grids=o["grids"],
                   best=[{k: v for k, v in r.items() if k not in ("bp", "tp")} for r in o["best"]]) for o in out]
     data = json.dumps(dict(cards=cards, summary=summary, cap=CAP,
                            made=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")))

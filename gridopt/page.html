@@ -26,6 +26,9 @@
       .g { color: var(--g); } .r { color: var(--r); }
       canvas { width: 100%; height: 260px; display: block; margin-top: 8px; }
       .tag { font-weight: 700; }
+      tr[data-id] { cursor: pointer; }
+      tr[data-id]:hover { background: #f0f3f7; }
+      tr.on { background: #e7eefc; }
     </style>
   </head>
   <body>
@@ -43,38 +46,59 @@
         curve, no re-entry before the next bell). Sells bought back one step lower, maker
         both ways; open shorts at the exit bought back at market (0.10%). Ranked by RoMaD
         (DD at each minute's high). Built ${D.made}.</div></div>`));
-      /* best grids over every bell */
+      /* best grids over every bell; a row clicked: that grid on every bell */
       const n = D.cards.length;
       $m.appendChild(el(`<div><h2>Best grids over all ${n} bells (σ from the P)</h2>
-        <div class="card wrap"><table><tr><th>Sells</th><th>Step</th><th>Size</th>
+        <div class="mu">Click a row to draw it on every bell; a bell's own row to draw it on
+        that bell. Bigger lines and marks = more FDUSD on that level.</div>
+        <div class="card wrap"><table id="sum"><tr><th>Sells</th><th>Step</th><th>Size</th>
         <th>RoMaD</th><th>PnL</th><th>Worst DD</th><th>Won</th></tr>
-        ${D.summary.map((s) => `<tr><td>${s.lv} from ${sg(s.first)}</td><td>${s.step}σ</td>
+        ${D.summary.map((s, j) => `<tr data-id="s${j}"><td>${s.lv} from ${sg(s.first)}</td><td>${s.step}σ</td>
           <td>${s.alloc}</td><td>${f2(s.romad)}</td><td class="${s.pnl >= 0 ? "g" : "r"}">${s.pnl.toFixed(1)}</td>
           <td>${s.dd.toFixed(1)}</td><td>${s.won}/${s.n}</td></tr>`).join("")}</table></div></div>`));
       $m.appendChild(el(`<h2>Each bell</h2>`));
-      D.cards.forEach((c, k) => {
-        const b = c.bell, s = c.show, best = c.best[0];
+      const cards = D.cards.map((c, k) => {
+        const b = c.bell;
         const card = el(`<div class="card">
           <div><span class="tag ${col(b.mv)}">${b.day} ${b.n}</span> P ${f0(b.px)}
             σ ${f0(b.sigma)} · curve ${b.lo}–${b.hi} · ${tm(b.birth)} → ${tm(c.end)} (${c.hours}h)</div>
-          <div class="mu">best: ${best.lv} sell${best.lv > 1 ? "s" : ""}
-            ${s.levels.map(f0).join(", ")}, each bought back ${f0(s.step)} lower ·
-            PnL ${f2(best.pnl)} · DD ${f2(best.dd)} · RoMaD ${f2(best.romad)}</div>
+          <div class="mu" id="gi${k}"></div>
           <canvas id="cv${k}"></canvas>
           <div class="wrap"><table><tr><th>Bottom</th><th>Top</th><th>Step</th><th>Size</th>
             <th>Sells</th><th>Trips</th><th>Open</th><th>PnL</th><th>DD</th><th>RoMaD</th></tr>
-            ${c.best.map((r) => `<tr><td>${sg(r.B)}</td><td>${sg(r.T)}</td><td>${r.step}σ</td>
-              <td>${r.alloc}</td><td>${r.lv}</td><td>${r.trips}</td><td>${r.open}</td>
+            ${c.best.map((r, i) => `<tr data-id="b${i}" data-k="${k}"><td>${sg(r.B)}</td><td>${sg(r.T)}</td>
+              <td>${r.step}σ</td><td>${r.alloc}</td><td>${r.lv}</td><td>${r.trips}</td><td>${r.open}</td>
               <td class="${r.pnl >= 0 ? "g" : "r"}">${f2(r.pnl)}</td><td>${f2(r.dd)}</td>
               <td>${f2(r.romad)}</td></tr>`).join("")}</table></div></div>`);
         $m.appendChild(card);
-        draw(document.getElementById("cv" + k), c);
+        return card;
       });
+      /* show grid id on card k: its sells in prices, sizes, and the chart */
+      const show = (k, id) => {
+        const c = D.cards[k], gr = c.grids[id];
+        document.getElementById("gi" + k).textContent =
+          `${id[0] === "s" ? "summary row" : "row"} ${+id.slice(1) + 1}: ` +
+          gr.levels.map((L, i) => `sell ${f0(L)} (${f0(gr.sizes[i])})`).join(", ") +
+          `, each bought back ${f0(gr.step)} lower · PnL ${f2(gr.pnl)} · DD ${f2(gr.dd)}` +
+          ` · RoMaD ${f2(gr.romad)} · ${gr.trips} trips, ${gr.open} open`;
+        cards[k].querySelectorAll("tr[data-id]").forEach((tr) =>
+          tr.classList.toggle("on", tr.dataset.id === id));
+        draw(document.getElementById("cv" + k), c, gr);
+      };
+      document.addEventListener("click", (e) => {
+        const tr = e.target.closest("tr[data-id]");
+        if (!tr) return;
+        if (tr.dataset.k != null) return show(+tr.dataset.k, tr.dataset.id);
+        document.querySelectorAll("#sum tr").forEach((x) => x.classList.toggle("on", x === tr));
+        D.cards.forEach((c, k) => show(k, tr.dataset.id));
+      });
+      D.cards.forEach((c, k) => show(k, "b0"));
       /* the window: price by the minute (high-low band, close line), the
-         curve's range shaded, the P dashed, the best grid's sells (red) and
-         buy backs (green), each fill marked */
-      function draw(cv, c) {
-        const b = c.bell, s = c.show, p = s.path, dpr = devicePixelRatio || 1,
+         curve's range shaded, the P dashed, the grid's sells (red) and buy
+         backs (green), each fill marked; line and mark size by the level's
+         FDUSD */
+      function draw(cv, c, gr) {
+        const b = c.bell, p = c.path, dpr = devicePixelRatio || 1,
           W = cv.clientWidth, H = cv.clientHeight;
         cv.width = W * dpr; cv.height = H * dpr;
         const g = cv.getContext("2d");
@@ -84,7 +108,8 @@
           lo = Math.min(b.lo, ...p.map((q) => q[2])) - 0.2 * b.sigma,
           L = 48, R = W - 6,
           X = (t) => L + ((t - t0) / (t1 - t0)) * (R - L),
-          Y = (v) => 6 + ((hi - v) / (hi - lo)) * (H - 24);
+          Y = (v) => 6 + ((hi - v) / (hi - lo)) * (H - 24),
+          k = (x) => Math.sqrt(x / D.cap);
         g.fillStyle = "rgba(41,98,255,.08)";
         g.fillRect(L, Y(b.hi), R - L, Y(b.lo) - Y(b.hi));
         g.font = "10px ui-monospace,Menlo,monospace";
@@ -95,25 +120,30 @@
         g.fillText(tm(t0), L, H - 4);
         g.textAlign = "right";
         g.fillText(tm(t1), R, H - 4);
-        const hl = (v, c2, d) => {
-          g.strokeStyle = c2; g.setLineDash(d); g.lineWidth = 1;
+        const hl = (v, c2, d, w) => {
+          g.strokeStyle = c2; g.setLineDash(d); g.lineWidth = w;
           g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(R, Y(v)); g.stroke(); g.setLineDash([]);
         };
-        hl(b.px, "#000", [5, 4]);
-        s.levels.forEach((v) => { hl(v, "rgba(229,57,53,.8)", []); hl(v - s.step, "rgba(8,153,129,.8)", [3, 3]); });
+        hl(b.px, "#000", [5, 4], 1);
+        gr.levels.forEach((v, i) => {
+          const w = 0.5 + 3 * k(gr.sizes[i]);
+          hl(v, "rgba(229,57,53,.75)", [], w);
+          hl(v - gr.step, "rgba(8,153,129,.75)", [3, 3], w);
+        });
         g.fillStyle = "rgba(67,70,81,.25)";
         p.forEach((q) => g.fillRect(X(q[0]), Y(q[1]), Math.max(1, X(q[0] + 6e4) - X(q[0])), Y(q[2]) - Y(q[1])));
         g.strokeStyle = "#434651"; g.lineWidth = 1.2; g.beginPath();
         p.forEach((q, i) => g[i ? "lineTo" : "moveTo"](X(q[0] + 3e4), Y(q[3])));
         g.stroke();
-        const tri = (x, y, up, c2) => {
+        const tri = (x, y, up, c2, z) => {
+          const h = 3 + 9 * z;
           g.fillStyle = c2; g.beginPath();
-          g.moveTo(x, y + (up ? -6 : 6)); g.lineTo(x - 4, y + (up ? 2 : -2)); g.lineTo(x + 4, y + (up ? 2 : -2));
+          g.moveTo(x, y + (up ? -h : h)); g.lineTo(x - h * 0.7, y); g.lineTo(x + h * 0.7, y);
           g.fill();
         };
-        s.fills.forEach(([ti, Lv, tj, Lb]) => {
-          tri(X(ti), Y(Lv) - 3, false, "#e53935");
-          if (tj != null) tri(X(tj), Y(Lb) + 3, true, "#089981");
+        gr.fills.forEach(([ti, Lv, tj, Lb, sz]) => {
+          tri(X(ti), Y(Lv) - 2, false, "#e53935", k(sz));
+          if (tj != null) tri(X(tj), Y(Lb) + 2, true, "#089981", k(sz));
         });
       }
     </script>
