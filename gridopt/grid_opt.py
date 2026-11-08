@@ -13,7 +13,15 @@ rests while price is below it. Shorts open at the exit are bought back at market
 or heavier at the bottom. DD on equity marked at each minute's high (worst case
 for shorts).
 
-Usage: python grid_opt.py [bells.json] [--top 5]
+Constraints (against fitting each bell): by default a step of at most 0.5 sigma,
+2 sells or more, flat size, the first sell no higher than +1 sigma. --free lifts
+them all; --max-step, --min-sells, --max-first, --sizes flat,top,bottom set each.
+
+Held out: for each bell, the shape (sells in sigma from the P) that did best on
+the other bells, scored on that bell: what the rule would have made live.
+
+Usage: python grid_opt.py [bells.json] [--top 5] [--free] [--max-step 0.5]
+       [--min-sells 2] [--max-first 1] [--sizes flat]
 """
 import io, json, sys, zipfile, datetime as dt
 from pathlib import Path
@@ -26,6 +34,8 @@ DD_FLOOR = 5.0  # RoMaD = PnL / max(DD, this): a near-zero DD does not win alone
 STEPS = [0.1, 0.15, 0.2, 0.25, 0.33, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 ALLOCS = ["flat", "top", "bottom"]
 DAY = 86_400_000
+# constraints (see the docstring); set from the command line in main()
+CON = dict(max_step=0.5, min_sells=2, max_first=1.0, sizes=["flat"])
 
 
 def day_secs(day):
@@ -168,9 +178,10 @@ def optimise(b, a, top=5):
             for st in STEPS:
                 s = st * sg
                 levels = np.arange(B + s, T + 1e-9, s)  # sells; their buy back is one step lower
-                if len(levels) < 1:
+                if (len(levels) < max(1, CON["min_sells"]) or st > CON["max_step"]
+                        or (levels[0] - P) / sg > CON["max_first"] + 1e-9):
                     continue
-                for al in ALLOCS if len(levels) > 1 else ["flat"]:  # one level: sizing is moot
+                for al in CON["sizes"] if len(levels) > 1 else ["flat"]:  # one level: sizing is moot
                     pnl, dd, tr, op = simulate(levels, weights(len(levels), al), s, pa, mins, mhi)
                     res.append(dict(B=round((B - P) / sg, 2), T=round((T - P) / sg, 2), step=st, alloc=al,
                                     lv=len(levels), trips=tr, open=op, pnl=round(pnl, 2), dd=round(dd, 2),
@@ -198,6 +209,14 @@ def grid_of(pa, t, sg, r):
 def main():
     args = sys.argv[1:]
     top = int(args[args.index("--top") + 1]) if "--top" in args else 5
+    opt = lambda k, f, d: f(args[args.index(k) + 1]) if k in args else d
+    if "--free" in args:
+        CON.update(max_step=99, min_sells=1, max_first=99, sizes=ALLOCS)
+    CON.update(max_step=opt("--max-step", float, CON["max_step"]),
+               min_sells=opt("--min-sells", int, CON["min_sells"]),
+               max_first=opt("--max-first", float, CON["max_first"]),
+               sizes=opt("--sizes", lambda x: x.split(","), CON["sizes"]))
+    print("constraints:", CON)
     path = Path(next((x for x in args if x.endswith(".json")), HERE / "bells.json"))
     bells = sorted(json.loads(path.read_text()), key=lambda x: x["birth"])
     now = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
@@ -247,14 +266,32 @@ def main():
     for j, (_, v) in enumerate(rows[:15]):
         for o, r in zip(out, v):
             o["grids"][f"s{j}"] = grid_of(o["pa"], o["t"], o["bell"]["sigma"], r)
-    page(out, summary)
+    # held out: each bell scored with the shape that did best on the others
+    loo = []
+    for i, o in enumerate(out):
+        if len(out) < 2 or not rows:
+            break
+        (L1, st, nl, al), v = max(rows, key=lambda kv: np.mean([r["romad"] for j, r in enumerate(kv[1]) if j != i]))
+        r = v[i]
+        o["grids"]["h"] = grid_of(o["pa"], o["t"], o["bell"]["sigma"], r)
+        loo.append(dict(k=i, first=L1, step=st, lv=nl, alloc=al, pnl=r["pnl"], dd=r["dd"], romad=r["romad"],
+                        trips=r["trips"], open=r["open"]))
+    if loo:
+        print(f"\nHeld out (each bell with the best shape of the others): PnL {sum(x['pnl'] for x in loo):.1f}"
+              f"  mean RoMaD {np.mean([x['romad'] for x in loo]):.2f}  worst DD {max(x['dd'] for x in loo):.1f}"
+              f"  won {sum(x['pnl'] > 0 for x in loo)}/{len(loo)}")
+        for x in loo:
+            print(f"  {out[x['k']]['bell']['day']} P{out[x['k']]['bell']['n']}: {x['lv']} from {x['first']:+.2f}"
+                  f" every {x['step']} {x['alloc']}  PnL {x['pnl']}  DD {x['dd']}  RoMaD {x['romad']}")
+    page(out, summary, loo)
 
 
-def page(out, summary):
-    """results.html: settings, best grids over all bells, a card per bell."""
+def page(out, summary, loo):
+    """results.html: settings, best grids over all bells, held out, a card per bell."""
     cards = [dict(bell=o["bell"], hours=o["hours"], end=o["end"], path=o["path"], grids=o["grids"],
                   best=[{k: v for k, v in r.items() if k not in ("bp", "tp")} for r in o["best"]]) for o in out]
-    data = json.dumps(dict(cards=cards, summary=summary, cap=CAP,
+    con = {k: v for k, v in CON.items()}
+    data = json.dumps(dict(cards=cards, summary=summary, loo=loo, con=con, cap=CAP,
                            made=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")))
     (HERE / "results.html").write_text((HERE / "page.html").read_text().replace("/*DATA*/null", data))
     print(f"\nresults.html written ({len(cards)} bells)")

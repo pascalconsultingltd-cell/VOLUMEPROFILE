@@ -45,7 +45,9 @@
         <div class="mu">${D.cap} FDUSD per bell, from its birth to its exit (price out of the
         curve, no re-entry before the next bell). Sells bought back one step lower, maker
         both ways; open shorts at the exit bought back at market (0.10%). Ranked by RoMaD
-        (DD at each minute's high). Built ${D.made}.</div></div>`));
+        (DD at each minute's high). Built ${D.made}.</div>
+        <div class="mu">Grids allowed: step ≤ ${D.con.max_step}σ, ${D.con.min_sells}+ sells,
+        first sell ≤ +${D.con.max_first}σ, size ${D.con.sizes.join(" / ")}.</div></div>`));
       /* best grids over every bell; a row clicked: that grid on every bell */
       const n = D.cards.length;
       $m.appendChild(el(`<div><h2>Best grids over all ${n} bells (σ from the P)</h2>
@@ -56,6 +58,24 @@
         ${D.summary.map((s, j) => `<tr data-id="s${j}"><td>${s.lv} from ${sg(s.first)}</td><td>${s.step}σ</td>
           <td>${s.alloc}</td><td>${f2(s.romad)}</td><td class="${s.pnl >= 0 ? "g" : "r"}">${s.pnl.toFixed(1)}</td>
           <td>${s.dd.toFixed(1)}</td><td>${s.won}/${s.n}</td></tr>`).join("")}</table></div></div>`));
+      /* held out: each bell with the shape that did best on the others */
+      if (D.loo.length) {
+        const L = D.loo, tot = L.reduce((a, x) => a + x.pnl, 0);
+        $m.appendChild(el(`<div><h2>Held out: each bell with the best shape of the others</h2>
+          <div class="mu">What the rule would have made live (the shape is chosen without the
+          bell it is scored on). Click a row to draw it on that bell.</div>
+          <div class="card wrap"><table><tr><th>Bell</th><th>Shape (σ from the P)</th><th>Trips</th>
+          <th>Open</th><th>PnL</th><th>DD</th><th>RoMaD</th></tr>
+          ${L.map((x) => { const b = D.cards[x.k].bell; return `<tr data-id="h" data-k="${x.k}">
+            <td><span class="tag ${col(b.mv)}">${b.day} ${b.n}</span></td>
+            <td>${x.lv} from ${sg(x.first)} every ${x.step}σ, ${x.alloc}</td><td>${x.trips}</td>
+            <td>${x.open}</td><td class="${x.pnl >= 0 ? "g" : "r"}">${f2(x.pnl)}</td><td>${f2(x.dd)}</td>
+            <td>${f2(x.romad)}</td></tr>`; }).join("")}
+          <tr><th>Total</th><th>won ${L.filter((x) => x.pnl > 0).length}/${L.length}</th><th></th><th></th>
+          <th class="${tot >= 0 ? "g" : "r"}">${tot.toFixed(1)}</th>
+          <th>${Math.max(...L.map((x) => x.dd)).toFixed(1)}</th>
+          <th>${(L.reduce((a, x) => a + x.romad, 0) / L.length).toFixed(2)}</th></tr></table></div></div>`));
+      }
       $m.appendChild(el(`<h2>Each bell</h2>`));
       const cards = D.cards.map((c, k) => {
         const b = c.bell;
@@ -77,7 +97,7 @@
       const show = (k, id) => {
         const c = D.cards[k], gr = c.grids[id];
         document.getElementById("gi" + k).textContent =
-          `${id[0] === "s" ? "summary row" : "row"} ${+id.slice(1) + 1}: ` +
+          `${id === "h" ? "held out" : (id[0] === "s" ? "summary row " : "row ") + (+id.slice(1) + 1)}: ` +
           gr.levels.map((L, i) => `sell ${f0(L)} (${f0(gr.sizes[i])})`).join(", ") +
           `, each bought back ${f0(gr.step)} lower · PnL ${f2(gr.pnl)} · DD ${f2(gr.dd)}` +
           ` · RoMaD ${f2(gr.romad)} · ${gr.trips} trips, ${gr.open} open`;
@@ -88,7 +108,10 @@
       document.addEventListener("click", (e) => {
         const tr = e.target.closest("tr[data-id]");
         if (!tr) return;
-        if (tr.dataset.k != null) return show(+tr.dataset.k, tr.dataset.id);
+        if (tr.dataset.k != null) {
+          tr.parentElement.querySelectorAll("tr").forEach((x) => x.classList.toggle("on", x === tr));
+          return show(+tr.dataset.k, tr.dataset.id);
+        }
         document.querySelectorAll("#sum tr").forEach((x) => x.classList.toggle("on", x === tr));
         D.cards.forEach((c, k) => show(k, tr.dataset.id));
       });
