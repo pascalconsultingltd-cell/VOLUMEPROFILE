@@ -4735,6 +4735,10 @@
             g.textBaseline = "bottom";
             /* a bell not out of its curve yet (no start): thin
                light grey from its birth, "wait"; D = a DT bell */
+            const pv = new Map();
+            scores.slice().sort((a, b) => a.birth - b.birth)
+              .forEach((b, i, a) =>
+                pv.set(b, i ? a[i - 1].px : null));
             scores.forEach((b) => {
               const y = Y(b.fin && b.xpx != null ? b.xpx : b.px),
                 w = b.start == null;
@@ -4771,6 +4775,20 @@
                 g.lineTo(xe - 4, y);
                 g.closePath();
                 g.fill();
+                /* its number in its day, under it (over it at
+                   the bottom edge) */
+                if (b.n) {
+                  /* coloured as in VP: its move from the bell
+                     before (green up / same, red down) */
+                  const q = pv.get(b);
+                  g.fillStyle = q == null ? "#000"
+                    : b.px >= q ? "#089981" : "#e53935";
+                  g.textAlign = "center";
+                  g.textBaseline = y + 18 > bot ? "bottom" : "top";
+                  g.fillText(b.n, xe, y + (y + 18 > bot ? -6 : 6));
+                  g.textAlign = "left";
+                  g.textBaseline = "bottom";
+                }
               } else if (tx) g.fillText(tx, xs + 2, y - 2);
             });
             g.restore();
