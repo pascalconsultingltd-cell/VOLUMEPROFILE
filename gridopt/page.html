@@ -29,6 +29,7 @@
       tr[data-id] { cursor: pointer; }
       tr[data-id]:hover { background: #f0f3f7; }
       tr.on { background: #e7eefc; }
+      td.lk { text-decoration: underline dotted; }
     </style>
   </head>
   <body>
@@ -47,7 +48,8 @@
         both ways; open shorts at the exit bought back at market (0.10%). Ranked by RoMaD
         (DD at each minute's high). Built ${D.made}.</div>
         <div class="mu">Grids allowed: step ≤ ${D.con.max_step}σ, ${D.con.min_sells}+ sells,
-        first sell ≤ +${D.con.max_first}σ, size ${D.con.sizes.join(" / ")}.</div></div>`));
+        first sell ≤ +${D.con.max_first}σ, size ${D.con.sizes.join(" / ")}.
+        ${D.page === "results.html" ? `<a href="results_free.html">free run</a>` : `<a href="results.html">constrained run</a>`}</div></div>`));
       /* best grids over every bell; a row clicked: that grid on every bell */
       const n = D.cards.length;
       $m.appendChild(el(`<div><h2>Best grids over all ${n} bells (σ from the P)</h2>
@@ -120,14 +122,16 @@
         $m.appendChild(el(`<div><h2>Rolling: each bell with the ${D.N} best shapes of the ${D.R} bells before it</h2>
           <div class="mu">No look ahead: the shapes are picked on the ${D.R} bells before, then used on the
           next. #1 = the best of them alone; ${D.N} best = their average (about the ${D.cap} split over
-          them). Click a row to draw #1 on that bell.</div>
+          them). Click a row to draw #1 on that bell; its ${D.N} best cells to draw their merged grid
+          (FDUSD added per sell and buy back price).</div>
           <div class="card wrap"><table><tr><th>Bell</th><th>#1 shape (σ from the P)</th><th>Trips</th>
           <th>PnL #1</th><th>DD #1</th><th>PnL ${D.N} best</th><th>DD ${D.N} best</th><th>Won of ${D.N}</th></tr>
           ${L.map((x) => { const b = D.cards[x.k].bell; return `<tr data-id="r" data-k="${x.k}">
             <td><span class="tag ${col(b.mv)}">${b.day} ${b.n}</span></td>
             <td>${x.lv} from ${sg(x.first)} every ${x.step}σ</td><td>${x.trips}</td>
             <td class="${x.pnl >= 0 ? "g" : "r"}">${f2(x.pnl)}</td><td>${f2(x.dd)}</td>
-            <td class="${x.pnlN >= 0 ? "g" : "r"}">${f2(x.pnlN)}</td><td>${f2(x.ddN)}</td><td>${x.wonN}/${x.n}</td></tr>`; }).join("")}
+            <td data-id="m" data-k="${x.k}" class="lk ${x.pnlN >= 0 ? "g" : "r"}">${f2(x.pnlN)}</td>
+            <td data-id="m" data-k="${x.k}" class="lk">${f2(x.ddN)}</td><td>${x.wonN}/${x.n}</td></tr>`; }).join("")}
           <tr><th>Total</th><th>won ${L.filter((x) => x.pnl > 0).length}/${L.length}</th><th></th>
           <th class="${t1 >= 0 ? "g" : "r"}">${t1.toFixed(1)}</th>
           <th>${Math.max(...L.map((x) => x.dd)).toFixed(1)}</th>
@@ -156,19 +160,20 @@
       const show = (k, id) => {
         const c = D.cards[k], gr = c.grids[id];
         document.getElementById("gi" + k).textContent =
-          `${id === "h" ? "held out" : id === "r" ? "rolling #1" : (id[0] === "s" ? "summary row " : "row ") + (+id.slice(1) + 1)}: ` +
-          gr.levels.map((L, i) => `sell ${f0(L)} (${f0(gr.sizes[i])})`).join(", ") +
-          `, each bought back ${f0(gr.step)} lower · PnL ${f2(gr.pnl)} · DD ${f2(gr.dd)}` +
+          `${id === "h" ? "held out" : id === "r" ? "rolling #1" : id === "m" ? `${D.N} best merged` : (id[0] === "s" ? "summary row " : "row ") + (+id.slice(1) + 1)}: ` +
+          gr.levels.map((L, i) => `sell ${f0(L)} (${f0(gr.sizes[i])})` + (gr.buys ? ` buy ${f0(gr.buys[i])}` : "")).join(", ") +
+          (gr.buys ? "" : `, each bought back ${f0(gr.step)} lower`) + ` · PnL ${f2(gr.pnl)} · DD ${f2(gr.dd)}` +
           ` · RoMaD ${f2(gr.romad)} · ${gr.trips} trips, ${gr.open} open`;
         cards[k].querySelectorAll("tr[data-id]").forEach((tr) =>
           tr.classList.toggle("on", tr.dataset.id === id));
         draw(document.getElementById("cv" + k), c, gr);
       };
       document.addEventListener("click", (e) => {
-        const tr = e.target.closest("tr[data-id]");
+        const tr = e.target.closest("[data-id]");
         if (!tr) return;
         if (tr.dataset.k != null) {
-          tr.parentElement.querySelectorAll("tr").forEach((x) => x.classList.toggle("on", x === tr));
+          const row = tr.closest("tr");
+          row.parentElement.querySelectorAll("tr").forEach((x) => x.classList.toggle("on", x === row));
           return show(+tr.dataset.k, tr.dataset.id);
         }
         document.querySelectorAll("#sum tr").forEach((x) => x.classList.toggle("on", x === tr));
@@ -210,7 +215,7 @@
         gr.levels.forEach((v, i) => {
           const w = 0.5 + 3 * k(gr.sizes[i]);
           hl(v, "rgba(229,57,53,.75)", [], w);
-          hl(v - gr.step, "rgba(8,153,129,.75)", [3, 3], w);
+          hl(gr.buys ? gr.buys[i] : v - gr.step, "rgba(8,153,129,.75)", [3, 3], w);
         });
         g.fillStyle = "rgba(67,70,81,.25)";
         p.forEach((q) => g.fillRect(X(q[0]), Y(q[1]), Math.max(1, X(q[0] + 6e4) - X(q[0])), Y(q[2]) - Y(q[1])));

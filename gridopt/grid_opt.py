@@ -38,6 +38,7 @@ STEPS = [0.1, 0.15, 0.2, 0.25, 0.33, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 ALLOCS = ["flat", "top", "bottom"]
 DAY = 86_400_000
 # constraints (see the docstring); set from the command line in main()
+PAGE = ["results.html"]  # --free writes results_free.html
 CON = dict(max_step=0.5, min_sells=2, max_first=1.0, sizes=["flat"])
 
 
@@ -219,6 +220,7 @@ def main():
     top = int(args[args.index("--top") + 1]) if "--top" in args else 5
     opt = lambda k, f, d: f(args[args.index(k) + 1]) if k in args else d
     if "--free" in args:
+        PAGE[0] = "results_free.html"
         CON.update(max_step=99, min_sells=1, max_first=99, sizes=ALLOCS)
     CON.update(max_step=opt("--max-step", float, CON["max_step"]),
                min_sells=opt("--min-sells", int, CON["min_sells"]),
@@ -315,6 +317,19 @@ def main():
         eqN = sum(curve_of(o, r) for r in rs) / len(rs)
         ddN = float(np.max(np.maximum.accumulate(np.r_[0.0, eqN]) - np.r_[0.0, eqN]))
         pnlN = float(eqN[-1])
+        # the N best merged into one grid: FDUSD added per (sell, buy back) pair
+        gs, mg = [grid_of(o["pa"], o["t"], o["bell"]["sigma"], r) for r in rs], {}
+        for gg in gs:
+            for L, sz in zip(gg["levels"], gg["sizes"]):
+                k = (round(L, 2), round(L - gg["step"], 2))
+                mg[k] = mg.get(k, 0) + sz / len(gs)
+        ks = sorted(mg, key=lambda k: (-k[0], -k[1]))
+        o["grids"]["m"] = dict(levels=[k[0] for k in ks], buys=[k[1] for k in ks],
+                               sizes=[round(mg[k], 1) for k in ks], step=None,
+                               fills=[f[:4] + [round(f[4] / len(gs), 1)] for gg in gs for f in gg["fills"]],
+                               pnl=round(pnlN, 2), dd=round(ddN, 2), romad=round(pnlN / max(ddN, DD_FLOOR), 2),
+                               trips=sum(gg["trips"] for gg in gs), open=sum(gg["open"] for gg in gs),
+                               B=None, T=None, alloc="merged")
         roll.append(dict(k=i, first=L1, step=st, lv=nl, alloc=al, pnl=rs[0]["pnl"], dd=rs[0]["dd"],
                          romad=rs[0]["romad"], trips=rs[0]["trips"], open=rs[0]["open"],
                          pnlN=round(pnlN, 2), ddN=round(ddN, 2), romadN=round(pnlN / max(ddN, DD_FLOOR), 2),
@@ -364,10 +379,10 @@ def page(out, summary, loo, roll, R, N, cmp):
     cards = [dict(bell=o["bell"], hours=o["hours"], end=o["end"], path=o["path"], grids=o["grids"],
                   best=[{k: v for k, v in r.items() if k not in ("bp", "tp")} for r in o["best"]]) for o in out]
     con = {k: v for k, v in CON.items()}
-    data = json.dumps(dict(cards=cards, summary=summary, loo=loo, roll=roll, R=R, N=N, cmp=cmp, con=con, cap=CAP,
+    data = json.dumps(dict(cards=cards, summary=summary, loo=loo, roll=roll, R=R, N=N, cmp=cmp, con=con, cap=CAP, page=PAGE[0],
                            made=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")))
-    (HERE / "results.html").write_text((HERE / "page.html").read_text().replace("/*DATA*/null", data))
-    print(f"\nresults.html written ({len(cards)} bells)")
+    (HERE / PAGE[0]).write_text((HERE / "page.html").read_text().replace("/*DATA*/null", data))
+    print(f"\n{PAGE[0]} written ({len(cards)} bells)")
 
 
 if __name__ == "__main__":
