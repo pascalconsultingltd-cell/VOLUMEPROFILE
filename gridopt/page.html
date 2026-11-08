@@ -76,6 +76,26 @@
           <th>${Math.max(...L.map((x) => x.dd)).toFixed(1)}</th>
           <th>${(L.reduce((a, x) => a + x.romad, 0) / L.length).toFixed(2)}</th></tr></table></div></div>`));
       }
+      /* rolling: each bell with the best shapes of the bells before it */
+      if (D.roll.length) {
+        const L = D.roll, t1 = L.reduce((a, x) => a + x.pnl, 0), tn = L.reduce((a, x) => a + x.pnlN, 0);
+        $m.appendChild(el(`<div><h2>Rolling: each bell with the ${D.N} best shapes of the ${D.R} bells before it</h2>
+          <div class="mu">No look ahead: the shapes are picked on the ${D.R} bells before, then used on the
+          next. #1 = the best of them alone; ${D.N} best = their average (about the ${D.cap} split over
+          them). Click a row to draw #1 on that bell.</div>
+          <div class="card wrap"><table><tr><th>Bell</th><th>#1 shape (σ from the P)</th><th>Trips</th>
+          <th>PnL #1</th><th>DD #1</th><th>PnL ${D.N} best</th><th>Won of ${D.N}</th></tr>
+          ${L.map((x) => { const b = D.cards[x.k].bell; return `<tr data-id="r" data-k="${x.k}">
+            <td><span class="tag ${col(b.mv)}">${b.day} ${b.n}</span></td>
+            <td>${x.lv} from ${sg(x.first)} every ${x.step}σ</td><td>${x.trips}</td>
+            <td class="${x.pnl >= 0 ? "g" : "r"}">${f2(x.pnl)}</td><td>${f2(x.dd)}</td>
+            <td class="${x.pnlN >= 0 ? "g" : "r"}">${f2(x.pnlN)}</td><td>${x.wonN}/${x.n}</td></tr>`; }).join("")}
+          <tr><th>Total</th><th>won ${L.filter((x) => x.pnl > 0).length}/${L.length}</th><th></th>
+          <th class="${t1 >= 0 ? "g" : "r"}">${t1.toFixed(1)}</th>
+          <th>${Math.max(...L.map((x) => x.dd)).toFixed(1)}</th>
+          <th class="${tn >= 0 ? "g" : "r"}">${tn.toFixed(1)}</th>
+          <th>won ${L.filter((x) => x.pnlN > 0).length}/${L.length}</th></tr></table></div></div>`));
+      }
       $m.appendChild(el(`<h2>Each bell</h2>`));
       const cards = D.cards.map((c, k) => {
         const b = c.bell;
@@ -97,7 +117,7 @@
       const show = (k, id) => {
         const c = D.cards[k], gr = c.grids[id];
         document.getElementById("gi" + k).textContent =
-          `${id === "h" ? "held out" : (id[0] === "s" ? "summary row " : "row ") + (+id.slice(1) + 1)}: ` +
+          `${id === "h" ? "held out" : id === "r" ? "rolling #1" : (id[0] === "s" ? "summary row " : "row ") + (+id.slice(1) + 1)}: ` +
           gr.levels.map((L, i) => `sell ${f0(L)} (${f0(gr.sizes[i])})`).join(", ") +
           `, each bought back ${f0(gr.step)} lower · PnL ${f2(gr.pnl)} · DD ${f2(gr.dd)}` +
           ` · RoMaD ${f2(gr.romad)} · ${gr.trips} trips, ${gr.open} open`;

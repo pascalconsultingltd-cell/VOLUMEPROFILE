@@ -20,8 +20,11 @@ them all; --max-step, --min-sells, --max-first, --sizes flat,top,bottom set each
 Held out: for each bell, the shape (sells in sigma from the P) that did best on
 the other bells, scored on that bell: what the rule would have made live.
 
+Rolling: each bell from the R-th on, with the N best shapes of the R bells before
+it (no look ahead): #1 alone, and the N averaged.
+
 Usage: python grid_opt.py [bells.json] [--top 5] [--free] [--max-step 0.5]
-       [--min-sells 2] [--max-first 1] [--sizes flat]
+       [--min-sells 2] [--max-first 1] [--sizes flat] [--roll 10] [--roll-top 10]
 """
 import io, json, sys, zipfile, datetime as dt
 from pathlib import Path
@@ -68,7 +71,9 @@ def day_secs(day):
 
 def secs(t0, t1):
     """1s candles from t0 to t1 (ms)."""
-    d0 = dt.datetime.fromtimestamp(t0 / 1000, dt.timezone.utc).date()
+    if t1 <= t0:
+        return np.zeros((0, 4))
+    d0 =dt.datetime.fromtimestamp(t0 / 1000, dt.timezone.utc).date()
     d1 = dt.datetime.fromtimestamp((t1 - 1) / 1000, dt.timezone.utc).date()
     days = [d0 + dt.timedelta(k) for k in range((d1 - d0).days + 1)]
     a = np.concatenate([day_secs(d.isoformat()) for d in days])
@@ -229,6 +234,9 @@ def main():
         if e is None:
             print(f"{tag}: still inside its bell, skipped")
             continue
+        if e < 60:
+            print(f"{tag}: window under a minute (next bell born with it), skipped")
+            continue
         a = a[:e]
         hrs = (a[-1, 0] - a[0, 0]) / 3.6e6
         best, allr, path, pa = optimise(b, a, top)
@@ -249,6 +257,7 @@ def main():
             k = (round((r["B"] + r["step"]) * 4) / 4, r["step"], r["lv"], r["alloc"])
             if k not in seen or r["romad"] > seen[k]["romad"]:
                 seen[k] = r
+        o["seen"] = seen
         for k, r in seen.items():
             agg.setdefault(k, []).append(r)
     rows = [(k, v) for k, v in agg.items() if len(v) == len(out)]
@@ -283,15 +292,43 @@ def main():
         for x in loo:
             print(f"  {out[x['k']]['bell']['day']} P{out[x['k']]['bell']['n']}: {x['lv']} from {x['first']:+.2f}"
                   f" every {x['step']} {x['alloc']}  PnL {x['pnl']}  DD {x['dd']}  RoMaD {x['romad']}")
-    page(out, summary, loo)
+    # rolling: each bell from the R-th on, with the N best shapes of the R bells
+    # before it (no look ahead); #1 alone and the N's average (about the 1500
+    # split over them)
+    R, N = opt("--roll", int, 10), opt("--roll-top", int, 10)
+    roll = []
+    for i in range(R, len(out)):
+        past = [out[j]["seen"] for j in range(i - R, i)]
+        keys = [k for k in past[0] if all(k in p for p in past) and k in out[i]["seen"]]
+        ranked = sorted(keys, key=lambda k: -np.mean([p[k]["romad"] for p in past]))[:N]
+        if not ranked:
+            continue
+        rs = [out[i]["seen"][k] for k in ranked]
+        (L1, st, nl, al) = ranked[0]
+        out[i]["grids"]["r"] = grid_of(out[i]["pa"], out[i]["t"], out[i]["bell"]["sigma"], rs[0])
+        roll.append(dict(k=i, first=L1, step=st, lv=nl, alloc=al, pnl=rs[0]["pnl"], dd=rs[0]["dd"],
+                         romad=rs[0]["romad"], trips=rs[0]["trips"], open=rs[0]["open"],
+                         pnlN=round(float(np.mean([r["pnl"] for r in rs])), 2),
+                         wonN=int(sum(r["pnl"] > 0 for r in rs)), n=len(rs),
+                         shapes=[f"{k[2]} from {k[0]:+.2f} every {k[1]}" for k in ranked]))
+    if roll:
+        print(f"\nRolling ({R} bells before, {N} best shapes): #1 PnL {sum(x['pnl'] for x in roll):.1f}"
+              f"  won {sum(x['pnl'] > 0 for x in roll)}/{len(roll)}  worst DD {max(x['dd'] for x in roll):.1f}"
+              f"  |  {N} best averaged PnL {sum(x['pnlN'] for x in roll):.1f}"
+              f"  won {sum(x['pnlN'] > 0 for x in roll)}/{len(roll)}")
+        for x in roll:
+            b = out[x["k"]]["bell"]
+            print(f"  {b['day']} P{b['n']}: #1 {x['shapes'][0]}  PnL {x['pnl']}  DD {x['dd']}"
+                  f"  | {x['n']} best: PnL {x['pnlN']}  {x['wonN']}/{x['n']} won")
+    page(out, summary, loo, roll, R, N)
 
 
-def page(out, summary, loo):
-    """results.html: settings, best grids over all bells, held out, a card per bell."""
+def page(out, summary, loo, roll, R, N):
+    """results.html: settings, best grids over all bells, held out, rolling, a card per bell."""
     cards = [dict(bell=o["bell"], hours=o["hours"], end=o["end"], path=o["path"], grids=o["grids"],
                   best=[{k: v for k, v in r.items() if k not in ("bp", "tp")} for r in o["best"]]) for o in out]
     con = {k: v for k, v in CON.items()}
-    data = json.dumps(dict(cards=cards, summary=summary, loo=loo, con=con, cap=CAP,
+    data = json.dumps(dict(cards=cards, summary=summary, loo=loo, roll=roll, R=R, N=N, con=con, cap=CAP,
                            made=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")))
     (HERE / "results.html").write_text((HERE / "page.html").read_text().replace("/*DATA*/null", data))
     print(f"\nresults.html written ({len(cards)} bells)")
