@@ -4755,10 +4755,17 @@
               g.lineTo(xe, y);
               g.stroke();
               g.setLineDash([]);
-              if (w) g.fillText(d + "wait", xs + 2, y - 2);
-              else if (v != null)
-                g.fillText(d + f(v) + " #1 " + f(b.n1), xs + 2,
-                  y - 2);
+              const tx = d + (w ? "wait"
+                : v == null ? "" : f(v) + " #1 " + f(b.n1));
+              /* over: a circle at its end, the score before it */
+              if (b.fin && v != null) {
+                g.beginPath();
+                g.arc(xe, y, 4, 0, 2 * Math.PI);
+                g.fill();
+                g.textAlign = "right";
+                g.fillText(tx, xe - 6, y - 2);
+                g.textAlign = "left";
+              } else if (tx) g.fillText(tx, xs + 2, y - 2);
             });
             g.restore();
           }
@@ -5402,14 +5409,18 @@
             return;
           }
           if (pan && view) {
-            const dx = t.clientX - pan.x;
-            /* touch: the crosshair stays until the finger moves */
+            let dx = t.clientX - pan.x;
+            /* touch: the crosshair stays until the finger moves;
+               its first move picks one axis, kept to the end */
             if (pan.tc && !pan.mv) {
               if (Math.hypot(dx, t.clientY - pan.y) < 8) return;
               pan.mv = true;
+              pan.ax = Math.abs(dx) >= Math.abs(t.clientY - pan.y)
+                ? "x" : "y";
               if (xh && xh.from === api) xh = null;
               charts.forEach((h) => h !== api && h.sched());
             }
+            if (pan.ax === "y") dx = 0;
             /* dragging right shows older, as on the chart */
             /* fractional, so the windows slide smoothly */
             if (pan.w === "pc")
@@ -5428,7 +5439,7 @@
               subX = tot - off;
             }
             const dy = t.clientY - pan.y;
-            if (Math.abs(dy) > 4) pan.vy = true;
+            if (Math.abs(dy) > 4 && pan.ax !== "x") pan.vy = true;
             if (pan.vy) ypan = pan.yp + (dy / view.ch) * pan.rng;
             hover = -1;
             if (pan.tc) mouse = null;
