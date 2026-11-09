@@ -4625,10 +4625,10 @@
            * as thick as its quantity; dot = filled,
            * cancelled just stops, open orders run to the edge
            */
-          /* BS: a line at each bell's P over its window, blue
-             / red (0 too) by the 10 best's PnL (grey: not
-             ranked yet), dashed while running; label: 10 best,
-             then #1 */
+          /* BS: each bell's N=6 grid capped at +/-1.96 sigma
+             (bellscore.py), blue when it made money (ranged), red
+             else; running: a dashed line at its P from its birth,
+             its score (sigma) at the start */
           if (cfg.main && showScores && scores.length && geo.length) {
             const tF = geo[0].c.t;
             g.save();
@@ -4637,36 +4637,27 @@
             g.clip();
             g.font = "10px ui-monospace,Menlo,monospace";
             g.textBaseline = "bottom";
-            /* a bell not out of its curve yet (no start): thin
-               light grey from its birth, "wait"; D = a DT bell */
             scores.forEach((b) => {
-              const y = Y(b.fin && b.xpx != null ? b.xpx : b.px),
-                w = b.start == null;
-              if ((!w && b.end < tF) || y < top || y > bot) return;
-              const a = geoAt(w ? b.birth : b.start),
+              const y = Y(b.fin && b.xpx != null ? b.xpx : b.px);
+              if (b.end < tF || y < top || y > bot) return;
+              const a = geoAt(b.birth),
                 e = b.fin ? geoAt(b.end) : null,
                 xs = a ? a.x + a.w / 2 : x0,
                 xe = e ? e.x + e.w / 2 : px0,
-                v = b.n10,
-                col = w ? "#a7b0ba" : v == null ? "#6b7684"
-                  : v > 0 ? "#2962ff" : "#e53935",
-                f = (x) => (x > 0 ? "+" : "") + x.toFixed(1),
-                d = b.kind === "D" ? "D " : "";
+                v = b.sc,
+                col = v == null ? "#6b7684"
+                  : v > 0 ? "#2962ff" : "#e53935";
               g.strokeStyle = g.fillStyle = col;
-              g.lineWidth = w ? 1 : 2;
+              g.lineWidth = 2;
               /* over: only its diamond, no line */
               if (!b.fin) {
-                g.setLineDash(w ? [2, 3] : [5, 3]);
+                g.setLineDash([5, 3]);
                 g.beginPath();
                 g.moveTo(xs, y);
                 g.lineTo(xe, y);
                 g.stroke();
                 g.setLineDash([]);
               }
-              const tx = d + (w ? "wait"
-                : v == null ? "" : f(v) + " #1 " + f(b.n1));
-              /* over: only a diamond (HA has circles) where it
-                 ended, at the price then (the next bell's exit) */
               if (b.fin && v != null) {
                 g.beginPath();
                 g.moveTo(xe, y - 5);
@@ -4694,7 +4685,8 @@
                   g.textAlign = "left";
                   g.textBaseline = "bottom";
                 }
-              } else if (tx) g.fillText(tx, xs + 2, y - 2);
+              } else if (v != null) g.fillText((v > 0 ? "+" : "") +
+                v.toFixed(2) + "σ", xs + 2, y - 2);
             });
             g.restore();
           }
