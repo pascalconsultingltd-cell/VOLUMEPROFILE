@@ -1620,12 +1620,10 @@
         schedule();
       }
       /* bell scores (BS button, bellscore.js from GRID-TRADING/
-         bellscore.py): each live vipoc bell from its first exit
-         to the next bell's, its rolling short grid PnL */
+         bellscore.py): each live P / D bell's N=6 grid score
+         (sigma), circled next to it in VP */
       let showScores = true,
         scores = [];
-      /* each day's VP numbers (P's and D's by age) and moves */
-      const rkDay = new Map();
       function setShowScores(v) {
         showScores = !!v;
         $("bsTog").className = showScores ? "a" : "";
@@ -3802,10 +3800,42 @@
               g.strokeText(i + 1, x, Y(px));
               g.fillText(i + 1, x, Y(px));
             });
+            /* BS (bellscore.py): each bell's grid score in sigma,
+               circled right of its P's curve / left of its D's;
+               the day's live bell of its kind nearest it, within
+               a vol; green made money, red not; dashed: running */
+            if (showScores && scores.length) {
+              const own = scores.filter((q) => q.sc != null &&
+                  dayOf(q.birth - 1) === P.dS),
+                pin = (X, kind, x) => {
+                  const m = own.filter((q) => q.kind === kind &&
+                    Math.abs(q.px - X.px) < vf);
+                  if (!m.length) return;
+                  const b = m.reduce((a, q) => Math.abs(q.px - X.px)
+                      < Math.abs(a.px - X.px) ? q : a),
+                    y = Y(X.px),
+                    col = b.sc > 0 ? "#089981" : "#e53935";
+                  g.setLineDash(b.fin ? [] : [3, 2]);
+                  g.beginPath();
+                  g.arc(x, y, 13, 0, 2 * Math.PI);
+                  g.fillStyle = "#fff";
+                  g.fill();
+                  g.strokeStyle = col;
+                  g.lineWidth = 1.5;
+                  g.stroke();
+                  g.setLineDash([]);
+                  g.fillStyle = col;
+                  g.font = "bold 10px ui-monospace,Menlo,monospace";
+                  g.fillText((b.sc > 0 ? "+" : "") + b.sc.toFixed(1),
+                    x, y);
+                };
+              sp.forEach((S) => pin(S, "P",
+                cX(Math.floor(S.px / P.step)) + 16));
+              (dc.ps || []).forEach((Q) => pin(Q, "D", cx0 - 18 -
+                ((dc.get(Math.floor(Q.px / P.step)) || 0) * kv * vs)
+                / 2));
+            }
             if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
-            /* for the BS diamonds: its P's numbers and moves */
-            rkDay.set(P.dS, rk.map((e, i) =>
-              ({ px: e[2], n: i + 1, mv: e[3], p: e[5] === 1 })));
             g.restore();
           }
           g.restore();
@@ -4625,71 +4655,6 @@
            * as thick as its quantity; dot = filled,
            * cancelled just stops, open orders run to the edge
            */
-          /* BS: each bell's N=6 grid capped at +/-1.96 sigma
-             (bellscore.py), blue when it made money (ranged), red
-             else; running: a dashed line at its P from its birth,
-             its score (sigma) at the start */
-          if (cfg.main && showScores && scores.length && geo.length) {
-            const tF = geo[0].c.t;
-            g.save();
-            g.beginPath();
-            g.rect(x0, top, px0 - x0, bot - top);
-            g.clip();
-            g.font = "10px ui-monospace,Menlo,monospace";
-            g.textBaseline = "bottom";
-            scores.forEach((b) => {
-              const y = Y(b.fin && b.xpx != null ? b.xpx : b.px);
-              if (b.end < tF || y < top || y > bot) return;
-              const a = geoAt(b.birth),
-                e = b.fin ? geoAt(b.end) : null,
-                xs = a ? a.x + a.w / 2 : x0,
-                xe = e ? e.x + e.w / 2 : px0,
-                v = b.sc,
-                col = v == null ? "#6b7684"
-                  : v > 0 ? "#2962ff" : "#e53935";
-              g.strokeStyle = g.fillStyle = col;
-              g.lineWidth = 2;
-              /* over: only its diamond, no line */
-              if (!b.fin) {
-                g.setLineDash([5, 3]);
-                g.beginPath();
-                g.moveTo(xs, y);
-                g.lineTo(xe, y);
-                g.stroke();
-                g.setLineDash([]);
-              }
-              if (b.fin && v != null) {
-                g.beginPath();
-                g.moveTo(xe, y - 5);
-                g.lineTo(xe + 4, y);
-                g.lineTo(xe, y + 5);
-                g.lineTo(xe - 4, y);
-                g.closePath();
-                g.fill();
-                /* its number under it (over it at the bottom
-                   edge), number and colour from VP: its day's P
-                   nearest the bell; a day VP has not drawn: none */
-                const L = (rkDay.get(dayOf(b.birth - 1)) || [])
-                    .filter((e) => e.p),
-                  r = L.length ? L.reduce((a, e) =>
-                    Math.abs(e.px - b.px) < Math.abs(a.px - b.px)
-                      ? e : a) : null;
-                if (r) {
-                  g.fillStyle = !r.mv ? "#000"
-                    : r.mv > 0 ? "#089981" : "#e53935";
-                  g.textAlign = "center";
-                  g.textBaseline = y + 18 > bot ? "bottom" : "top";
-                  g.font = "bold 11px ui-monospace,Menlo,monospace";
-                  g.fillText(r.n, xe, y + (y + 18 > bot ? -6 : 6));
-                  g.font = "10px ui-monospace,Menlo,monospace";
-                  g.textAlign = "left";
-                  g.textBaseline = "bottom";
-                }
-              } else if (v != null) g.fillText((v > 0 ? "+" : "") +
-                v.toFixed(2) + "σ", xs + 2, y - 2);
-            });
-            g.restore();
-          }
           /* my orders (O) */
           const ords = showOrders ? orders : [];
           if (ords.length) {
