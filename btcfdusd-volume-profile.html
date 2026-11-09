@@ -1420,7 +1420,8 @@
        * main zigzag breaking the other way; PF: a column
        * crossing the IC channel's upper / lower line, and V95
        * boxes; VP: the live price out of today's bells' +/-
-       * 1.96 sigma), once per bar (PF: per column / box).
+       * 1.96 sigma, and its dot: a bell's grid ending under
+       * 0.25 sigma), once per bar (PF: per column / box).
        * Saved per device. alerts["w|dir"] = { ctx, ids }:
        * the bars already rung or there when armed, ctx =
        * what they were computed on (a new ctx resets them,
@@ -3620,6 +3621,16 @@
               if (c < loP - z)
                 ev.push({ id: "s" + P.dS + "|d|" + loP.toFixed(0),
                   up: false, txt: "below -1.96σ " + c.toFixed(0) });
+              /* BS: a bell of the last day whose grid ended under
+                 0.25 sigma (red / pale red dot), dir "bs" */
+              scores.forEach((q) => {
+                if (q.fin && q.sc != null && q.sc < 0.25 &&
+                  q.birth > Date.now() - DAY)
+                  ev.push({ id: "b" + q.birth + q.kind + q.px,
+                    dir: "bs", up: false, txt: q.kind + " " +
+                      q.px.toFixed(0) + " grid " + q.sc.toFixed(2) +
+                      "σ" });
+              });
               /* "s": armed on the old alert, no ring at first */
               vpEv = { ctx: "s" + [vf, P.step].join(), ev };
             }
@@ -4053,6 +4064,25 @@
               else g.stroke();
               g.restore();
             });
+            /* VP: a bell's grid ending under 0.25 sigma, a ringed
+               dot, red while armed */
+            if (w === "vp") {
+              const x2 = xr - 72 - izo,
+                y = top + 3,
+                on = alerts["vp|bs"];
+              icons.push({ k: "a|vp|bs", x: x2 - 3, y: y - 3, w: 18,
+                h: 19 });
+              g.save();
+              g.setLineDash([]);
+              g.beginPath();
+              g.arc(x2 + 6, y + 6.5, 4.5, 0, 7);
+              g.fillStyle = "#e53935";
+              if (on) g.fill();
+              g.lineWidth = on ? 1.5 : 1.2;
+              g.strokeStyle = on ? "#000" : "#b4bdc8";
+              g.stroke();
+              g.restore();
+            }
             /* PF: V95 alert, a ringed dot, green / red while armed */
             if (w !== "pf") return;
             const x2 = xr - 90,
