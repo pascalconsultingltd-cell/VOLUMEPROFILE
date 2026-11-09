@@ -3802,7 +3802,7 @@
             });
             /* BS (bellscore.py): each bell's grid score as a dot
                right of its P's curve / left of its D's: red <= 0,
-               black to 0.25 sigma (about one round trip), green
+               grey to 0.25 sigma (about one round trip), green
                to 1 (ranged), dark green above (strong range);
                faded while running; the day's live bell of its
                kind whose latest place (last) is nearest it,
@@ -3821,7 +3821,7 @@
                   g.beginPath();
                   g.arc(x, Y(X.px), 6, 0, 2 * Math.PI);
                   g.fillStyle = v <= 0 ? "#e53935" : v <= 0.25
-                    ? "#000" : v <= 1 ? "#26a69a" : "#00573f";
+                    ? "#a7b0ba" : v <= 1 ? "#26a69a" : "#00573f";
                   g.fill();
                   g.lineWidth = 1.5;
                   g.strokeStyle = "#fff";
