@@ -1621,7 +1621,7 @@
       }
       /* bell scores (BS button, bellscore.js from GRID-TRADING/
          bellscore.py): each live P / D bell's N=6 grid score
-         (sigma), circled next to it in VP */
+         (sigma), a coloured dot next to it in VP */
       let showScores = true,
         scores = [];
       function setShowScores(v) {
@@ -3800,11 +3800,13 @@
               g.strokeText(i + 1, x, Y(px));
               g.fillText(i + 1, x, Y(px));
             });
-            /* BS (bellscore.py): each bell's grid score in sigma,
-               circled right of its P's curve / left of its D's;
-               the day's live bell of its kind whose latest place
-               (last) is nearest it, within a vol; green made
-               money, red not; dashed: running */
+            /* BS (bellscore.py): each bell's grid score as a dot
+               right of its P's curve / left of its D's: red <= 0,
+               black to 0.25 sigma (about one round trip), green
+               to 1 (ranged), dark green above (strong range);
+               faded while running; the day's live bell of its
+               kind whose latest place (last) is nearest it,
+               within a vol */
             if (showScores && scores.length) {
               const own = scores.filter((q) => q.sc != null &&
                   dayOf(q.birth - 1) === P.dS),
@@ -3814,25 +3816,23 @@
                       at(q) < vf);
                   if (!m.length) return;
                   const b = m.reduce((a, q) => at(q) < at(a) ? q : a),
-                    y = Y(X.px),
-                    col = b.sc > 0 ? "#089981" : "#e53935";
-                  g.setLineDash(b.fin ? [] : [3, 2]);
+                    v = b.sc;
+                  g.globalAlpha = b.fin ? 1 : 0.45;
                   g.beginPath();
-                  g.arc(x, y, 13, 0, 2 * Math.PI);
-                  g.fillStyle = "#fff";
+                  g.arc(x, Y(X.px), 6, 0, 2 * Math.PI);
+                  g.fillStyle = v <= 0 ? "#e53935" : v <= 0.25
+                    ? "#000" : v <= 1 ? "#26a69a" : "#00573f";
                   g.fill();
-                  g.strokeStyle = col;
                   g.lineWidth = 1.5;
+                  g.strokeStyle = "#fff";
                   g.stroke();
-                  g.setLineDash([]);
-                  g.fillStyle = col;
-                  g.font = "bold 10px ui-monospace,Menlo,monospace";
-                  g.fillText((b.sc > 0 ? "+" : "") + b.sc.toFixed(1),
-                    x, y);
+                  g.globalAlpha = 1;
+                  P.bsDots.push({ x, y: Y(X.px), b });
                 };
+              P.bsDots = [];
               sp.forEach((S) => pin(S, "P",
-                cX(Math.floor(S.px / P.step)) + 16));
-              (dc.ps || []).forEach((Q) => pin(Q, "D", cx0 - 18 -
+                cX(Math.floor(S.px / P.step)) + 9));
+              (dc.ps || []).forEach((Q) => pin(Q, "D", cx0 - 11 -
                 ((dc.get(Math.floor(Q.px / P.step)) || 0) * kv * vs)
                 / 2));
             }
@@ -5006,6 +5006,26 @@
                   mouse.x >= q.cx0 - 2 &&
                   mouse.x <= q.cx0 + colW,
               );
+              /* a BS dot under the pointer: its score */
+              const hd = P && (P.bsDots || []).find((q) =>
+                Math.hypot(q.x - mouse.x, q.y - mouse.y) < 9);
+              if (hd) {
+                const v = hd.b.sc,
+                  t = hd.b.kind + " grid " + (v > 0 ? "+" : "") +
+                    v.toFixed(2) + "σ" +
+                    (hd.b.fin ? "" : " running");
+                g.font = "bold 11px ui-monospace,Menlo,monospace";
+                const tw = g.measureText(t).width + 10;
+                g.fillStyle = "#fff";
+                g.fillRect(hd.x + 10, hd.y - 10, tw, 20);
+                g.strokeStyle = "#1a1f26";
+                g.lineWidth = 1;
+                g.strokeRect(hd.x + 10, hd.y - 10, tw, 20);
+                g.fillStyle = "#1a1f26";
+                g.textAlign = "left";
+                g.textBaseline = "middle";
+                g.fillText(t, hd.x + 15, hd.y);
+              }
               if (P && P.poc != null) {
                 const ri = Math.floor(pv / P.step),
                   k = Math.floor((mouse.x - P.cx0) / P.lw),
