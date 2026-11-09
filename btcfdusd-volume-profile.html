@@ -3802,17 +3802,18 @@
             });
             /* BS (bellscore.py): each bell's grid score in sigma,
                circled right of its P's curve / left of its D's;
-               the day's live bell of its kind nearest it, within
-               a vol; green made money, red not; dashed: running */
+               the day's live bell of its kind whose latest place
+               (last) is nearest it, within a vol; green made
+               money, red not; dashed: running */
             if (showScores && scores.length) {
               const own = scores.filter((q) => q.sc != null &&
                   dayOf(q.birth - 1) === P.dS),
                 pin = (X, kind, x) => {
-                  const m = own.filter((q) => q.kind === kind &&
-                    Math.abs(q.px - X.px) < vf);
+                  const at = (q) => Math.abs((q.last ?? q.px) - X.px),
+                    m = own.filter((q) => q.kind === kind &&
+                      at(q) < vf);
                   if (!m.length) return;
-                  const b = m.reduce((a, q) => Math.abs(q.px - X.px)
-                      < Math.abs(a.px - X.px) ? q : a),
+                  const b = m.reduce((a, q) => at(q) < at(a) ? q : a),
                     y = Y(X.px),
                     col = b.sc > 0 ? "#089981" : "#e53935";
                   g.setLineDash(b.fin ? [] : [3, 2]);
