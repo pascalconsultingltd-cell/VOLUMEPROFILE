@@ -3709,34 +3709,16 @@
               g.stroke();
               g.setLineDash([]);
             });
-            /* a P / D's live bell (bellscore.js): the day's bell
-               of its kind whose latest place (last) is nearest it,
-               within a vol */
-            const own = scores.filter((q) =>
-                dayOf(q.birth - 1) === P.dS),
-              bellOf = (X, kind) => {
-                const at = (q) => Math.abs((q.last ?? q.px) - X.px),
-                  m = own.filter((q) => q.kind === kind &&
-                    at(q) < vf);
-                return m.length
-                  ? m.reduce((a, q) => at(q) < at(a) ? q : a) : null;
-              },
-              /* its order: its bell's birth (fixed once born), else
-                 its row age as a time */
-              born = (X, kind) => {
-                const b = bellOf(X, kind);
-                return b ? b.birth : P.dS + ag(X) * TPO_MS;
-              };
             /* each bell's middle: P's right, D's left */
             const wx = (m, X) =>
               (m.get(Math.floor(X.px / P.step)) || 0) * kv * vs;
             sp.forEach((S) =>
-              rk.push([born(S, "P"), cx0 + wx(exp, S) / 2, S.px, 0,
-                S, 1]));
+              rk.push([ag(S), cx0 + wx(exp, S) / 2, S.px, 0, S,
+                1]));
             (dc.ps || []).forEach((Q) =>
-              rk.push([born(Q, "D"), cx0 - 2 - wx(dc, Q) / 4, Q.px,
-                0, 0, -1]));
-            /* by birth; each one's move vs the one before (1: the
+              rk.push([ag(Q), cx0 - 2 - wx(dc, Q) / 4, Q.px, 0, 0,
+                -1]));
+            /* by age; each one's move vs the one before (1: the
                day before's last bell, else its last vipoc): its
                number's colour and, for a P, its BF lead side */
             let q0 = rkEnd.has(prevDay(P.dS))
@@ -3814,9 +3796,9 @@
             perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
             /* its vipocs: black lines to the curve */
             drawPs(P, sp, cx0, (S) => cX(Math.floor(S.px / P.step)));
-            /* P's and D's numbered by birth together, 1 = first,
-               in the middle of each bell; green above the one
-               before (1: the day before's last), red below */
+            /* P's and D's ranked by age together, 1 = oldest, in
+               the middle of each bell; green above the one before
+               (1: the day before's last), red below */
             g.save();
             g.font = "bold 12px ui-monospace,Menlo,monospace";
             g.textAlign = "center";
@@ -3833,12 +3815,19 @@
                right of its P's curve / left of its D's: red <= 0,
                pale red to 0.25 sigma (~one round trip), green
                to 1 (ranged), dark green above (strong range);
-               faded while running; its bell as bellOf */
+               faded while running; the day's live bell of its
+               kind whose latest place (last) is nearest it,
+               within a vol */
             if (showScores && scores.length) {
-              const pin = (X, kind, x) => {
-                  const b = bellOf(X, kind),
-                    v = b && b.sc;
-                  if (v == null) return;
+              const own = scores.filter((q) => q.sc != null &&
+                  dayOf(q.birth - 1) === P.dS),
+                pin = (X, kind, x) => {
+                  const at = (q) => Math.abs((q.last ?? q.px) - X.px),
+                    m = own.filter((q) => q.kind === kind &&
+                      at(q) < vf);
+                  if (!m.length) return;
+                  const b = m.reduce((a, q) => at(q) < at(a) ? q : a),
+                    v = b.sc;
                   g.globalAlpha = b.fin ? 1 : 0.45;
                   g.beginPath();
                   g.arc(x, Y(X.px), 6, 0, 2 * Math.PI);
