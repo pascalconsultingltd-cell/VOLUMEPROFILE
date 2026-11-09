@@ -570,7 +570,7 @@
       const subCache = new Map(),
         /* zigzag points per day (see the profiles) */
         zCache = new Map(),
-        /* St colours of closed periods, frozen (see stAt) */
+        /* IC channels of closed periods, frozen (see icFor) */
         stFz = new Map(),
         /* PF columns' final IC by start time (see icFor) */
         icT = new Map();
@@ -685,20 +685,12 @@
         }
         return pocs;
       }
-      /*
-       * steps colours (simplified/POC): from each sub POC
-       * one row each side per step, up to the lowest row
-       * towards the next POC or the day's end; red = more
-       * bricks above so far, green = more below, stronger =
-       * more lopsided. A POC row takes its P colour, the
-       * low rows in between stay grey. Map row -> colour.
-       * A zone with fewer than minB bricks stays grey.
-       */
-      const SPC = ["0,51,102", "47,128,200", "107,118,132"],
-        SGREY = "rgba(107,118,132,.3)",
-        /* vol mass: bricks of the regimes behind the 240 vol
-           (median); a PocStpCol zone colours from there */
-        VOL_MASS = 227;
+      /* vol mass: bricks of the regimes behind the 240 vol
+         (median) */
+      const VOL_MASS = 227,
+        /* DT: a D's least mass (bricks), so its curve fills a
+           brick at its centre row (5.1% of the mass there) */
+        D_MIN = 20;
       /* standard normal CDF (Abramowitz-Stegun 7.1.26) */
       function ncdf(x) {
         const t = 1 / (1 + (0.3275911 * Math.abs(x)) / Math.SQRT2),
@@ -706,49 +698,6 @@
             (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) *
             Math.exp((-x * x) / 2);
         return x >= 0 ? (1 + y) / 2 : (1 - y) / 2;
-      }
-      function stepCols(rows, step, sp, minB = 0) {
-        const ks = [...rows.keys()],
-          r0 = Math.min(...ks),
-          c = [],
-          out = new Map();
-        for (let r = r0; r <= Math.max(...ks); r++)
-          c.push((rows.get(r) || []).length);
-        const n = c.length,
-          rs = sp.map((S) => {
-            const r = Math.floor(S.px / step) - r0;
-            return Math.min(n - 1, Math.max(0, r));
-          });
-        /* lowest row between two POC rows */
-        const cut = (x, y) => {
-          let m = x + 1;
-          for (let r = x + 2; r < y; r++) if (c[r] < c[m]) m = r;
-          return m;
-        };
-        rs.forEach((p, k) => {
-          const dn = Math.max(-1, ...rs.filter((r) => r < p)),
-            up = Math.min(n, ...rs.filter((r) => r > p)),
-            a = dn < 0 ? 0 : Math.min(p, cut(dn, p) + 1),
-            b = up >= n ? n - 1 : Math.max(p, cut(p, up) - 1);
-          out.set(p + r0, "rgb(" + SPC[k] + ")");
-          let tot = 0;
-          for (let r = a; r <= b; r++) tot += c[r];
-          if (tot < minB) return;
-          const J = Math.max(b - p, p - a);
-          for (let j = 1, U = 0, L = 0; j <= J; j++) {
-            U += p + j <= b ? c[p + j] : 0;
-            L += p - j >= a ? c[p - j] : 0;
-            const v = (U - L) / (U + L || 1),
-              /* only a clear imbalance (over 60 / 40) */
-              col = Math.abs(v) <= 0.2
-                ? SGREY
-                : (v > 0 ? "rgba(229,57,53," : "rgba(8,153,129,") +
-                  (0.15 + 0.85 * Math.abs(v)).toFixed(2) + ")";
-            if (p + j <= b) out.set(p + j + r0, col);
-            if (p - j >= a) out.set(p - j + r0, col);
-          }
-        });
-        return out;
       }
       function kl(h, q) {
         return h + "/api/v3/klines?symbol=" + SYM + "&" + q;
@@ -1470,7 +1419,8 @@
        * unticked (main and 15s: big-candle dots; ZZ: the
        * main zigzag breaking the other way; PF: a column
        * crossing the IC channel's upper / lower line, and V95
-       * boxes), once per bar (PF: per column / box).
+       * boxes; VP: the live price out of today's bells' +/-
+       * 1.96 sigma), once per bar (PF: per column / box).
        * Saved per device. alerts["w|dir"] = { ctx, ids }:
        * the bars already rung or there when armed, ctx =
        * what they were computed on (a new ctx resets them,
@@ -3233,44 +3183,6 @@
               }),
             );
           });
-          /*
-           * St, no repaint: the colours (row -> colour) of day
-           * dS's bricks as at the close of its period i, from
-           * its rows and sub POCs up to then; kept in stFz
-           * once that period has closed
-           */
-          /*
-           * frozen on the day's vol and on its own range so far,
-           * so the days shown do not change them; m.step = their
-           * row size, look colours up by price
-           */
-          const stFor = (dS, i) => {
-            const vC = volFor(dS),
-              P = dayProf(
-                dS,
-                vC ? Math.max(1, Math.ceil(vC / 10)) : undefined,
-              ),
-              vf = vC || P.step * 10,
-              ps = P.ps.filter((q) => q.i <= i),
-              key = [dS, i, vf, P.step].join();
-            if (stFz.has(key)) return stFz.get(key);
-            const rows = new Map();
-            P.rows.forEach((l, r) => {
-              const f = l.filter((x) => x <= i);
-              if (f.length) rows.set(r, f);
-            });
-            const sps = ps.length ? subPocs(dS, ps, vf, P.step) : [],
-              m = ps.length
-                ? stepCols(rows, P.step, sps, VOL_MASS)
-                : new Map();
-            m.step = P.step;
-            if (dS + (i + 1) * TPO_MS <= Date.now() &&
-              (!ps.length || sps.vol)) {
-              if (stFz.size > 3e4) stFz.clear();
-              stFz.set(key, m);
-            }
-            return m;
-          };
           /* the forming 15m candle's high / low from the PF
              trades before t, or null */
           const liveHL = (cut, t) => {
@@ -3590,14 +3502,22 @@
                 sg = vf / 1.2816,
                 N = Math.ceil((4 * sg) / st),
                 ms = ps.map(() => 0),
+                jr = new Map(),
                 gap = (r, Q) => Math.abs((r + 0.5) * st - Q.px);
               dp.forEach((q, r) => {
                 let j = 0;
                 ps.forEach((Q, i) => gap(r, Q) < gap(r, ps[j]) &&
                   (j = i));
                 ms[j] += q / kv;
+                jr.set(r, j);
               });
+              /* a dropped D's rows: bricks only (volume) */
+              out.loose = new Map([...dp].filter(([r]) =>
+                ms[jr.get(r)] < D_MIN));
+              /* under D_MIN bricks: no D, its curve dropped */
+              const kp = ps.filter((Q, i) => ms[i] >= D_MIN);
               ps.forEach((Q, i) => {
+                if (ms[i] < D_MIN) return;
                 const p = Math.floor(Q.px / st);
                 for (let r = p - N; r <= p + N; r++)
                   out.set(r, (out.get(r) || 0) + ms[i] * (
@@ -3605,7 +3525,7 @@
                     ncdf((r * st - Q.px) / sg)));
               });
               /* D1, D2..: ordered as the P's */
-              out.ps = byAge(P, ps);
+              out.ps = byAge(P, kp);
             }
             vw.dc = [ck, out];
             return out;
@@ -3684,55 +3604,26 @@
             /* for the hover: its volume per brick and scale */
             Object.assign(P, { vw, vs });
             const vf = volFor(P.dS) > 0 ? volFor(P.dS) : P.step * 10;
-            const sp = byAge(P, subPocs(P.dS, P.ps, vf, P.step)),
-              /* St, no repaint: a closed period's colours as at
-                 its close (stFor), for the VP alert */
-              shut = (i) => P.dS + (i + 1) * TPO_MS <= Date.now(),
-              stAt = (i) => stFor(P.dS, i);
-            /*
-             * VP alert: the colour of today's latest closed
-             * period at its close price (1 green, -1 red, 0
-             * else) against the period before it
-             */
-            if (P.dS === dayOf(Date.now()) && k15.length) {
-              const cls = (i) => {
-                  const e = P.dS + (i + 1) * TPO_MS;
-                  let c = null;
-                  for (let j = k15.length - 1; j >= 0; j--)
-                    if (k15[j].t < e && okC(k15[j])) {
-                      c = k15[j].c;
-                      break;
-                    }
-                  const col =
-                    c == null
-                      ? ""
-                      : stAt(i).get(Math.floor(c / stAt(i).step)) ||
-                        "";
-                  return {
-                    c,
-                    z: col.startsWith("rgba(8,153,129")
-                      ? 1
-                      : col.startsWith("rgba(229,57,53")
-                        ? -1
-                        : 0,
-                  };
-                },
-                shuts = P.ps.filter((q) => shut(q.i)),
-                L = shuts[shuts.length - 1],
-                Lp = shuts[shuts.length - 2],
+            const sp = byAge(P, subPocs(P.dS, P.ps, vf, P.step));
+            /* VP alert: the live price out of today's bells, past
+               the lowest P - 1.96 sigma / highest P + 1.96 sigma
+               (sigma = vol / 1.2816, the curves'); once per side
+               and outermost P */
+            if (P.dS === dayOf(Date.now()) && k15.length &&
+              sp.length) {
+              const c = k15[k15.length - 1].c,
+                z = (1.96 * vf) / 1.2816,
+                hiP = Math.max(...sp.map((S) => S.px)),
+                loP = Math.min(...sp.map((S) => S.px)),
                 ev = [];
-              if (L && Lp) {
-                const a = cls(L.i),
-                  b = cls(Lp.i);
-                if (a.z && a.z !== b.z)
-                  ev.push({
-                    id: "v" + P.dS + "|" + L.i,
-                    up: a.z > 0,
-                    txt:
-                      (a.z > 0 ? "green " : "red ") + a.c.toFixed(0),
-                  });
-              }
-              vpEv = { ctx: [vf, P.step].join(), ev };
+              if (c > hiP + z)
+                ev.push({ id: "s" + P.dS + "|u|" + hiP.toFixed(0),
+                  up: true, txt: "above +1.96σ " + c.toFixed(0) });
+              if (c < loP - z)
+                ev.push({ id: "s" + P.dS + "|d|" + loP.toFixed(0),
+                  up: false, txt: "below -1.96σ " + c.toFixed(0) });
+              /* "s": armed on the old alert, no ring at first */
+              vpEv = { ctx: "s" + [vf, P.step].join(), ev };
             }
             /* the vipocs' normal curves in volume, a brick's
                worth = the mean volume / bricks of the 5 finished
@@ -3849,6 +3740,14 @@
             };
             shade(1, exp, cx0, (v) => v * kv * vs);
             shade(-1, dc, cx0 - 2, (v) => (-v * kv * vs) / 2);
+            /* a D under D_MIN: its extra volume as plain grey
+               bricks, no bell, no number */
+            (dc.loose || new Map()).forEach((q, r) => {
+              const w = (q * vs) / 2,
+                yT = Y((r + 1) * P.step);
+              if (w >= 0.5) sb.rect("rgba(67,70,81,.35)",
+                cx0 - 2 - w, yT + 0.5, w, Math.max(1, rowH - 1));
+            });
             sb.fill();
             /* what a row lacks vs the curve (negative delta),
                the black curve filled from its volume, in its
