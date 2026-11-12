@@ -2767,11 +2767,18 @@
             cwE = sw * vis.length,
             vsum = vis.reduce((s, c) => s + (c.v || 0), 0) || 1,
             minW = Math.min(3, sw * 0.4),
+            vcW = (c) =>
+              minW + ((cwE - vis.length * minW) * (c.v || 0)) / vsum;
+          /* Std: high volume candles (wider in VC than sw) keep
+             their VC width, the others share the rest equally */
+          const hv = vis.filter((c) => vcW(c) > sw),
+            sS = hv.length < vis.length
+              ? (cwE - hv.reduce((s, c) => s + vcW(c), 0)) /
+                (vis.length - hv.length)
+              : sw,
             wOf = (c) =>
-              mode === "eq"
-                ? minW +
-                  ((cwE - vis.length * minW) * (c.v || 0)) / vsum
-                : sw;
+              mode === "eq" ? vcW(c)
+                : mode === "std" ? (vcW(c) > sw ? vcW(c) : sS) : sw;
           const dayStart = dayOf(vis[vis.length - 1].t);
           const dayC = cfg.tpo
             ? k15.filter((c) => c.t >= dayStart && okC(c))
