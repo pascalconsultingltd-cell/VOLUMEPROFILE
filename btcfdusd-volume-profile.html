@@ -1049,7 +1049,8 @@
           const f = !d0 && (await idb.get("u|" + dS));
           if (f && f.length) {
             for (let i = 0; i < f.length; i += 6)
-              d.k.push(Array.from(f.subarray(i, i + 6)));
+              d.k.push([f[i], f[i + 1], f[i + 2], f[i + 3], f[i + 4],
+                f[i + 5]]);
             d.end = d.kept = d.k[d.k.length - 1][0] >= dE - 1000;
           }
           for (let n = 0; n < 120 && !d.end; n++) {
@@ -1591,7 +1592,7 @@
             if (f) {
               const k = [];
               for (let i = 0; i < f.length; i += 4)
-                k.push(Array.from(f.subarray(i, i + 4)));
+                k.push([f[i], f[i + 1], f[i + 2], f[i + 3]]);
               usdtMD.set(d, { k, end: true });
               continue;
             }
@@ -2487,6 +2488,7 @@
                 ),
             );
             seeded[iv] = true;
+            if (iv === "15m") keepK15();
             if (iv === IV && mid == null)
               $("px").textContent =
                 k5[k5.length - 1].c.toFixed(DP);
@@ -2500,6 +2502,13 @@
        * lazy history: one more page of older klines when
        * the view reaches the start of what is loaded
        */
+      /* closed 15m candles kept in the browser ("k15", while
+         under 9 days old): the vol and the profiles start
+         without paging back; recent pages still come from REST
+         and replace their part */
+      function keepK15() {
+        if (k15.length > 1) idb.put("k15", k15.slice(0, -1));
+      }
       async function older(iv) {
         if (olderBusy[iv] || olderEnd[iv] || !store(iv).length)
           return;
@@ -2520,6 +2529,7 @@
             if (arr.length) setStore(iv, arr.concat(cur));
             if (!arr.length || store(iv).length >= 6000)
               olderEnd[iv] = true;
+            if (iv === "15m") keepK15();
             ok = true;
             schedule();
             break;
@@ -3861,30 +3871,53 @@
              the close before follows it (last = where it is
              now), else a new bell born at that close; a D within
              vol of a P (this close's, or a P bell's last) is its
-             child. Kept per day: once per 30m close (no repaint) */
+             child. Incremental: each close once (no repaint), its
+             seconds all in first; the state (n closes, W rows,
+             bells, the last close's P's / D's as bell indexes)
+             kept in the browser ("b|day") with its vol, step, kv */
           const dayBells = (P, vw, kv, vf) => {
-            const cl = P.ps.filter((q) =>
-                P.dS + (q.i + 1) * TPO_MS <= Date.now()),
-              key = [cl.length, vf, P.step, kv].join(),
-              o = bellDays.get(P.dS);
-            if (o && o.key === key) return;
+            const key = [vf, P.step, kv].join(),
+              u = usdtOf(P.dS),
+              zt = u && u.n ? usdtK.get(P.dS).k[u.n - 1][0] : -1,
+              cl = P.ps.filter((q) =>
+                P.dS + (q.i + 1) * TPO_MS <= Math.min(Date.now(),
+                  zt + 1000));
+            let o = bellDays.get(P.dS);
+            if (!o || o.key !== key) {
+              o = { key, n: 0, W: new Map(), bs: [], prev: null,
+                look: true };
+              bellDays.set(P.dS, o);
+              idb.get("b|" + P.dS).then((v) => {
+                if (v && v.key === key && bellDays.get(P.dS) === o &&
+                  !o.n) {
+                  o.bs = v.bs;
+                  o.W = new Map(v.W);
+                  const bk = (a) => a.map(([x, i]) => [x, o.bs[i]]);
+                  o.prev = { P: bk(v.prev.P), D: bk(v.prev.D) };
+                  o.n = v.n;
+                  bellVer++;
+                }
+                o.look = false;
+                schedule();
+              });
+            }
+            if (o.look || o.n >= cl.length) return;
             const st = P.step,
               byI = new Map(),
-              W = new Map(),
-              out = [];
+              out = o.bs;
             vw.forEach((v, k) => {
               const [r, i] = k.split("|").map(Number);
               if (!byI.has(i)) byI.set(i, []);
               byI.get(i).push([r, v]);
             });
-            let prev = { P: [], D: [] };
-            for (let n = 0; n < cl.length; n++) {
+            let prev = o.prev || { P: [], D: [] };
+            for (let n = o.n; n < cl.length; n++) {
               const q = cl[n],
                 cp = subPocs(P.dS, cl.slice(0, n + 1), vf, st);
-              if (!cp.vol) return;
+              if (!cp.vol) break;
               (byI.get(q.i) || []).forEach(([r, v]) =>
-                W.set(r, (W.get(r) || 0) + v));
-              const d = dPs(W, expOf(P, cp, vf), kv, vf, st),
+                o.W.set(r, (o.W.get(r) || 0) + v));
+              const d = dPs(o.W, expOf(P, cp, vf), kv, vf, st),
                 cur = { P: cp.map((S) => S.px),
                   D: d.ps.filter((Q, i) => d.ms[i] >= D_MIN)
                     .map((Q) => Q.px) },
@@ -3906,9 +3939,14 @@
                 now[kind].push([px, b]);
               }));
               prev = now;
+              o.n = n + 1;
             }
-            bellDays.set(P.dS, { key, bs: out });
+            o.prev = prev;
             bellVer++;
+            const ix = (a) => a.map(([x, b]) => [x, out.indexOf(b)]);
+            idb.put("b|" + P.dS, { key, n: o.n, W: [...o.W],
+              bs: out.map((b) => ({ ...b })),
+              prev: { P: ix(prev.P), D: ix(prev.D) } });
           };
           /* Perf: the curve's edge row by row, a step line from
              the profile's left edge, over its rows of a brick or
@@ -7279,6 +7317,16 @@
       loadOrders();
       loadVol();
       connect();
+      idb.get("k15").then((a) => {
+        if (!Array.isArray(a) || !a.length ||
+          a[a.length - 1].t < Date.now() - 9 * 864e5) return;
+        k15 = k15.length ? a.filter((c) => c.t < k15[0].t)
+          .concat(k15) : a;
+        schedule();
+      });
+      /* daily volumes now, not at the first profile draw */
+      loadDVol("BTCUSDT");
+      loadDVol(SYM);
       hist(IV, () => seedIv(IV));
       hist("15m", () => seedIv("15m"));
       load15(null);
