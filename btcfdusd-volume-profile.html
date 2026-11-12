@@ -613,8 +613,13 @@
           d = usdtK.get(dS);
         if (!u || !d) return null;
         let v = pvCur.get(dS);
-        if (!v || v.st !== st || v.n > u.n)
-          pvCur.set(dS, (v = { st, n: 0, p: [] }));
+        if (!v || v.st !== st || v.n > u.n) {
+          const r = rowsK.get(dS);
+          v = r && r.p.st === st && r.p.n <= u.n
+            ? { st, n: r.p.n, p: r.p.p.map((m) => m && new Map(m)) }
+            : { st, n: 0, p: [] };
+          pvCur.set(dS, v);
+        }
         for (const a = d.k; v.n < u.n; v.n++) {
           const e = u.rt[v.n],
             [t, h, l, , q] = a[v.n],
@@ -1052,6 +1057,8 @@
               d.k.push([f[i], f[i + 1], f[i + 2], f[i + 3], f[i + 4],
                 f[i + 5]]);
             d.end = d.kept = d.k[d.k.length - 1][0] >= dE - 1000;
+            const r = d.end && (await idb.get("r|" + dS));
+            if (r) rowsK.set(dS, r);
           }
           for (let n = 0; n < 120 && !d.end; n++) {
             const z = d.k[d.k.length - 1],
@@ -1138,6 +1145,33 @@
          second's); px per second, and VAP rows by PF box. Null
          until both pairs are loaded */
       const usdtV = new Map();
+      /* a finished day's computed rows kept in the browser
+         ("r|day", read with its seconds): usdtOf, perVol and
+         vwOf start from them, not from 86400 seconds */
+      const rowsK = new Map(),
+        nn = (a) => Float64Array.from(a, (x) =>
+          (x == null ? NaN : x)),
+        un = (f) => Array.from(f, (x) => (x !== x ? null : x));
+      function keepRows(dS) {
+        const d = usdtK.get(dS),
+          f = aggrT.get(dS),
+          u = usdtV.get(dS),
+          p = pvCur.get(dS),
+          w = vwS.get(dS);
+        if (rowsK.has(dS) || !d || !d.end || !f || !f.end || !u ||
+          u.n < d.k.length || !p || p.n < u.n || !w || w.n < u.n)
+          return;
+        const { px, rt, rows, dl, ...sc } = u,
+          r = {
+            u: { ...sc, px: nn(px), rt: nn(rt), rows: [...rows],
+              dl: [...dl] },
+            p: { st: p.st, n: p.n,
+              p: Array.from(p.p, (m) => m && [...m]) },
+            w: { st: w.st, n: w.n, m: [...w.m] },
+          };
+        rowsK.set(dS, r);
+        idb.put("r|" + dS, r);
+      }
       /* a second's volume over the rows its range spans, each
          by the share of the range inside it */
       function spread(lo, hi, st, fn) {
@@ -1154,9 +1188,15 @@
           st = pfStep(dS);
         if (!u || !u.k.length || !f || !f.tr.length) return null;
         let v = usdtV.get(dS);
-        if (!v || v.st !== st)
-          usdtV.set(dS, (v = { st, n: 0, j: 0, pf: null, e: null,
-            px: [], rt: [], rows: new Map(), dl: new Map(), mx: 0 }));
+        if (!v || v.st !== st) {
+          const r = rowsK.get(dS);
+          v = r && r.u.st === st
+            ? { ...r.u, px: un(r.u.px), rt: un(r.u.rt),
+              rows: new Map(r.u.rows), dl: new Map(r.u.dl) }
+            : { st, n: 0, j: 0, pf: null, e: null, px: [], rt: [],
+              rows: new Map(), dl: new Map(), mx: 0 };
+          usdtV.set(dS, v);
+        }
         const a = u.k,
           tr = f.tr;
         for (; v.n < a.length; v.n++) {
@@ -1225,29 +1265,36 @@
       }
       /* VBT: a day's volume per profile brick, "row|period" ->
          volume, from USDT seconds; null until loaded */
-      const vwC = new Map();
+      /* incremental per day (vwS: st, n seconds in, m); the
+         caches drawn from it (ex, dc, bf) dropped as it grows */
+      const vwS = new Map();
       function vwOf(dS, st) {
         const u = usdtOf(dS);
         if (!u) return null;
-        const n = u.n,
-          key = [dS, st, n].join();
-        if (vwC.has(key)) return vwC.get(key);
-        const m = new Map();
-        let mx = 0;
-        const add = (t, r, q) => {
-          const k = r + "|" + Math.floor((t - dS) / TPO_MS);
-          m.set(k, (m.get(k) || 0) + q);
-        };
+        let s = vwS.get(dS);
+        if (!s || s.st !== st || s.n > u.n) {
+          const r = rowsK.get(dS);
+          s = r && r.w.st === st && r.w.n <= u.n
+            ? { st, n: r.w.n, m: new Map(r.w.m) }
+            : { st, n: 0, m: new Map() };
+          vwS.set(dS, s);
+        }
+        const m = s.m;
+        if (s.n === u.n && m.rw) return m;
         const a = usdtK.get(dS).k;
-        for (let i = 0; i < n; i++) {
-          const [t, h, l, , q] = a[i],
-            e = u.rt[i];
+        for (; s.n < u.n; s.n++) {
+          const [t, h, l, , q] = a[s.n],
+            e = u.rt[s.n];
           if (e != null)
-            spread(l * e, h * e, st, (r, k) => add(t, r, q * k));
+            spread(l * e, h * e, st, (r, k) => {
+              const x = r + "|" + Math.floor((t - dS) / TPO_MS);
+              m.set(x, (m.get(x) || 0) + q * k);
+            });
         }
         /* each row's volume, the widest (scale), the total */
         const rw = new Map();
-        let tot = 0;
+        let tot = 0,
+          mx = 0;
         m.forEach((w, k) => {
           const r = +k.split("|")[0],
             x = (rw.get(r) || 0) + w;
@@ -1255,9 +1302,8 @@
           tot += w;
           if (x > mx) mx = x;
         });
-        Object.assign(m, { mx, rw, tot });
-        if (vwC.size > 50) vwC.clear();
-        vwC.set(key, m);
+        Object.assign(m, { mx, rw, tot, ex: null, dc: null,
+          bf: null });
         return m;
       }
       /*
@@ -1656,6 +1702,9 @@
         );
         const r = Number.isFinite(v) ? Math.round(v) : 0;
         volDays.set(dS, r);
+        /* a day's vol uses the days before only: final, kept */
+        if (r > 0)
+          idb.put("vols", [...volDays].filter(([, x]) => x > 0));
         return r;
       }
       /* PF box of a day: a tenth of its vol, as its profile
@@ -4025,6 +4074,7 @@
             const sp = byAge(P, subPocs(P.dS, P.ps, vf, P.step));
             /* BS: this day's bells, then every bell's score */
             dayBells(P, vw, kvFor(P.dS, "BTCUSDT"), vf);
+            keepRows(P.dS);
             scores = bellScores();
             /* VP alert: the live price out of today's bells, past
                the lowest P - 1.96 sigma / highest P + 1.96 sigma
@@ -7322,6 +7372,11 @@
           a[a.length - 1].t < Date.now() - 9 * 864e5) return;
         k15 = k15.length ? a.filter((c) => c.t < k15[0].t)
           .concat(k15) : a;
+        schedule();
+      });
+      idb.get("vols").then((a) => {
+        (a || []).forEach(([d, x]) => volDays.has(d) ||
+          volDays.set(d, x));
         schedule();
       });
       /* daily volumes now, not at the first profile draw */
