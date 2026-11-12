@@ -6670,13 +6670,10 @@
           size,
           full: (k) => setFull(k),
           resetView: () => {
-            /* main 5m: 3 days, from the Asia open (00:00 UTC) 2 days
-               back to now; VP 6 days; PF all its 3 days (pfN 0) */
-            N = slotsFor(cfg.main && TF === "5m"
-              ? Math.ceil((Date.now() - dayOf(Date.now()) +
-                2 * 864e5) / 3e5)
-              : cfg.N);
-            if (cfg.main) nTpo = 6;
+            /* main: 1 day (288 5m candles; 15s window as set);
+               VP 5 days; PF all its 3 days (pfN 0) */
+            N = slotsFor(cfg.N);
+            if (cfg.main) nTpo = 5;
             off = home();
             ysc = 1;
             ypan = 0;
@@ -6770,6 +6767,7 @@
             [
               [1, "1d"],
               [3, "3d"],
+              [5, "5d"],
               [7, "7d"],
             ],
             () => nTpo,
