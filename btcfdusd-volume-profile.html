@@ -1050,10 +1050,11 @@
         d.last = m.a;
         d.at = Date.now();
       }
-      /* a day's USDT seconds on FDUSD prices: each second's mid
-         x the FDUSD / USDT ratio of the 5 minutes before (mean
-         last FDUSD trade over mean USDT mid; fixed for 5 min, no
-         jumps, no repaint; the day's first 5 min: its first
+      /* a day's USDT seconds on FDUSD prices: each second's
+         (high + low) / 2 x the FDUSD / USDT ratio of the 5 min
+         before (mean last FDUSD trade over mean USDT (h + l) / 2:
+         trades, no bid/ask history on Binance; fixed for 5 min,
+         no jumps, no repaint; the day's first 5 min: its first
          second's); px per second, and VAP rows by PF box. Null
          until both pairs are loaded */
       const usdtV = new Map();
