@@ -1002,7 +1002,18 @@
          its FDUSD values, never big); line-break bricks stay
          FDUSD. Twins older than 10 min are final: kept */
       const twK = new WeakMap(),
-        twC = {};
+        twC = {},
+        /* big-candle flags of final twins ("5|t" / "s|t"),
+           kept in the browser ("big", 40 days) */
+        bigK = new Map();
+      let bigNew = false;
+      setInterval(() => {
+        if (!bigNew) return;
+        bigNew = false;
+        const old = Date.now() - 40 * 864e5;
+        idb.put("big", [...bigK].filter(([k]) =>
+          +k.slice(2) > old));
+      }, 3e4);
       function twin(arr) {
         const five = arr === k5;
         if (!five && arr !== c15) return arr;
@@ -1020,6 +1031,7 @@
             if (!w.own && c.t < old) twK.set(c, w);
             return w;
           });
+        v.tw = five ? "5|" : "s|";
         twC[five] = { key, v };
         return v;
       }
@@ -1057,8 +1069,10 @@
               d.k.push([f[i], f[i + 1], f[i + 2], f[i + 3], f[i + 4],
                 f[i + 5]]);
             d.end = d.kept = d.k[d.k.length - 1][0] >= dE - 1000;
-            const r = d.end && (await idb.get("r|" + dS));
+            const r = d.end && (await idb.get("r|" + dS)),
+              x = d.end && (await idb.get("x|" + dS));
             if (r) rowsK.set(dS, r);
+            if (x) xK.set(dS, x);
           }
           for (let n = 0; n < 120 && !d.end; n++) {
             const z = d.k[d.k.length - 1],
@@ -1413,72 +1427,156 @@
        * of the VH_MS before, as a 5m bar in 150; vd = its delta.
        * Cached until a trade changes the columns.
        */
-      let pfHotC = null;
+      /* Worked out as it goes: each closed minute's boxes once
+         (per day, hotD), the window run forward once over them
+         (hs), the open minute on a copy; a finished day's boxes
+         and V95's kept in the browser ("x|day"): no repaint.
+         The day before the PF's first warms the window. */
+      const xK = new Map(),
+        hotD = new Map();
+      let hs = null,
+        pfHotC = null;
+      /* a day's closed minutes' boxes [m0, row, q, delta], in
+         order; open = the minute still forming */
+      function hotBoxes(dS) {
+        const v = usdtOf(dS),
+          d = usdtK.get(dS);
+        if (!v || !d) return null;
+        const st = pfStep(dS);
+        let o = hotD.get(dS);
+        if (!o || o.st !== st) {
+          const x = xK.get(dS);
+          o = x && x.st === st
+            ? { st, n: x.n, bx: x.bx, hot: new Map(x.hot), kept: 1 }
+            : { st, n: 0, bx: [] };
+          hotD.set(dS, o);
+        }
+        const a = d.k,
+          fin = d.end && v.n === a.length;
+        o.open = [];
+        while (o.n < v.n) {
+          const m0 = Math.floor(a[o.n][0] / 6e4) * 6e4,
+            mb = new Map();
+          let n = o.n;
+          for (; n < v.n && a[n][0] < m0 + 6e4; n++) {
+            const p = v.px[n];
+            if (p == null) continue;
+            const r = Math.floor(p / st),
+              b = mb.get(r) || [0, 0];
+            mb.set(r,
+              [b[0] + a[n][4], b[1] + 2 * a[n][5] - a[n][4]]);
+          }
+          const bx = [...mb].map(([r, [q, dd]]) => [m0, r, q, dd]);
+          if (n >= v.n && !fin) {
+            o.open = bx;
+            break;
+          }
+          o.bx.push(...bx);
+          o.n = n;
+        }
+        o.fin = fin;
+        return o;
+      }
+      /* the window: last VH_MS of box volumes, sorted (win);
+         a box is V95 when it ranks in the top n of it */
+      const hotIns = (w, x) => {
+        let a = 0, b = w.length;
+        while (a < b) {
+          const m = (a + b) >> 1;
+          if (w[m] < x) a = m + 1;
+          else b = m;
+        }
+        return a;
+      };
+      function hotStep(S, m0, r, q, dd, out) {
+        const n = Math.ceil((1 - BIG_PERC) * BIG_WIN);
+        S.win.splice(hotIns(S.win, q), 0, q);
+        S.qa.push(m0);
+        S.qq.push(q);
+        for (; S.qa[S.h] <= m0 - VH_MS; S.h++)
+          S.win.splice(hotIns(S.win, S.qq[S.h]), 1);
+        if (S.at0 == null) S.at0 = m0;
+        if (out && m0 - S.at0 >= VH_MS && S.win.length > n &&
+          q >= S.win[S.win.length - n])
+          out.set(m0 + "|" + r, dd);
+      }
+      function hotRun(days) {
+        if (!hs || hs.d0 > days[0] || hs.d0 < days[0] - 2 * 864e5)
+          hs = { d0: days[0], win: [], qa: [], qq: [], h: 0,
+            at0: null, hot: new Map(), pos: new Map() };
+        const open = new Map();
+        for (const dS of days) {
+          const o = hotBoxes(dS);
+          if (!o) {
+            if (dS === days[0]) continue;
+            break;
+          }
+          let p = hs.pos.get(dS) || 0;
+          if (o.kept && !p) {
+            /* kept: its V95's, and its last VH_MS warm the window */
+            if (hs.at0 == null) hs.at0 = -Infinity;
+            o.hot.forEach((dd, k) => hs.hot.set(k, dd));
+            const t = (o.bx.length ? o.bx[o.bx.length - 1][0] : 0) -
+              VH_MS;
+            o.bx.forEach(([m0, r, q, dd]) => m0 > t &&
+              hotStep(hs, m0, r, q, dd, null));
+            p = o.bx.length;
+          }
+          for (; p < o.bx.length; p++)
+            hotStep(hs, ...o.bx[p], hs.hot);
+          hs.pos.set(dS, p);
+          if (hs.h > 2e4) {
+            hs.qa = hs.qa.slice(hs.h);
+            hs.qq = hs.qq.slice(hs.h);
+            hs.h = 0;
+          }
+          /* finished and warm from its start: kept */
+          if (o.fin && !o.kept && hs.at0 <= dS - VH_MS) {
+            const hot = [...hs.hot].filter(([k]) => {
+              const m0 = +k.split("|")[0];
+              return m0 >= dS && m0 < dS + 864e5;
+            });
+            Object.assign(o, { kept: 1, hot: new Map(hot) });
+            idb.put("x|" + dS, { st: o.st, n: o.n, bx: o.bx, hot });
+          }
+          if (o.open.length) {
+            const C = { win: hs.win.slice(), qa: hs.qa.slice(hs.h),
+              qq: hs.qq.slice(hs.h), h: 0, at0: hs.at0 };
+            o.open.forEach((b) => hotStep(C, ...b, open));
+          }
+        }
+        return { hot: hs.hot, open };
+      }
       function pfHot(all) {
-        const z = all[all.length - 1],
-          zv = z ? [...z.v.values()].reduce((a, b) => a + b, 0) : 0,
-          ud = [...new Set(all.map((c) => dayOf(c.t0)))],
-          uv = ud.map(usdtOf),
-          key = [all[0] && all[0].st, z && z.st, all.length,
-            z && z.d.size, z && z.lo, zv,
-            uv.map((v) => v && v.n).join("/")].join();
-        if (pfHotC && pfHotC.key === key) return pfHotC;
-        const sq2 = [],
-          dd = [],
-          av = [],
-          at = [],
-          vh = new Set(),
+        const vh = new Set(),
           vd = new Map(),
-          /* vm: a V95 box's minute */
           vm = new Map();
-        if (all.length) {
-          let k = 0;
-          ud.forEach((dS, i) => {
-            const v = uv[i],
-              a = v && usdtK.get(dS).k;
-            if (!v) return;
-            for (let n = 0; n < v.n; ) {
-              const m0 = Math.floor(a[n][0] / 6e4) * 6e4,
-                mb = new Map();
-              for (; n < v.n && a[n][0] < m0 + 6e4; n++) {
-                const p = v.px[n];
-                if (p == null) continue;
-                const r = Math.floor(p / pfStep(dS)),
-                  b = mb.get(r) || [0, 0];
-                mb.set(r,
-                  [b[0] + a[n][4], b[1] + 2 * a[n][5] - a[n][4]]);
-              }
-              if (m0 < all[0].t0) continue;
-              while (k + 1 < all.length && all[k + 1].t0 <= m0) k++;
-              mb.forEach(([q, d], r) => {
-                sq2.push(k + "|" + r);
-                av.push(q);
-                at.push(m0);
-                dd.push(d);
-              });
-            }
-          });
-        }
-        /* sorted window kept as it slides */
-        for (let k = 0, j = 0, w = []; k < av.length; k++) {
-          const ins = (x) => {
-            let a = 0, b = w.length;
-            while (a < b) {
-              const m = (a + b) >> 1;
-              if (w[m] < x) a = m + 1;
-              else b = m;
-            }
-            return a;
-          };
-          w.splice(ins(av[k]), 0, av[k]);
-          for (; at[j] <= at[k] - VH_MS; j++) w.splice(ins(av[j]), 1);
-          const n = Math.ceil((1 - BIG_PERC) * BIG_WIN);
-          if (at[k] - at[0] >= VH_MS && w.length > n &&
-            av[k] >= w[w.length - n])
-            vh.add(sq2[k]), vd.set(sq2[k], dd[k]),
-              vm.set(sq2[k], at[k]);
-        }
-        return (pfHotC = { key, vh, vd, vm });
+        if (!all.length) return { vh, vd, vm };
+        const ud = [...new Set(all.map((c) => dayOf(c.t0)))]
+            .sort((a, b) => a - b),
+          { hot, open } = hotRun([ud[0] - 864e5, ...ud]),
+          key = [all.length, all[0].t0, all[all.length - 1].t0,
+            all[all.length - 1].d && all[all.length - 1].d.size,
+            hot.size, [...open.keys()].join()].join();
+        if (pfHotC && pfHotC.key === key && pfHotC.all === all)
+          return pfHotC;
+        const add = (dd, k) => {
+          const [m0, r] = k.split("|").map(Number);
+          if (m0 < all[0].t0) return;
+          let a = 0, b = all.length - 1;
+          while (a < b) {
+            const m = (a + b + 1) >> 1;
+            if (all[m].t0 <= m0) a = m;
+            else b = m - 1;
+          }
+          const x = a + "|" + r;
+          vh.add(x);
+          vd.set(x, dd);
+          vm.set(x, m0);
+        };
+        hot.forEach(add);
+        open.forEach(add);
+        return (pfHotC = { key, all, vh, vd, vm });
       }
       /*
        * A day's vol, as vol() in imports.py / 2: the height of
@@ -6659,6 +6757,9 @@
             uk +
             "|" +
             arr[k - BIG_WIN + 1].t;
+          /* kept: closed twins older than 10 min are final */
+          const bk = arr.tw && arr.tw + c.t;
+          if (bk && bigK.has(bk)) return bigK.get(bk);
           let f = fcache.get(key);
           if (f === undefined) {
             const us = [];
@@ -6680,6 +6781,10 @@
             f = Math.abs(c.c - c.o) > bs[r] &&
               us[BIG_WIN - 1] > vs[r];
             fcache.set(key, f);
+          }
+          if (bk && c.t < Date.now() - 6e5) {
+            bigK.set(bk, f);
+            bigNew = true;
           }
           return f;
         }
@@ -7372,6 +7477,11 @@
           a[a.length - 1].t < Date.now() - 9 * 864e5) return;
         k15 = k15.length ? a.filter((c) => c.t < k15[0].t)
           .concat(k15) : a;
+        schedule();
+      });
+      idb.get("big").then((a) => {
+        (a || []).forEach(([k, f]) => bigK.has(k) ||
+          bigK.set(k, f));
         schedule();
       });
       idb.get("vols").then((a) => {
