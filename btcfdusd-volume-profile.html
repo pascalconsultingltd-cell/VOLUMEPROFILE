@@ -4047,7 +4047,7 @@
                 yT = Y((r + 1) * P.step);
               if (w >= 0.5 && !dc.has(r))
                 sb.rect("rgba(67,70,81,.35)",
-                cx0 - 2 - w, yT + 0.5, w, Math.max(1, rowH - 1));
+                cx0 - 2 - w, yT, w, Y(r * P.step) - yT);
             });
             sb.fill();
             /* what a row lacks vs the curve (negative delta),
@@ -4068,8 +4068,8 @@
               nb.rect(!b || !b[3] ? "rgba(67,70,81,.45)"
                 : b[3] > 0 ? `rgba(8,153,129,${aL})`
                   : `rgba(229,57,53,${aL})`,
-                vpMiss ? cx0 : x0, yT + 0.5,
-                cX(r) - x0, Math.max(1, rowH - 1));
+                vpMiss ? cx0 : x0, yT,
+                cX(r) - x0, Y(r * P.step) - yT);
             });
             /* D's: what a row's delta lacks vs its D curve, in
                its nearest D's colour, leftwards */
@@ -4086,8 +4086,8 @@
                 return;
               nb.rect(b[3] > 0 ? `rgba(8,153,129,${aL})`
                 : `rgba(229,57,53,${aL})`,
-                vpMiss ? cx0 - 2 - (xb - xc) : xc, yT + 0.5, xb - xc,
-                Math.max(1, rowH - 1));
+                vpMiss ? cx0 - 2 - (xb - xc) : xc, yT, xb - xc,
+                Y(r * P.step) - yT);
             });
             nb.fill();
             /* BF: the lead wing's empty part, from its closed
@@ -4100,8 +4100,8 @@
                 yT = Y((r + 1) * P.step);
               if (cX(r) - x0 > 0.5)
                 lb.rect("rgba(30,90,220,.85)",
-                  vpMiss ? cx0 : x0, yT + 0.5,
-                  cX(r) - x0, Math.max(1, rowH - 1));
+                  vpMiss ? cx0 : x0, yT,
+                  cX(r) - x0, Y(r * P.step) - yT);
             }));
             lb.fill();
             perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
