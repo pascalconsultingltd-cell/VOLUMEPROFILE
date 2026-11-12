@@ -481,7 +481,7 @@
                   <button
                     id="bsTog"
                     class="a"
-                    title="Bell grid scores (bellscore.js)"
+                    title="Bell grid scores"
                   >
                     BS
                   </button></span
@@ -1701,8 +1701,8 @@
         pcPf = !!v;
         schedule();
       }
-      /* bell scores (BS button, bellscore.js from GRID-TRADING/
-         bellscore.py): each live P / D bell's N=6 grid score
+      /* bell scores (BS button, worked out in the chart, was
+         GRID-TRADING/bellscore.py): each P / D bell's N=6 grid score
          (sigma), a coloured dot next to it in VP */
       let showScores = true,
         scores = [];
@@ -1725,36 +1725,79 @@
         $("missTog").className = vpMiss ? "a" : "";
         schedule();
       }
-      /* GitHub Pages: bellscore.py pushes the file to the
-         repo's scores branch every 5 min, read from raw */
-      const RAW_BS = "https://raw.githubusercontent.com/" +
-        "pascalconsultingltd-cell/VOLUMEPROFILE/scores/" +
-        "bellscore.js?t=";
-      async function loadRawScores() {
-        try {
-          const t = await (await fetch(RAW_BS + Date.now(),
-            { cache: "no-store" })).text();
-          const a = JSON.parse(t.slice(t.indexOf("["),
-            t.lastIndexOf("]") + 1));
-          if (Array.isArray(a)) (scores = a), schedule();
-        } catch (e) {}
-        setTimeout(loadRawScores, 60000);
+      /* bellDays: day -> { key, bs: its bells } (see dayBells
+         in the VP draw); bellVer: bumped on each change */
+      const bellDays = new Map();
+      let bellVer = 0;
+      /* a day's 1s FDUSD closes (last trade of each second
+         with trades), from its aggTrades; kept per trade count */
+      const fdC = new Map();
+      function fdSec(dS) {
+        const a = aggrT.get(dS);
+        if (!a) return null;
+        let c = fdC.get(dS);
+        if (!c || c.n > a.tr.length)
+          fdC.set(dS, (c = { n: 0, t: [], p: [] }));
+        for (; c.n < a.tr.length; c.n++) {
+          const [T, p] = a.tr[c.n],
+            s = Math.floor(T / 1000) * 1000;
+          if (c.t[c.t.length - 1] === s) c.p[c.p.length - 1] = p;
+          else c.t.push(s), c.p.push(p);
+        }
+        c.end = a.end;
+        return c;
       }
-      function loadScores() {
-        if (location.hostname.endsWith("github.io"))
-          return loadRawScores();
-        const s = document.createElement("script");
-        window.BELLSCORE = undefined;
-        s.onload = s.onerror = () => {
-          s.remove();
-          if (Array.isArray(window.BELLSCORE)) {
-            scores = window.BELLSCORE;
-            schedule();
-          }
-          setTimeout(loadScores, 30000);
-        };
-        s.src = "bellscore.js?t=" + Date.now();
-        document.head.appendChild(s);
+      /* the 1s closes from t0 to t1 (whole days in), null if a
+         day between is not loaded */
+      function closes(t0, t1) {
+        const out = [];
+        for (let d = dayOf(t0); d < t1; d = nextDay(d)) {
+          const c = fdSec(d);
+          const e = nextDay(d);
+          if (!c || (!c.end && e <= t1 && e <= Date.now()))
+            return null;
+          for (let i = 0; i < c.t.length; i++)
+            if (c.t[i] >= t0 && c.t[i] < t1) out.push(c.p[i]);
+        }
+        return out;
+      }
+      /* a bell's N=6 neutral grid on 1s closes c: levels every
+         3.92 sigma / 6 from px - 1.96 sigma, long below px,
+         short above, a fill each time a close crosses the next
+         level; past the range it holds; stopped at the last
+         close clipped to +/-1.96 sigma. sc in sigma, no fees */
+      function gridSc(b, c) {
+        const N = 6, sg = b.sigma, d = (2 * 1.96 * sg) / N,
+          L0 = b.px - 1.96 * sg, L = (j) => L0 + j * d;
+        let k = Math.min(N, Math.max(0, Math.round((c[0] - L0) / d))),
+          pos = (N / 2 - k) / N,
+          cash = -pos * c[0];
+        for (const x of c) {
+          while (k > 0 && x <= L(k - 1)) k--, pos += 1 / N,
+            cash -= L(k) / N;
+          while (k < N && x >= L(k + 1)) k++, pos -= 1 / N,
+            cash += L(k) / N;
+        }
+        const e = Math.min(L(N), Math.max(L0, c[c.length - 1]));
+        return Math.round(((cash + pos * e) / sg) * 1000) / 1000;
+      }
+      /* every known bell, by birth, with its score: from birth
+         until a newer bell is born (a child ends no grid);
+         finished ones kept, running ones redone each second */
+      let bsMemo = { k: "", v: [] };
+      function bellScores() {
+        const k = bellVer + "|" + Math.floor(Date.now() / 1000);
+        if (bsMemo.k === k) return bsMemo.v;
+        const bs = [...bellDays.values()].flatMap((o) => o.bs)
+          .sort((a, b) => a.birth - b.birth);
+        bs.forEach((b) => {
+          if (b.fin) return;
+          const nx = bs.find((o) => o.birth > b.birth && !o.child),
+            c = closes(b.birth, nx ? nx.birth : Date.now());
+          b.sc = c && c.length > 1 ? gridSc(b, c) : null;
+          b.fin = !!nx && b.sc != null;
+        });
+        return (bsMemo = { k, v: bs }).v;
       }
       /* own orders on the chart (O button) */
       let showOrders = false;
@@ -3584,37 +3627,45 @@
             vw.bf = [ck, out];
             return out;
           };
-          const dCurve = (P, vw, sp, kv, vf, exp) => {
-            const ck = [kv, vf, ...sp.map((S) => S.px)].join();
-            if (vw.dc && vw.dc[0] === ck) return vw.dc[1];
-            const st = P.step,
-              dp = new Map(),
-              out = new Map();
-            vw.rw.forEach((u, r) => {
+          /* DT core: rows' volume above the P's curves (dp), its
+             P's by the shrinking brick, each one's mass (bricks)
+             from the rows nearest it */
+          const dPs = (rw, exp, kv, vf, st) => {
+            const dp = new Map();
+            rw.forEach((u, r) => {
               const d = u - (exp.get(r) || 0) * kv;
               if (d > 0) dp.set(r, d);
             });
             const rs = [...dp.keys()];
-            if (rs.length && kv) {
-              const lo = Math.min(...rs) * st,
-                hi = (Math.max(...rs) + 1) * st,
-                ps = pocsBy(lo, hi, vf, st, (z) => {
-                  const c = [];
-                  dp.forEach((q, r) =>
-                    spread(r * st - lo, (r + 1) * st - lo, z,
-                      (i, k) => (c[i] = (c[i] || 0) + q * k)));
-                  return c;
-                }),
-                sg = vf / 1.2816,
-                N = Math.ceil((4 * sg) / st),
-                ms = ps.map(() => 0),
-                gap = (r, Q) => Math.abs((r + 0.5) * st - Q.px);
-              dp.forEach((q, r) => {
-                let j = 0;
-                ps.forEach((Q, i) => gap(r, Q) < gap(r, ps[j]) &&
-                  (j = i));
-                ms[j] += q / kv;
-              });
+            if (!rs.length || !kv) return { dp, ps: [], ms: [] };
+            const lo = Math.min(...rs) * st,
+              hi = (Math.max(...rs) + 1) * st,
+              ps = pocsBy(lo, hi, vf, st, (z) => {
+                const c = [];
+                dp.forEach((q, r) =>
+                  spread(r * st - lo, (r + 1) * st - lo, z,
+                    (i, k) => (c[i] = (c[i] || 0) + q * k)));
+                return c;
+              }),
+              ms = ps.map(() => 0),
+              gap = (r, Q) => Math.abs((r + 0.5) * st - Q.px);
+            dp.forEach((q, r) => {
+              let j = 0;
+              ps.forEach((Q, i) => gap(r, Q) < gap(r, ps[j]) &&
+                (j = i));
+              ms[j] += q / kv;
+            });
+            return { dp, ps, ms };
+          };
+          const dCurve = (P, vw, sp, kv, vf, exp) => {
+            const ck = [kv, vf, ...sp.map((S) => S.px)].join();
+            if (vw.dc && vw.dc[0] === ck) return vw.dc[1];
+            const st = P.step,
+              out = new Map(),
+              { dp, ps, ms } = dPs(vw.rw, exp, kv, vf, st);
+            if (ps.length) {
+              const sg = vf / 1.2816,
+                N = Math.ceil((4 * sg) / st);
               /* every row's delta, drawn as bars (a dropped D's
                  rows: the bars only) */
               out.dp = dp;
@@ -3633,6 +3684,61 @@
             }
             vw.dc = [ck, out];
             return out;
+          };
+          /* BS: the day's bells as they first show at each 30m
+             close: P's of the closed periods, D's of their volume
+             above those P's curves. One within vol of a P (D) of
+             the close before follows it (last = where it is
+             now), else a new bell born at that close; a D within
+             vol of a P (this close's, or a P bell's last) is its
+             child. Kept per day: once per 30m close (no repaint) */
+          const dayBells = (P, vw, kv, vf) => {
+            const cl = P.ps.filter((q) =>
+                P.dS + (q.i + 1) * TPO_MS <= Date.now()),
+              key = [cl.length, vf, P.step, kv].join(),
+              o = bellDays.get(P.dS);
+            if (o && o.key === key) return;
+            const st = P.step,
+              byI = new Map(),
+              W = new Map(),
+              out = [];
+            vw.forEach((v, k) => {
+              const [r, i] = k.split("|").map(Number);
+              if (!byI.has(i)) byI.set(i, []);
+              byI.get(i).push([r, v]);
+            });
+            let prev = { P: [], D: [] };
+            for (let n = 0; n < cl.length; n++) {
+              const q = cl[n],
+                cp = subPocs(P.dS, cl.slice(0, n + 1), vf, st);
+              if (!cp.vol) return;
+              (byI.get(q.i) || []).forEach(([r, v]) =>
+                W.set(r, (W.get(r) || 0) + v));
+              const d = dPs(W, expOf(P, cp, vf), kv, vf, st),
+                cur = { P: cp.map((S) => S.px),
+                  D: d.ps.filter((Q, i) => d.ms[i] >= D_MIN)
+                    .map((Q) => Q.px) },
+                now = { P: [], D: [] };
+              ["P", "D"].forEach((kind) => cur[kind].forEach((px) => {
+                const near = prev[kind].filter(([x]) =>
+                  Math.abs(x - px) < vf);
+                let b;
+                if (near.length) {
+                  b = near.reduce((a, z) => Math.abs(z[0] - px) <
+                    Math.abs(a[0] - px) ? z : a)[1];
+                  b.last = px;
+                } else out.push(b = { px, last: px, kind,
+                  birth: P.dS + (q.i + 1) * TPO_MS,
+                  sigma: vf / 1.2816,
+                  child: kind === "D" && cur.P.concat(out.filter(
+                    (z) => z.kind === "P").map((z) => z.last))
+                    .some((x) => Math.abs(x - px) < vf) });
+                now[kind].push([px, b]);
+              }));
+              prev = now;
+            }
+            bellDays.set(P.dS, { key, bs: out });
+            bellVer++;
           };
           /* Perf: the curve's edge row by row, a step line from
              the profile's left edge, over its rows of a brick or
@@ -3709,6 +3815,9 @@
             Object.assign(P, { vw, vs });
             const vf = volFor(P.dS) > 0 ? volFor(P.dS) : P.step * 10;
             const sp = byAge(P, subPocs(P.dS, P.ps, vf, P.step));
+            /* BS: this day's bells, then every bell's score */
+            dayBells(P, vw, kvFor(P.dS, "BTCUSDT"), vf);
+            scores = bellScores();
             /* VP alert: the live price out of today's bells, past
                the lowest P - 1.96 sigma / highest P + 1.96 sigma
                (sigma = vol / 1.2816, the curves'); once per side
@@ -3954,7 +4063,7 @@
               g.strokeText(i + 1, x, Y(px));
               g.fillText(i + 1, x, Y(px));
             });
-            /* BS (bellscore.py): each bell's grid score as a dot
+            /* BS: each bell's grid score as a dot
                right of its P's curve / left of its D's: red <= 0,
                pale red to 0.25 sigma (~one round trip), green
                to 1 (ranged), dark green above (strong range);
@@ -6991,7 +7100,6 @@
         navigator.serviceWorker.register("sw.js").catch(() => {});
       loadOrders();
       loadVol();
-      loadScores();
       connect();
       hist(IV, () => seedIv(IV));
       hist("15m", () => seedIv("15m"));
