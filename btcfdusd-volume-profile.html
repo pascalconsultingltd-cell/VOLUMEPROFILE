@@ -351,8 +351,21 @@
         display: none;
       }
       body.phone[data-tab="main"] .ctl .grp[title="Main chart"],
-      body.phone[data-tab="tpo"] .ctl .grp[title="Volume profile"] {
+      body.phone[data-tab="tpo"] .ctl .grp[title="Volume profile"],
+      body.phone[data-tab="split"] .ctl .grp[title="Main chart"],
+      body.phone[data-tab="split"] .ctl .grp[title="Volume profile"] {
         display: inline-flex;
+      }
+      /* phone split: VP on top, the main chart under it */
+      #vpPane {
+        display: none;
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      body.phone[data-tab="split"] #vpPane {
+        display: block;
       }
       body.t15 #mini {
         display: flex !important;
@@ -480,6 +493,7 @@
       </div>
     </header>
     <div id="info"></div>
+    <div id="vpPane"><canvas id="cvp"></canvas></div>
     <main><canvas id="c"></canvas></main>
     <div id="toast"></div>
     <div id="alBox" hidden>
@@ -2576,7 +2590,7 @@
            "press Esc" notice; Esc or the icon leaves it */
         function setFull(k) {
           full = k;
-          if (cfg.main)
+          if (cfg.main && !cfg.vp)
             dispatchEvent(new CustomEvent("full", { detail: k }));
           document.body.classList.toggle("fs", !!k);
           requestAnimationFrame(() =>
@@ -2584,8 +2598,10 @@
           );
         }
         /* phone: opens (and resets) on the chart full screen */
-        const fs0 = cfg.main && matchMedia("(pointer: coarse)")
-          .matches && Math.min(screen.width, screen.height) < 600
+        /* (phone split: the VP pane always on the profiles) */
+        const fs0 = cfg.vp ? "tpo" : cfg.main &&
+          matchMedia("(pointer: coarse)").matches &&
+          Math.min(screen.width, screen.height) < 600
           ? "main" : null;
         if (fs0) setFull(fs0);
         function size() {
@@ -6484,7 +6500,8 @@
             b.onclick = () => {
               set(v);
               mkBtns(el, opts, get, set);
-              draw();
+              /* all charts: the phone's VP pane shares nTpo */
+              schedule();
             };
             el.appendChild(b);
           });
@@ -6549,7 +6566,7 @@
           $("sym").textContent = SYM + " " + v;
           draw();
         }
-        if (cfg.main) ui();
+        if (cfg.main && !cfg.vp) ui();
         if (window.ResizeObserver)
           new ResizeObserver(() => size()).observe(cv);
         size();
@@ -6874,16 +6891,20 @@
           },
           lit = (k) => [...tb.children].forEach((b) =>
             (b.className = b.dataset.k === k ? "a" : "")),
+          /* Split: VP pane (its own chart, on the profiles) on
+             top, the main chart under it */
           go = (k) => {
             document.body.classList.toggle("t15", k === "m15");
+            if (k !== "m15") mainChart.full(k === "split" ? "main" : k);
             document.body.dataset.tab = k;
-            if (k !== "m15") mainChart.full(k);
             lit(k);
             sz();
           };
         document.body.classList.add("phone");
-        [["main", "Main"], ["tpo", "VP"], ["pc", "PF"],
-          ["m15", "15s"]].forEach(([k, l]) => {
+        charts.push(makeChart($("cvp"), { main: true, vp: true,
+          mode: "eq", N: 288, room: 0.2, tpo: true }));
+        [["split", "Split"], ["main", "Main"], ["tpo", "VP"],
+          ["pc", "PF"], ["m15", "15s"]].forEach(([k, l]) => {
           const b = document.createElement("button");
           b.textContent = l;
           b.dataset.k = k;
@@ -6891,12 +6912,14 @@
           tb.appendChild(b);
         });
         addEventListener("full", (e) => {
-          if (document.body.dataset.tab === "m15") return;
+          if (document.body.dataset.tab === "m15" ||
+            (document.body.dataset.tab === "split" &&
+              e.detail === "main")) return;
           document.body.dataset.tab = e.detail || "";
           lit(e.detail);
         });
         new ResizeObserver(sz).observe(hd);
-        go("main");
+        go("split");
       }
       /* installable app: only when served over https */
       if (
