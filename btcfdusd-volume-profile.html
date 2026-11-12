@@ -4869,10 +4869,10 @@
               g.restore();
             });
           /*
-           * circles: green below bullish bars, black above
-           * bearish bars; the 15s window gets its own; HA: in
-           * the middle of the candle (high to low), so a small
-           * one is not missed
+           * circles: green bullish, black bearish; main chart
+           * (any type): in the middle of the candle (high to
+           * low), so a small one is not missed; the 15s window:
+           * below bullish bars, above bearish ones
            */
           geo.forEach((o) => {
             const f = bigs.get(o.c);
@@ -4880,7 +4880,7 @@
             const c = o.c;
             if (c.c === c.o) return;
             const bull = c.c > c.o,
-              y = ha ? Y((c.h + c.l) / 2)
+              y = ha || cfg.main ? Y((c.h + c.l) / 2)
                 : bull ? Y(c.l) + 12 : Y(c.h) - 12;
             if (y < top || y > bot) return;
             g.fillStyle = bull ? "#4caf50" : "#000000";
