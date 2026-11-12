@@ -427,7 +427,7 @@
             ><span class="box"><span id="tpoBtns"></span
               ><button
                 id="invTog"
-                class="a"
+                class=""
                 title="VP colours inverted: filled volume strong, what is missing pale"
               >
                 Inv
@@ -1669,7 +1669,7 @@
         schedule();
       }
       /* Inv: VP red / green swapped strong <-> pale */
-      let vpInv = true;
+      let vpInv = false;
       function setVpInv(v) {
         vpInv = !!v;
         $("invTog").className = vpInv ? "a" : "";
@@ -6584,7 +6584,7 @@
       }
       const mainChart = makeChart($("c"), {
         main: true,
-        mode: "eq",
+        mode: "std",
         /* one day of 5m candles, a fifth of the width free */
         N: 288,
         room: 0.2,
@@ -6607,7 +6607,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 41;
+      const DEFAULTS_VER = 42;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -6684,8 +6684,8 @@
         /* BS: new in version 39, on by default */
         if (st.dv >= 39 && typeof st.showScores === "boolean")
           setShowScores(st.showScores);
-        /* Inv: new in version 40, on by default */
-        if (st.dv >= 40 && typeof st.vpInv === "boolean")
+        /* Inv: off by default since version 42 */
+        if (st.dv >= 42 && typeof st.vpInv === "boolean")
           setVpInv(st.vpInv);
         /* Miss: new in version 41, on by default */
         if (st.dv >= 41 && typeof st.vpMiss === "boolean")
@@ -6696,7 +6696,7 @@
          * scale, floating window) always starts from its
          * default, so only timeframe and TPO days are taken
          * from the saved chart state; the main chart always
-         * opens on volume candles (VC).
+         * opens on standard candles (Std).
          */
         /* TPO days: back to 3 in version 24 */
         const keep = (s) =>
