@@ -842,7 +842,11 @@
       /* big candles: volume from BTCUSDT (prices stay FDUSD).
          uv5: 5m start -> USDT volume, its 5m klines back to
          the oldest 5m candle; live from its kline stream */
-      const uv5 = new Map();
+      const uv5 = new Map(),
+        /* uk5: 5m start -> its BTCUSDT [o, h, l, c] */
+        uk5 = new Map();
+      const setU5 = (r) => (uv5.set(r[0], +r[5]),
+        uk5.set(r[0], [+r[1], +r[2], +r[3], +r[4]]));
       let uvLo = Infinity,
         uvBusy = false,
         uvEnd = false;
@@ -858,7 +862,7 @@
               if (!Array.isArray(j)) continue;
               if (!j.length) uvEnd = true;
               j.forEach((r) => {
-                uv5.set(r[0], +r[5]);
+                setU5(r);
                 uvLo = Math.min(uvLo, r[0]);
               });
               break;
@@ -895,6 +899,59 @@
         let q = 0;
         for (; i < a.length && a[i][0] < e; i++) q += a[i][4];
         return q;
+      }
+      /* a candle's BTCUSDT twin (same start): o h l c, volume
+         u, fd = the candle; null until loaded. 15s: from the
+         USDT seconds in it, open = the close before */
+      function twinOf(c, five) {
+        const u = uOf(c, five);
+        if (u === undefined) return null;
+        let o, h = -Infinity, l = Infinity, x;
+        if (five) {
+          const q = uk5.get(c.t);
+          if (!q) return null;
+          [o, h, l, x] = q;
+        } else {
+          const a = usdtK.get(dayOf(c.t)).k;
+          let i = 0, j = a.length;
+          while (i < j) {
+            const m = (i + j) >> 1;
+            if (a[m][0] < c.t) i = m + 1;
+            else j = m;
+          }
+          if (i >= a.length || a[i][0] >= c.t + 15000) return null;
+          o = a[i ? i - 1 : i][3];
+          for (; i < a.length && a[i][0] < c.t + 15000; i++)
+            (h = Math.max(h, a[i][1])), (l = Math.min(l, a[i][2])),
+              (x = a[i][3]);
+        }
+        return { t: c.t, o, h, l, c: x, u, fd: c };
+      }
+      /* the USDT twins of k5 / c15, one per candle, for the big
+         candles (HA) and the zigzag (a candle without one keeps
+         its FDUSD values, never big); line-break bricks stay
+         FDUSD. Twins older than 10 min are final: kept */
+      const twK = new WeakMap(),
+        twC = {};
+      function twin(arr) {
+        const five = arr === k5;
+        if (!five && arr !== c15) return arr;
+        const z = arr[arr.length - 1],
+          key = [arr.length, arr[0] && arr[0].t, z && z.t, z && z.c,
+            uk5.size, usdtK.size, Math.floor(Date.now() / 1000)]
+            .join();
+        if (twC[five] && twC[five].key === key) return twC[five].v;
+        const old = Date.now() - 6e5,
+          v = arr.map((c) => {
+            let w = twK.get(c);
+            if (w) return w;
+            w = twinOf(c, five) || { t: c.t, o: c.o, h: c.h,
+              l: c.l, c: c.c, u: NaN, fd: c, own: true };
+            if (!w.own && c.t < old) twK.set(c, w);
+            return w;
+          });
+        twC[five] = { key, v };
+        return v;
       }
       const usdtK = new Map(),
         usdtBusy = new Set();
@@ -2441,7 +2498,7 @@
               "&interval=5m&limit=2", 5000),
           ]);
           if (Array.isArray(u5))
-            u5.forEach((r) => uv5.set(r[0], +r[5]));
+            u5.forEach(setU5);
           if (!polling) return;
           if (!Array.isArray(a5) || !Array.isArray(tr))
             throw new Error("bad reply");
@@ -2567,7 +2624,8 @@
             liveAggr(m);
           } else if (m.e === "kline" && m.k && m.s === "BTCUSDT")
             m.k.i === "1s" ? liveUsdt(m.k)
-              : (uv5.set(m.k.t, +m.k.v), schedule());
+              : (setU5([m.k.t, m.k.o, m.k.h, m.k.l, m.k.c,
+                m.k.v]), schedule());
           else if (m.e === "kline" && m.k) onKline(m.k);
           /* bookTicker */
           else if (m.b !== undefined && m.a !== undefined)
@@ -6377,7 +6435,9 @@
          */
 
         /* needs k>=BIG_WIN-1 */
+        /* on the USDT twins (see twin) */
         function isBig(arr, k) {
+          arr = twin(arr);
           const c = arr[k],
             five = arr === k5;
           if (!c || c.h == null) return false;
@@ -6452,8 +6512,13 @@
            (the scale, the drawing and the alerts all ask), each
            caller gets copies (the drawing moves the open end) */
         let zfbC = null;
+        /* decided on the USDT twins (see twin); each pivot on
+           its FDUSD candle, at that candle's own FDUSD low /
+           high (the price reached there; a ratio can be off by
+           100s on a thin FDUSD candle) */
         function zfbPiv(arr) {
-          const z = arr[arr.length - 1],
+          const T = twin(arr),
+            z = arr[arr.length - 1],
             key = [arr.length, arr[0] && arr[0].t, z && z.t,
               z && z.o, z && z.h, z && z.l, z && z.c, uv5.size,
               volDays.size, volN].join();
@@ -6469,29 +6534,32 @@
             }
             return arr[a] === c;
           };
-          if (zfbC && zfbC.key === key &&
+          if (zfbC && zfbC.key === key && zfbC.T === T &&
             zfbC.piv.every((o) => has(o.c)))
             return zfbC.piv.map((o) => ({ ...o }));
-          const piv = [];
+          const piv = [],
+            /* a twin's pivot on its FDUSD candle, in FDUSD */
+            pv = (low, p, q) => ({ low, c: q.fd || q,
+              p: q.fd ? (low ? q.fd.l : q.fd.h) : p });
           let dn = null,
             ht = 0,
             seen = false,
             ext = 0,
             at = null;
-          for (let k = 0; k < arr.length; k++) {
-            const q = arr[k];
+          for (let k = 0; k < T.length; k++) {
+            const q = T[k];
             if (!okC(q)) continue;
             /* the forming candle only extends the open leg: it
                turns nothing until it closes (no repaint) */
-            const live = k === arr.length - 1,
+            const live = k === T.length - 1,
               big = !live && k >= BIG_WIN - 1 && q.c !== q.o &&
-                isBig(arr, k),
+                isBig(T, k),
               way = q.c < q.o;
             if (dn === null) {
               dn = way;
               ext = dn ? q.l : q.h;
               at = q;
-              piv.push({ low: !dn, p: dn ? q.h : q.l, c: q });
+              piv.push(pv(!dn, dn ? q.h : q.l, q));
             }
             /* the extreme first: a big candle turning the leg
                can wick past it (the pivot is then its wick) */
@@ -6503,7 +6571,7 @@
               seen = true;
               ht = q.h - q.l;
               if (way !== dn) {
-                piv.push({ low: dn, p: ext, c: at });
+                piv.push(pv(dn, ext, at));
                 dn = way;
                 ext = dn ? q.l : q.h;
                 at = q;
@@ -6511,14 +6579,14 @@
             } else if (!seen) ht = volOfDay(dayOf(q.t)) || volN;
             if (!big && !live &&
               (dn ? q.c > ext + ht : q.c < ext - ht)) {
-              piv.push({ low: dn, p: ext, c: at });
+              piv.push(pv(dn, ext, at));
               dn = !dn;
               ext = dn ? q.l : q.h;
               at = q;
             }
           }
-          if (dn !== null) piv.push({ low: dn, p: ext, c: at });
-          zfbC = { key, piv: piv.map((o) => ({ ...o })) };
+          if (dn !== null) piv.push(pv(dn, ext, at));
+          zfbC = { key, T, piv: piv.map((o) => ({ ...o })) };
           return piv;
         }
         /*
