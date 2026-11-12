@@ -3771,13 +3771,15 @@
             };
             shade(1, exp, cx0, (v, r) => vpInv
               ? Math.min(v * kv, vw.rw.get(r) || 0) * vs : v * kv * vs);
-            shade(-1, dc, cx0 - 2, (v) => (-v * kv * vs) / 2);
-            /* delta bars: each row's extra volume vs the curve as
-               grey bricks; a D under D_MIN has only these */
-            (dc.dp || new Map()).forEach((q, r) => {
+            /* D's as P's: the delta bars in the shade, up to
+               their curve; rows out of any D (under D_MIN) grey */
+            const dp = dc.dp || new Map();
+            shade(-1, dc, cx0 - 2, (v, r) =>
+              (-Math.min(v * kv, dp.get(r) || 0) * vs) / 2);
+            dp.forEach((q, r) => {
               const w = (q * vs) / 2,
                 yT = Y((r + 1) * P.step);
-              if (w >= 0.5) sb.rect("rgba(67,70,81,.35)",
+              if (w >= 0.5 && !dc.has(r)) sb.rect("rgba(67,70,81,.35)",
                 cx0 - 2 - w, yT + 0.5, w, Math.max(1, rowH - 1));
             });
             sb.fill();
@@ -3799,6 +3801,23 @@
               nb.rect(!b || !b[3] ? "rgba(67,70,81,.45)"
                 : b[3] > 0 ? `rgba(8,153,129,${aL})`
                   : `rgba(229,57,53,${aL})`, x0, yT + 0.5, cX(r) - x0,
+                Math.max(1, rowH - 1));
+            });
+            /* D's: what a row's delta lacks vs its D curve, in
+               its nearest D's colour, leftwards */
+            const bd = rk.filter((e) => e[5] === -1);
+            if (bd.length) dc.forEach((e, r) => {
+              const xb = cx0 - 2 - ((dp.get(r) || 0) * vs) / 2,
+                xc = cx0 - 2 - (e * kv * vs) / 2,
+                yT = Y((r + 1) * P.step),
+                c = (r + 0.5) * P.step,
+                b = bd.reduce((a, q) =>
+                  Math.abs(q[2] - c) < Math.abs(a[2] - c) ? q : a);
+              if (xb - xc < 0.25 || !b[3] || yT > bot ||
+                yT + rowH < top)
+                return;
+              nb.rect(b[3] > 0 ? `rgba(8,153,129,${aL})`
+                : `rgba(229,57,53,${aL})`, xc, yT + 0.5, xb - xc,
                 Math.max(1, rowH - 1));
             });
             nb.fill();
