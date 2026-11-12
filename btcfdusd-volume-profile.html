@@ -792,6 +792,58 @@
         /* PF channel per column, kept until a column is added,
            finalised or the latest one's IC moves */
         pfBd = null;
+      /* finished days (USDT seconds, FDUSD trades) kept in this
+         browser (IndexedDB): final, so a reload fetches today
+         only; today's closed part saved each minute too (final);
+         "u|" / "a|" / "m|" + day, dropped after 15 days (m: 40) */
+      const idb = (() => {
+        let p = null;
+        const open = () => p || (p = new Promise((ok) => {
+          try {
+            const r = indexedDB.open("btcfdusd-days", 1);
+            r.onupgradeneeded = () => r.result.createObjectStore("d");
+            r.onsuccess = () => ok(r.result);
+            r.onerror = () => ok(null);
+          } catch (e) {
+            ok(null);
+          }
+        }));
+        const tx = async (mode, fn) => {
+          const db = await open();
+          return db && new Promise((ok) => {
+            try {
+              const r = fn(db.transaction("d", mode)
+                .objectStore("d"));
+              r.onsuccess = () => ok(r.result);
+              r.onerror = () => ok(undefined);
+            } catch (e) {
+              ok(undefined);
+            }
+          });
+        };
+        return {
+          get: (k) => tx("readonly", (s) => s.get(k)),
+          put: (k, v) => tx("readwrite", (s) => s.put(v, k)),
+          keys: () => tx("readonly", (s) => s.getAllKeys()),
+          del: (k) => tx("readwrite", (s) => s.delete(k)),
+        };
+      })();
+      /* save a day: finished once, else (today) each minute */
+      const keepDay = (d, key, v) => {
+        if (d.kept || (!d.end && Date.now() - (d.sv || 0) < 6e4))
+          return;
+        d.kept = d.end;
+        d.sv = Date.now();
+        idb.put(key, v());
+      };
+      idb.keys().then((ks) => (ks || []).forEach((k) =>
+        +k.split("|")[1] < dayOf(Date.now()) -
+          (k[0] === "m" ? 40 : 15) * 864e5 && idb.del(k)));
+      const keepA = (d, dS) => keepDay(d, "a|" + dS, () => ({
+        last: d.last, end: d.end, t: Float64Array.from(
+          d.tr.flatMap((x) => [x[0], x[1], x[2], x[3] ? 1 : 0])) }));
+      const keepU = (d, dS) => keepDay(d, "u|" + dS, () =>
+        Float64Array.from(d.k.flat()));
       async function loadAggr(dS) {
         const d0 = aggrT.get(dS);
         if (aggrBusy.has(dS) || (d0 && d0.end)) return;
@@ -803,6 +855,16 @@
         const d = d0 || { tr: [], last: null, end: false, at: 0 },
           dE = nextDay(dS);
         try {
+          /* a day kept here ([T, p, q, m] x n, last id, end):
+             finished, or today so far, REST goes on after it */
+          const f = !d0 && (await idb.get("a|" + dS));
+          if (f) {
+            for (let i = 0; i < f.t.length; i += 4)
+              d.tr.push([f.t[i], f.t[i + 1], f.t[i + 2],
+                !!f.t[i + 3]]);
+            Object.assign(d, { last: f.last, end: f.end,
+              kept: f.end });
+          }
           for (let n = 0; n < 300 && !d.end; n++) {
             const q =
                 d.last == null
@@ -822,6 +884,8 @@
                 d.end = true;
                 break;
               }
+              /* the stream may have added it meanwhile */
+              if (d.last != null && a.a <= d.last) continue;
               d.tr.push([a.T, +a.p, +a.q, a.m]);
               d.last = a.a;
             }
@@ -831,6 +895,7 @@
           d.at = Date.now();
           aggrT.set(dS, d);
           aggrBusy.delete(dS);
+          if (d.tr.length) keepA(d, dS);
           schedule();
         }
       }
@@ -979,6 +1044,14 @@
         const d = d0 || { k: [], end: false, at: 0 },
           dE = nextDay(dS);
         try {
+          /* a day kept here (6 numbers a second): finished, or
+             today's closed seconds, REST goes on after them */
+          const f = !d0 && (await idb.get("u|" + dS));
+          if (f && f.length) {
+            for (let i = 0; i < f.length; i += 6)
+              d.k.push(Array.from(f.subarray(i, i + 6)));
+            d.end = d.kept = d.k[d.k.length - 1][0] >= dE - 1000;
+          }
           for (let n = 0; n < 120 && !d.end; n++) {
             const z = d.k[d.k.length - 1],
               u = "/api/v3/klines?symbol=BTCUSDT&interval=1s" +
@@ -999,6 +1072,9 @@
               /* a second open or just closed (REST can lag the
                  final values ~1s): not kept (no repaint) */
               if (a[6] >= Date.now() - 2000) break;
+              /* the stream may have added it meanwhile */
+              const y = d.k[d.k.length - 1];
+              if (y && a[0] <= y[0]) continue;
               d.k.push([a[0], +a[2], +a[3], +a[4], +a[5], +a[9]]);
             }
             const y = d.k[d.k.length - 1];
@@ -1010,6 +1086,7 @@
           usdtK.set(dS, d);
           usdtBusy.delete(dS);
           drainUsdt(dS);
+          if (d.k.length) keepU(d, dS);
           schedule();
         }
       }
@@ -1036,6 +1113,7 @@
         d.at = Date.now();
         if (d.k[d.k.length - 1][0] >= nextDay(dS) - 1000)
           d.end = true;
+        keepU(d, dS);
         schedule();
       }
       /* live: an FDUSD aggTrade, kept only if its id follows
@@ -1049,6 +1127,7 @@
         d.tr.push([m.T, +m.p, +m.q, m.m]);
         d.last = m.a;
         d.at = Date.now();
+        keepA(d, dayOf(m.T));
       }
       /* a day's USDT seconds on FDUSD prices: each second's
          (high + low) / 2 x the FDUSD / USDT ratio of the 5 min
@@ -1484,34 +1563,66 @@
           : NaN;
       }
       /* BTCUSDT 1m candles [time, high, low, volume] from the
-         first 15m candle loaded, for the vol; topped up each
-         minute */
+         first 15m candle's day, for the vol; per day (usdtMD),
+         finished days kept in the browser ("m|day"); closed
+         minutes only; topped up each minute */
       let usdtM = [],
         usdtMBusy = false,
         usdtMAt = 0;
+      const usdtMD = new Map();
       async function loadUsdtM() {
         if (usdtMBusy || !k15.length) return;
-        if (usdtM.length && k15[0].t < usdtM[0][0]) usdtM = [];
-        if (Date.now() - usdtMAt < 60000 && usdtM.length) return;
+        if (Date.now() - usdtMAt < 60000 && usdtM.length &&
+          usdtM[0][0] <= k15[0].t) return;
         usdtMBusy = true;
         try {
-          for (let n = 0; n < 150; n++) {
-            const z = usdtM[usdtM.length - 1],
-              from = z ? z[0] + 60000 : k15[0].t;
-            if (from > Date.now() - 60000) break;
-            const u = "/api/v3/klines?symbol=BTCUSDT&interval=1m" +
-              "&limit=1000&startTime=" + from;
-            let j = null;
-            for (const h of REST) {
-              try {
-                j = await fj(h + u);
-                if (Array.isArray(j)) break;
-              } catch (e) {}
+          /* the kept days read all at once */
+          const ds = [];
+          for (let d = dayOf(k15[0].t); d <= Date.now();
+            d = nextDay(d)) ds.push(d);
+          const kept = await Promise.all(ds.map((d) =>
+            !usdtMD.has(d) && nextDay(d) <= Date.now() &&
+            idb.get("m|" + d)));
+          for (const [i, d] of ds.entries()) {
+            const dE = nextDay(d);
+            let a = usdtMD.get(d);
+            if (a && a.end) continue;
+            const f = kept[i];
+            if (f) {
+              const k = [];
+              for (let i = 0; i < f.length; i += 4)
+                k.push(Array.from(f.subarray(i, i + 4)));
+              usdtMD.set(d, { k, end: true });
+              continue;
             }
-            if (!Array.isArray(j) || !j.length) break;
-            j.forEach((a) => usdtM.push([a[0], +a[2], +a[3], +a[5]]));
-            if (j.length < 1000) break;
+            a = a || { k: [], end: false };
+            for (let n = 0; n < 3; n++) {
+              const z = a.k[a.k.length - 1],
+                from = z ? z[0] + 60000 : d;
+              if (from >= Math.min(dE, Date.now() - 60000)) break;
+              const u = "/api/v3/klines?symbol=BTCUSDT" +
+                "&interval=1m&limit=1000&startTime=" + from;
+              let j = null;
+              for (const h of REST) {
+                try {
+                  j = await fj(h + u);
+                  if (Array.isArray(j)) break;
+                } catch (e) {}
+              }
+              if (!Array.isArray(j) || !j.length) break;
+              j.forEach((r) => r[0] < dE && r[6] < Date.now() &&
+                a.k.push([r[0], +r[2], +r[3], +r[5]]));
+              if (j.length < 1000) break;
+            }
+            const z = a.k[a.k.length - 1];
+            a.end = dE <= Date.now() && !!z && z[0] >= dE - 60000;
+            usdtMD.set(d, a);
+            if (a.end)
+              idb.put("m|" + d, Float64Array.from(a.k.flat()));
           }
+          const d0 = dayOf(k15[0].t);
+          usdtM = [...usdtMD.keys()].filter((d) => d >= d0)
+            .sort((x, y) => x - y).flatMap((d) => usdtMD.get(d).k);
         } finally {
           usdtMAt = Date.now();
           usdtMBusy = false;
