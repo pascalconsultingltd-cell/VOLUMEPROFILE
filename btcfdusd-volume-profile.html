@@ -457,6 +457,13 @@
                     title="Bell grid scores (bellscore.js)"
                   >
                     BS
+                  </button>
+                  <button
+                    id="invTog"
+                    class="a"
+                    title="VP colours inverted: filled volume strong, what is missing pale"
+                  >
+                    Inv
                   </button></span
                 ></span
               ></span
@@ -1628,6 +1635,13 @@
       function setShowScores(v) {
         showScores = !!v;
         $("bsTog").className = showScores ? "a" : "";
+        schedule();
+      }
+      /* Inv: VP red / green swapped strong <-> pale */
+      let vpInv = true;
+      function setVpInv(v) {
+        vpInv = !!v;
+        $("invTog").className = vpInv ? "a" : "";
         schedule();
       }
       /* GitHub Pages: bellscore.py pushes the file to the
@@ -3735,8 +3749,11 @@
             });
             const dm = new Map(rk.filter((e) => e[4])
               .map((e) => [e[4], e[3]]));
-            /* each bell shaded as its number, very light: a row
-               goes to its nearest P (right) / D (left) */
+            /* each bell shaded as its number, very light (Inv:
+               strong, P's only up to their volume): a row goes to
+               its nearest P (right) / D (left) */
+            const aS = vpInv ? 0.6 : 0.12,
+              aL = vpInv ? 0.12 : 0.6;
             const sb = batch(),
               shade = (sd, m, x0, wf) => {
               const bs = rk.filter((e) => e[5] === sd);
@@ -3744,15 +3761,16 @@
                 const c = (r + 0.5) * P.step,
                   b = bs.reduce((a, e) => Math.abs(e[2] - c) <
                     Math.abs(a[2] - c) ? e : a),
-                  w = wf(v),
+                  w = wf(v, r),
                   yT = Y((r + 1) * P.step);
                 if (Math.abs(w) < 0.5 || !b[3]) return;
-                sb.rect(b[3] > 0 ? "rgba(8,153,129,.12)"
-                  : "rgba(229,57,53,.12)", Math.min(x0, x0 + w), yT,
+                sb.rect(b[3] > 0 ? `rgba(8,153,129,${aS})`
+                  : `rgba(229,57,53,${aS})`, Math.min(x0, x0 + w), yT,
                   Math.abs(w), Y(r * P.step) - yT);
               });
             };
-            shade(1, exp, cx0, (v) => v * kv * vs);
+            shade(1, exp, cx0, (v, r) => vpInv
+              ? Math.min(v * kv, vw.rw.get(r) || 0) * vs : v * kv * vs);
             shade(-1, dc, cx0 - 2, (v) => (-v * kv * vs) / 2);
             /* delta bars: each row's extra volume vs the curve as
                grey bricks; a D under D_MIN has only these */
@@ -3779,8 +3797,8 @@
                 yT + rowH < top)
                 return;
               nb.rect(!b || !b[3] ? "rgba(67,70,81,.45)"
-                : b[3] > 0 ? "rgba(8,153,129,.6)"
-                  : "rgba(229,57,53,.6)", x0, yT + 0.5, cX(r) - x0,
+                : b[3] > 0 ? `rgba(8,153,129,${aL})`
+                  : `rgba(229,57,53,${aL})`, x0, yT + 0.5, cX(r) - x0,
                 Math.max(1, rowH - 1));
             });
             nb.fill();
@@ -6519,7 +6537,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 39;
+      const DEFAULTS_VER = 40;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -6546,6 +6564,7 @@
           showOrders,
           showLines,
           showScores,
+          vpInv,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -6594,6 +6613,9 @@
         /* BS: new in version 39, on by default */
         if (st.dv >= 39 && typeof st.showScores === "boolean")
           setShowScores(st.showScores);
+        /* Inv: new in version 40, on by default */
+        if (st.dv >= 40 && typeof st.vpInv === "boolean")
+          setVpInv(st.vpInv);
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -6789,6 +6811,7 @@
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
       $("bsTog").onclick = () => setShowScores(!showScores);
+      $("invTog").onclick = () => setVpInv(!vpInv);
       /* phone: tabs Main / VP / PF / 15s, each its chart full
          screen (15s: the floating window over everything) */
       if (matchMedia("(pointer: coarse)").matches &&
