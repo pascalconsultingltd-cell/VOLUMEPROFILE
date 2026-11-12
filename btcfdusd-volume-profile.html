@@ -4193,19 +4193,19 @@
             g.fillStyle = "#434651";
             g.fill(bp);
             /* V95 boxes: a circle green / red by the box's delta,
-               bigger with it (3px, +2px per 10 BTC, 12px at most) */
+               bigger with it (2px, +1px per 10 BTC, 6px at most) */
             const hs = pfHot(all),
               ci = new Map(all.map((c, k) => [c, k])),
               xm = new Map(shown.map((c, i) => [ci.get(c),
                 [c, pa + sl * jOf(i)]]));
             g.strokeStyle = "#000";
-            g.lineWidth = 1.5;
+            g.lineWidth = 1;
             hs.vh.forEach((key) => {
               const [k, r] = key.split("|").map(Number),
                 q = xm.get(k);
               if (!q) return;
               const dl = hs.vd.get(key) || 0,
-                rd = Math.min(12, 3 + (2 * Math.abs(dl)) / 10);
+                rd = Math.min(6, 2 + Math.abs(dl) / 10);
               g.fillStyle = dl >= 0 ? "#089981" : "#e53935";
               g.beginPath();
               g.arc(q[1], Y((r + 0.5) * q[0].st), rd, 0, 7);
