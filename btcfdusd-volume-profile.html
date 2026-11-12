@@ -428,14 +428,14 @@
               ><button
                 id="invTog"
                 class=""
-                title="VP colours inverted: filled volume strong, what is missing pale"
+                title="Inverted: filled volume strong, missing pale"
               >
                 Inv
               </button
               ><button
                 id="missTog"
                 class="a"
-                title="Bells and 2nd order delta: missing part from the axis, the volume after it"
+                title="Missing part from the axis, volume after it"
               >
                 Miss
               </button></span></span
@@ -795,8 +795,10 @@
       async function loadAggr(dS) {
         const d0 = aggrT.get(dS);
         if (aggrBusy.has(dS) || (d0 && d0.end)) return;
-        /* today: every 5s while the PF shows, else 30s */
-        if (d0 && Date.now() - d0.at < 5000) return;
+        /* today: every 5s while the PF shows, else 30s; not
+           while the stream carries it */
+        if (d0 && (Date.now() - d0.at < 5000 ||
+          (d0.sync && ws && ws.readyState === 1))) return;
         aggrBusy.add(dS);
         const d = d0 || { tr: [], last: null, end: false, at: 0 },
           dE = nextDay(dS);
@@ -937,6 +939,9 @@
                 d.end = true;
                 break;
               }
+              /* a second open or just closed (REST can lag the
+                 final values ~1s): not kept (no repaint) */
+              if (a[6] >= Date.now() - 2000) break;
               d.k.push([a[0], +a[2], +a[3], +a[4], +a[5], +a[9]]);
             }
             const y = d.k[d.k.length - 1];
@@ -947,8 +952,46 @@
           d.at = Date.now();
           usdtK.set(dS, d);
           usdtBusy.delete(dS);
+          drainUsdt(dS);
           schedule();
         }
+      }
+      /* live: a closed USDT second from the kline_1s stream,
+         held 60s in usdtPend and added once it follows the
+         last row (a gap: REST fills it, then the held ones go
+         on). Fresh `at` keeps the 5s REST top-up idle while
+         the stream runs */
+      const usdtPend = new Map();
+      function liveUsdt(k) {
+        if (!k.x) return;
+        usdtPend.set(k.t, [k.t, +k.h, +k.l, +k.c, +k.v, +k.V]);
+        usdtPend.forEach((r, t) =>
+          t < k.t - 6e4 && usdtPend.delete(t));
+        drainUsdt(dayOf(k.t));
+      }
+      function drainUsdt(dS) {
+        const d = usdtK.get(dS);
+        if (!d || d.end || !d.k.length) return;
+        let r, n = 0;
+        while ((r = usdtPend.get(d.k[d.k.length - 1][0] + 1000))
+          && r[0] < nextDay(dS)) d.k.push(r), n++;
+        if (!n) return;
+        d.at = Date.now();
+        if (d.k[d.k.length - 1][0] >= nextDay(dS) - 1000)
+          d.end = true;
+        schedule();
+      }
+      /* live: an FDUSD aggTrade, kept only if its id follows
+         the last one; sync: the stream carries the day (REST
+         idle while the socket is open), a gap ends it */
+      function liveAggr(m) {
+        const d = aggrT.get(dayOf(m.T));
+        if (!d || d.end || d.last == null || m.a <= d.last) return;
+        d.sync = m.a === d.last + 1;
+        if (!d.sync) return;
+        d.tr.push([m.T, +m.p, +m.q, m.m]);
+        d.last = m.a;
+        d.at = Date.now();
       }
       /* a day's USDT seconds on FDUSD prices: each second's mid
          x the FDUSD / USDT ratio of the 5 minutes before (mean
@@ -2428,7 +2471,7 @@
           "bookTicker",
         ]
           .map((x) => sy + "@" + x)
-          .concat("btcusdt@kline_5m")
+          .concat("btcusdt@kline_5m", "btcusdt@kline_1s")
           .join("/");
         const again = () => {
           hostI++;
@@ -2476,9 +2519,12 @@
             return;
           }
           if (!m) return;
-          if (m.e === "aggTrade") addTrade(+m.p, +m.q, m.T, m.m);
-          else if (m.e === "kline" && m.k && m.s === "BTCUSDT")
-            uv5.set(m.k.t, +m.k.v), schedule();
+          if (m.e === "aggTrade") {
+            addTrade(+m.p, +m.q, m.T, m.m);
+            liveAggr(m);
+          } else if (m.e === "kline" && m.k && m.s === "BTCUSDT")
+            m.k.i === "1s" ? liveUsdt(m.k)
+              : (uv5.set(m.k.t, +m.k.v), schedule());
           else if (m.e === "kline" && m.k) onKline(m.k);
           /* bookTicker */
           else if (m.b !== undefined && m.a !== undefined)
@@ -3814,21 +3860,25 @@
             /* Miss: the missing part from the axis, the volume
                after it */
             shade(1, exp, cx0, (v, r) => vpInv || vpMiss
-              ? Math.min(v * kv, vw.rw.get(r) || 0) * vs : v * kv * vs,
+              ? Math.min(v * kv, vw.rw.get(r) || 0) * vs
+              : v * kv * vs,
               vpMiss ? (v, r) =>
-                Math.max(0, v * kv - (vw.rw.get(r) || 0)) * vs : null);
+                Math.max(0, v * kv - (vw.rw.get(r) || 0)) * vs
+              : null);
             /* D's as P's: the delta bars in the shade, up to
                their curve; rows out of any D (under D_MIN) grey;
                Miss: the missing part from the axis, the bar after */
             const dp = dc.dp || new Map(),
-              dMiss = (v, r) => Math.max(0, v * kv - (dp.get(r) || 0));
+              dMiss = (v, r) =>
+                Math.max(0, v * kv - (dp.get(r) || 0));
             shade(-1, dc, cx0 - 2, (v, r) =>
               (-Math.min(v * kv, dp.get(r) || 0) * vs) / 2,
               vpMiss ? (v, r) => (-dMiss(v, r) * vs) / 2 : null);
             dp.forEach((q, r) => {
               const w = (q * vs) / 2,
                 yT = Y((r + 1) * P.step);
-              if (w >= 0.5 && !dc.has(r)) sb.rect("rgba(67,70,81,.35)",
+              if (w >= 0.5 && !dc.has(r))
+                sb.rect("rgba(67,70,81,.35)",
                 cx0 - 2 - w, yT + 0.5, w, Math.max(1, rowH - 1));
             });
             sb.fill();
@@ -3849,7 +3899,8 @@
                 return;
               nb.rect(!b || !b[3] ? "rgba(67,70,81,.45)"
                 : b[3] > 0 ? `rgba(8,153,129,${aL})`
-                  : `rgba(229,57,53,${aL})`, vpMiss ? cx0 : x0, yT + 0.5,
+                  : `rgba(229,57,53,${aL})`,
+                vpMiss ? cx0 : x0, yT + 0.5,
                 cX(r) - x0, Math.max(1, rowH - 1));
             });
             /* D's: what a row's delta lacks vs its D curve, in
@@ -6905,7 +6956,8 @@
              top, the main chart under it */
           go = (k) => {
             document.body.classList.toggle("t15", k === "m15");
-            if (k !== "m15") mainChart.full(k === "split" ? "main" : k);
+            if (k !== "m15")
+              mainChart.full(k === "split" ? "main" : k);
             document.body.dataset.tab = k;
             lit(k);
             sz();
