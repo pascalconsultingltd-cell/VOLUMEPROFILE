@@ -3508,18 +3508,16 @@
                 sg = vf / 1.2816,
                 N = Math.ceil((4 * sg) / st),
                 ms = ps.map(() => 0),
-                jr = new Map(),
                 gap = (r, Q) => Math.abs((r + 0.5) * st - Q.px);
               dp.forEach((q, r) => {
                 let j = 0;
                 ps.forEach((Q, i) => gap(r, Q) < gap(r, ps[j]) &&
                   (j = i));
                 ms[j] += q / kv;
-                jr.set(r, j);
               });
-              /* a dropped D's rows: bricks only (volume) */
-              out.loose = new Map([...dp].filter(([r]) =>
-                ms[jr.get(r)] < D_MIN));
+              /* every row's delta, drawn as bars (a dropped D's
+                 rows: the bars only) */
+              out.dp = dp;
               /* under D_MIN bricks: no D, its curve dropped */
               const kp = ps.filter((Q, i) => ms[i] >= D_MIN);
               ps.forEach((Q, i) => {
@@ -3756,9 +3754,9 @@
             };
             shade(1, exp, cx0, (v) => v * kv * vs);
             shade(-1, dc, cx0 - 2, (v) => (-v * kv * vs) / 2);
-            /* a D under D_MIN: its extra volume as plain grey
-               bricks, no bell, no number */
-            (dc.loose || new Map()).forEach((q, r) => {
+            /* delta bars: each row's extra volume vs the curve as
+               grey bricks; a D under D_MIN has only these */
+            (dc.dp || new Map()).forEach((q, r) => {
               const w = (q * vs) / 2,
                 yT = Y((r + 1) * P.step);
               if (w >= 0.5) sb.rect("rgba(67,70,81,.35)",
