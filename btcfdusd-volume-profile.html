@@ -951,9 +951,11 @@
         }
       }
       /* a day's USDT seconds on FDUSD prices: each second's mid
-         x the FDUSD / USDT ratio (last FDUSD trade over its
-         close, smoothed over ~60s); px per second, and VAP rows
-         by PF box. Null until both pairs are loaded */
+         x the FDUSD / USDT ratio of the 5 minutes before (mean
+         last FDUSD trade over mean USDT mid; fixed for 5 min, no
+         jumps, no repaint; the day's first 5 min: its first
+         second's); px per second, and VAP rows by PF box. Null
+         until both pairs are loaded */
       const usdtV = new Map();
       /* a second's volume over the rows its range spans, each
          by the share of the range inside it */
@@ -985,9 +987,17 @@
             v.px.push(null), v.rt.push(null);
             continue;
           }
-          const ra = v.pf / c;
-          v.e = v.e == null ? ra : v.e + (ra - v.e) / 60;
-          v.px.push(((h + l) / 2) * v.e), v.rt.push(v.e);
+          const bk = Math.floor(t / 3e5),
+            md = (h + l) / 2;
+          if (bk !== v.b) {
+            if (v.sU) v.e = v.sF / v.sU;
+            v.b = bk;
+            v.sF = v.sU = 0;
+          }
+          v.sF += v.pf;
+          v.sU += md;
+          if (v.e == null) v.e = v.pf / md;
+          v.px.push(md * v.e), v.rt.push(v.e);
           spread(l * v.e, h * v.e, st, (r, k) => {
             const w = (v.rows.get(r) || 0) + q * k;
             v.rows.set(r, w);
