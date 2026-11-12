@@ -422,7 +422,7 @@
               ><button
                 id="missTog"
                 class="a"
-                title="2nd order delta: missing part from the axis, the bar after it"
+                title="Bells and 2nd order delta: missing part from the axis, the volume after it"
               >
                 Miss
               </button></span></span
@@ -1651,7 +1651,7 @@
         $("invTog").className = vpInv ? "a" : "";
         schedule();
       }
-      /* Miss: D side, missing delta from the axis */
+      /* Miss: P and D bells, missing part from the axis */
       let vpMiss = true;
       function setVpMiss(v) {
         vpMiss = !!v;
@@ -3785,8 +3785,12 @@
                   Math.abs(w), Y(r * P.step) - yT);
               });
             };
-            shade(1, exp, cx0, (v, r) => vpInv
-              ? Math.min(v * kv, vw.rw.get(r) || 0) * vs : v * kv * vs);
+            /* Miss: the missing part from the axis, the volume
+               after it */
+            shade(1, exp, cx0, (v, r) => vpInv || vpMiss
+              ? Math.min(v * kv, vw.rw.get(r) || 0) * vs : v * kv * vs,
+              vpMiss ? (v, r) =>
+                Math.max(0, v * kv - (vw.rw.get(r) || 0)) * vs : null);
             /* D's as P's: the delta bars in the shade, up to
                their curve; rows out of any D (under D_MIN) grey;
                Miss: the missing part from the axis, the bar after */
@@ -3819,8 +3823,8 @@
                 return;
               nb.rect(!b || !b[3] ? "rgba(67,70,81,.45)"
                 : b[3] > 0 ? `rgba(8,153,129,${aL})`
-                  : `rgba(229,57,53,${aL})`, x0, yT + 0.5, cX(r) - x0,
-                Math.max(1, rowH - 1));
+                  : `rgba(229,57,53,${aL})`, vpMiss ? cx0 : x0, yT + 0.5,
+                cX(r) - x0, Math.max(1, rowH - 1));
             });
             /* D's: what a row's delta lacks vs its D curve, in
                its nearest D's colour, leftwards */
@@ -3851,7 +3855,7 @@
                 yT = Y((r + 1) * P.step);
               if (cX(r) - x0 > 0.5)
                 lb.rect(F.dir > 0 ? "rgba(0,77,64,.9)"
-                  : "rgba(127,0,0,.9)", x0, yT + 0.5,
+                  : "rgba(127,0,0,.9)", vpMiss ? cx0 : x0, yT + 0.5,
                   cX(r) - x0, Math.max(1, rowH - 1));
             }));
             lb.fill();
