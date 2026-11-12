@@ -418,6 +418,13 @@
                 title="VP colours inverted: filled volume strong, what is missing pale"
               >
                 Inv
+              </button
+              ><button
+                id="missTog"
+                class="a"
+                title="2nd order delta: missing part from the axis, the bar after it"
+              >
+                Miss
               </button></span></span
         ></span>
         <span class="grp" title="Main chart"
@@ -1642,6 +1649,13 @@
       function setVpInv(v) {
         vpInv = !!v;
         $("invTog").className = vpInv ? "a" : "";
+        schedule();
+      }
+      /* Miss: D side, missing delta from the axis */
+      let vpMiss = true;
+      function setVpMiss(v) {
+        vpMiss = !!v;
+        $("missTog").className = vpMiss ? "a" : "";
         schedule();
       }
       /* GitHub Pages: bellscore.py pushes the file to the
@@ -3755,27 +3769,32 @@
             const aS = vpInv ? 0.6 : 0.12,
               aL = vpInv ? 0.12 : 0.6;
             const sb = batch(),
-              shade = (sd, m, x0, wf) => {
+              /* of: the shade's start, moved from x0 */
+              shade = (sd, m, x0, wf, of) => {
               const bs = rk.filter((e) => e[5] === sd);
               if (bs.length) m.forEach((v, r) => {
                 const c = (r + 0.5) * P.step,
                   b = bs.reduce((a, e) => Math.abs(e[2] - c) <
                     Math.abs(a[2] - c) ? e : a),
                   w = wf(v, r),
+                  xs = x0 + (of ? of(v, r) : 0),
                   yT = Y((r + 1) * P.step);
                 if (Math.abs(w) < 0.5 || !b[3]) return;
                 sb.rect(b[3] > 0 ? `rgba(8,153,129,${aS})`
-                  : `rgba(229,57,53,${aS})`, Math.min(x0, x0 + w), yT,
+                  : `rgba(229,57,53,${aS})`, Math.min(xs, xs + w), yT,
                   Math.abs(w), Y(r * P.step) - yT);
               });
             };
             shade(1, exp, cx0, (v, r) => vpInv
               ? Math.min(v * kv, vw.rw.get(r) || 0) * vs : v * kv * vs);
             /* D's as P's: the delta bars in the shade, up to
-               their curve; rows out of any D (under D_MIN) grey */
-            const dp = dc.dp || new Map();
+               their curve; rows out of any D (under D_MIN) grey;
+               Miss: the missing part from the axis, the bar after */
+            const dp = dc.dp || new Map(),
+              dMiss = (v, r) => Math.max(0, v * kv - (dp.get(r) || 0));
             shade(-1, dc, cx0 - 2, (v, r) =>
-              (-Math.min(v * kv, dp.get(r) || 0) * vs) / 2);
+              (-Math.min(v * kv, dp.get(r) || 0) * vs) / 2,
+              vpMiss ? (v, r) => (-dMiss(v, r) * vs) / 2 : null);
             dp.forEach((q, r) => {
               const w = (q * vs) / 2,
                 yT = Y((r + 1) * P.step);
@@ -3817,7 +3836,8 @@
                 yT + rowH < top)
                 return;
               nb.rect(b[3] > 0 ? `rgba(8,153,129,${aL})`
-                : `rgba(229,57,53,${aL})`, xc, yT + 0.5, xb - xc,
+                : `rgba(229,57,53,${aL})`,
+                vpMiss ? cx0 - 2 - (xb - xc) : xc, yT + 0.5, xb - xc,
                 Math.max(1, rowH - 1));
             });
             nb.fill();
@@ -6556,7 +6576,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 40;
+      const DEFAULTS_VER = 41;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -6584,6 +6604,7 @@
           showLines,
           showScores,
           vpInv,
+          vpMiss,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -6635,6 +6656,9 @@
         /* Inv: new in version 40, on by default */
         if (st.dv >= 40 && typeof st.vpInv === "boolean")
           setVpInv(st.vpInv);
+        /* Miss: new in version 41, on by default */
+        if (st.dv >= 41 && typeof st.vpMiss === "boolean")
+          setVpMiss(st.vpMiss);
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -6831,6 +6855,7 @@
       $("ordLineTog").onclick = () => setShowLines(!showLines);
       $("bsTog").onclick = () => setShowScores(!showScores);
       $("invTog").onclick = () => setVpInv(!vpInv);
+      $("missTog").onclick = () => setVpMiss(!vpMiss);
       /* phone: tabs Main / VP / PF / 15s, each its chart full
          screen (15s: the floating window over everything) */
       if (matchMedia("(pointer: coarse)").matches &&
