@@ -1807,6 +1807,41 @@
       }
       /* PF box of a day: a tenth of its vol, as its profile
          rows, else 25 */
+      /* a day's VP scale: the median busiest-row volume (USDT
+         1m, rows of vol / 10) of the 5 finished days before it.
+         Days before only: final, kept like the vol ("rmeds");
+         0 until those days are in */
+      const rowMeds = new Map();
+      function rowMedOf(dS) {
+        if (rowMeds.has(dS)) return rowMeds.get(dS);
+        const M = usdtM,
+          tops = [];
+        for (let d = dS - 5 * 864e5; d < dS; d += 864e5) {
+          const v = volOfDay(d);
+          if (!(v > 0)) return 0;
+          if (!M.length || M[0][0] > d ||
+            M[M.length - 1][0] < d + 864e5 - 6e4)
+            return loadUsdtM(), 0;
+          const st = Math.max(1, Math.ceil(v / 10)),
+            m = new Map();
+          let i = 0, j = M.length;
+          while (i < j) {
+            const k = (i + j) >> 1;
+            if (M[k][0] < d) i = k + 1;
+            else j = k;
+          }
+          for (; i < M.length && M[i][0] < d + 864e5; i++) {
+            const [, h, l, q] = M[i];
+            spread(l, h, st, (r, k) => m.set(r, (m.get(r) || 0) +
+              q * k));
+          }
+          tops.push(Math.max(...m.values()));
+        }
+        tops.sort((a, b) => a - b);
+        rowMeds.set(dS, tops[2]);
+        idb.put("rmeds", [...rowMeds]);
+        return tops[2];
+      }
       function pfStep(dS) {
         const v = volOfDay(dS) || volN;
         return v > 0 ? Math.max(1, Math.ceil(v / 10)) : 25;
@@ -4150,8 +4185,11 @@
                its vol and kv; no partial draw first */
             loadAggr(P.dS);
             loadUsdt(P.dS);
+            /* one scale for every day: today's row median fills
+               a column; a busier row is cut at the column edge */
             const vw = vwOf(P.dS, P.step),
-              vs = vw && vw.mx ? (colW - 2) / vw.mx : 0,
+              rm = rowMedOf(dayOf(Date.now())),
+              vs = vw && rm > 0 ? (colW - 2) / rm : 0,
               uk = usdtK.get(P.dS),
               at = aggrT.get(P.dS),
               z = uk && uk.k[uk.k.length - 1],
@@ -4168,6 +4206,11 @@
             }
             /* for the hover: its volume per brick and scale */
             Object.assign(P, { vw, vs });
+            g.save();
+            g.beginPath();
+            g.rect(cx0 - lmK * colW, top, (1 + lmK) * colW - 2,
+              bot - top);
+            g.clip();
             const vf = volFor(P.dS) > 0 ? volFor(P.dS) : P.step * 10;
             const sp = byAge(P, subPocs(P.dS, P.ps, vf, P.step));
             /* BS: this day's bells, then every bell's score */
@@ -4457,6 +4500,18 @@
             }
             if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
             g.restore();
+            g.restore();
+            /* rows cut at the column edge: a small mark there */
+            g.fillStyle = "#e65100";
+            vw.rw.forEach((v, r) => {
+              if (v * vs <= colW - 2) return;
+              const y = Y((r + 0.5) * P.step);
+              g.beginPath();
+              g.moveTo(cx0 + colW - 2, y);
+              g.lineTo(cx0 + colW - 7, y - 4);
+              g.lineTo(cx0 + colW - 7, y + 4);
+              g.fill();
+            });
           }
           g.restore();
           /*
@@ -7482,6 +7537,11 @@
       idb.get("big").then((a) => {
         (a || []).forEach(([k, f]) => bigK.has(k) ||
           bigK.set(k, f));
+        schedule();
+      });
+      idb.get("rmeds").then((a) => {
+        (a || []).forEach(([d, x]) => rowMeds.has(d) ||
+          rowMeds.set(d, x));
         schedule();
       });
       idb.get("vols").then((a) => {
