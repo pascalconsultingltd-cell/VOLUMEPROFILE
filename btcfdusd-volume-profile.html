@@ -4044,13 +4044,14 @@
               /* every row's delta, drawn as bars (a dropped D's
                  rows: the bars only) */
               out.dp = dp;
-              /* under D_MIN bricks: no D, its curve dropped */
+              /* under D_MIN bricks: no D, its curve dropped; a
+                 D's curve holds VOL_MASS bricks, as a P's */
               const kp = ps.filter((Q, i) => ms[i] >= D_MIN);
               ps.forEach((Q, i) => {
                 if (ms[i] < D_MIN) return;
                 const p = Math.floor(Q.px / st);
                 for (let r = p - N; r <= p + N; r++)
-                  out.set(r, (out.get(r) || 0) + ms[i] * (
+                  out.set(r, (out.get(r) || 0) + VOL_MASS * (
                     ncdf(((r + 1) * st - Q.px) / sg) -
                     ncdf((r * st - Q.px) / sg)));
               });
