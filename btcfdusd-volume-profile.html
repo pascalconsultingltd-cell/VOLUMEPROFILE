@@ -4460,6 +4460,8 @@
             perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
             /* its vipocs: black lines to the curve */
             drawPs(P, sp, cx0, (S) => cX(Math.floor(S.px / P.step)));
+            /* the clip ends here: numbers and dots never cut */
+            g.restore();
             /* P's and D's ranked by age together, 1 = oldest, in
                the middle of each bell; green above the one before
                (1: the day before's last), red below */
@@ -4512,7 +4514,6 @@
                 / 2));
             }
             if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
-            g.restore();
             g.restore();
             /* rows cut at the column edge: the bell curve red and
                bolder on them */
