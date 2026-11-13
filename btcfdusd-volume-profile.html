@@ -1356,7 +1356,7 @@
           if (x > mx) mx = x;
         });
         Object.assign(m, { mx, rw, tot, ex: null, dc: null,
-          bf: null });
+          bf: null, bfD: null });
         return m;
       }
       /*
@@ -4009,13 +4009,17 @@
              at the curve (no repaint); belly within 1 sigma,
              lead wing = the side it moved to from the P before
              it (P1: the day before's last), trail = the other;
-             dm (DT): P -> its move in the age ranks (P's and D's) */
-          const bellFill = (P, sp, vw, kv, vf, dm) => {
+             dm (DT): P / D -> its move in the age ranks (P's and
+             D's); fx: the closed rows turned into what fills the
+             bells (D Bells: the surplus over the P Bells' curves),
+             kept apart (bfD) */
+          const bellFill = (P, sp, vw, kv, vf, dm, fx) => {
             const nC = Math.floor((Math.min(NOW(),
                 nextDay(P.dS)) - P.dS) / TPO_MS),
+              kc = fx ? "bfD" : "bf",
               ck = [kv, vf, nC, ...sp.map((S) => S.px),
                 ...(dm ? dm.values() : [])].join();
-            if (vw.bf && vw.bf[0] === ck) return vw.bf[1];
+            if (vw[kc] && vw[kc][0] === ck) return vw[kc][1];
             const st = P.step,
               sg = vf / 1.2816,
               rw = new Map(),
@@ -4027,6 +4031,8 @@
               const [r, i] = k.split("|").map(Number);
               if (i < nC) rw.set(r, (rw.get(r) || 0) + q);
             });
+            const fl = fx ? fx(rw) : rw;
+            out.rw = fl;
             sp.forEach((S, k) => {
               const pv = k ? sp[k - 1].px : pd,
                 dir = dm ? dm.get(S) || 0
@@ -4045,7 +4051,7 @@
                     (ncdf(((r + 1) * st - S.px) / sg) -
                       ncdf((r * st - S.px) / sg)),
                   w = z[Math.abs(x) <= 1 ? "b" : x > 0 ? "u" : "d"];
-                w[0] += Math.min(e, rw.get(r) || 0);
+                w[0] += Math.min(e, fl.get(r) || 0);
                 w[1] += e;
                 if (dir && Math.abs(x) > 1 && Math.sign(x) === dir)
                   lead.push(r);
@@ -4054,7 +4060,7 @@
                 l: pc(dir > 0 ? z.u : z.d),
                 t: pc(dir > 0 ? z.d : z.u) });
             });
-            vw.bf = [ck, out];
+            vw[kc] = [ck, out];
             return out;
           };
           /* DT core: rows' volume above the P's curves (dp), its
@@ -4405,7 +4411,7 @@
                 1]));
             (dc.ps || []).forEach((Q) =>
               rk.push([ag(Q), cx0 - 2 - F(wx(dc, Q)) / 2, Q.px, 0,
-                0, -1]));
+                Q, -1]));
             /* by age; each one's move vs the one before (1: the
                day before's last bell, else its last vipoc): its
                number's colour and, for a P, its BF lead side */
@@ -4525,6 +4531,27 @@
                 cr = (exp.get(r) || 0) * kv * vs,
                 xa = vpMiss ? xR(0) : xR(br),
                 xb = vpMiss ? xR(cr - br) : xR(cr),
+                yT = Y((r + 1) * P.step);
+              if (cr > br && xb - xa > 0.5)
+                lb.rect("rgba(30,90,220,.85)", xa, yT, xb - xa,
+                  Y(r * P.step) - yT);
+            }));
+            /* the same for the D Bells: their lead wing's empty
+               part, from the closed surplus to the D curve */
+            const bfD = bellFill(P, dc.ps || [], vw, kv, vf, dm,
+              (rw) => {
+                const m = new Map();
+                rw.forEach((u, r) => {
+                  const d = u - (exp.get(r) || 0) * kv;
+                  if (d > 0) m.set(r, d);
+                });
+                return m;
+              });
+            bfD.ps.forEach((B) => B.lead.forEach((r) => {
+              const br = (bfD.rw.get(r) || 0) * vs,
+                cr = (dc.get(r) || 0) * kv * vs,
+                xa = vpMiss ? xLf(cr - br) : xLf(cr),
+                xb = vpMiss ? xLf(0) : xLf(br),
                 yT = Y((r + 1) * P.step);
               if (cr > br && xb - xa > 0.5)
                 lb.rect("rgba(30,90,220,.85)", xa, yT, xb - xa,
