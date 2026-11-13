@@ -468,6 +468,13 @@
                 title="Missing part from the axis, volume after it"
               >
                 Miss
+              </button
+              ><button
+                id="compTog"
+                class="a"
+                title="Comp: squeezed past 80%; off: Fold"
+              >
+                Comp
               </button></span></span
         ></span>
         <span class="grp" title="Main chart"
@@ -2112,6 +2119,31 @@
         vpInv = !!v;
         $("invTog").className = vpInv ? "a" : "";
         schedule();
+      }
+      /* Comp: VP widths squeezed past 80% of a column (nothing
+         cut); off = Fold, cut rows hatched back from the edge */
+      let vpComp = true;
+      function setVpComp(v) {
+        vpComp = !!v;
+        $("compTog").className = vpComp ? "a" : "";
+        schedule();
+      }
+      /* Fold's hatch: dark red diagonals, made once */
+      let hatchP = null;
+      function hatch() {
+        if (hatchP) return hatchP;
+        const c = document.createElement("canvas"),
+          x = c.getContext("2d");
+        c.width = c.height = 6;
+        x.fillStyle = "rgba(140,0,0,.25)";
+        x.fillRect(0, 0, 6, 6);
+        x.strokeStyle = "rgba(140,0,0,.85)";
+        x.lineWidth = 1.2;
+        x.beginPath();
+        x.moveTo(0, 6);
+        x.lineTo(6, 0);
+        x.stroke();
+        return (hatchP = x.createPattern(c, "repeat"));
       }
       /* Miss: P and D bells, missing part from the axis */
       let vpMiss = true;
@@ -4281,6 +4313,22 @@
             g.rect(cx0 - lmK * colW, top, (1 + lmK) * colW - 2,
               bot - top);
             g.clip();
+            /* offsets (px from the axis, either side) as drawn:
+               Comp squeezes past 80% of a column so nothing is cut
+               (that zone shaded); Fold keeps them, cut rows fold
+               back from the edge (see below) */
+            const Cw = colW - 2,
+              kn = 0.8 * Cw,
+              Rr = Cw - kn,
+              F = (o) => (!vpComp || o <= kn ? o
+                : kn + (Rr * (o - kn)) / (o - kn + Rr)),
+              xR = (o) => cx0 + F(o),
+              xLf = (o) => cx0 - 2 - F(o);
+            if (vpComp) {
+              g.fillStyle = "rgba(0,0,0,.04)";
+              g.fillRect(cx0 + kn, top, Rr, bot - top);
+              g.fillRect(cx0 - 2 - Cw, top, Rr, bot - top);
+            }
             const vf = volFor(P.dS) > 0 ? volFor(P.dS) : P.step * 10;
             const sp = byAge(P, subPocs(P.dS, P.ps, vf, P.step));
             /* BS: this day's bells, then every bell's score */
@@ -4326,7 +4374,7 @@
               vw.ex = [ek, expOf(P, sp, vf)];
             const exp = vw.ex[1],
               kv = kvFor(P.dS, "BTCUSDT"),
-              cX = (r) => cx0 + (exp.get(r) || 0) * kv * vs;
+              cX = (r) => xR((exp.get(r) || 0) * kv * vs);
             /* the bells' axis = the day's candle, wick low to high,
                body open to close (today: live), green up, black
                down; rk = the P's and D's ages (rank written at the
@@ -4371,7 +4419,7 @@
             }
             /* the delta's normal curve, left of the axis */
             const dc = dCurve(P, vw, sp, kv, vf, exp);
-            perfLine(P, dc, cx0 - 2, (e) => -e * kv * vs,
+            perfLine(P, dc, cx0 - 2, (e) => -F(e * kv * vs),
               "#000");
             /* its P's: a black line to the curve; age = the
                average period of the row's bricks */
@@ -4387,8 +4435,8 @@
               g.beginPath();
               /* to the delta's curve */
               g.moveTo(cx0 - 2, y);
-              g.lineTo(cx0 - 2 - (dc.get(Math.floor(Q.px /
-                P.step)) || 0) * kv * vs, y);
+              g.lineTo(xLf((dc.get(Math.floor(Q.px /
+                P.step)) || 0) * kv * vs), y);
               g.stroke();
               g.setLineDash([]);
             });
@@ -4396,11 +4444,11 @@
             const wx = (m, X) =>
               (m.get(Math.floor(X.px / P.step)) || 0) * kv * vs;
             sp.forEach((S) =>
-              rk.push([ag(S), cx0 + wx(exp, S) / 2, S.px, 0, S,
+              rk.push([ag(S), cx0 + F(wx(exp, S)) / 2, S.px, 0, S,
                 1]));
             (dc.ps || []).forEach((Q) =>
-              rk.push([ag(Q), cx0 - 2 - wx(dc, Q) / 2, Q.px, 0, 0,
-                -1]));
+              rk.push([ag(Q), cx0 - 2 - F(wx(dc, Q)) / 2, Q.px, 0,
+                0, -1]));
             /* by age; each one's move vs the one before (1: the
                day before's last bell, else its last vipoc): its
                number's colour and, for a P, its BF lead side */
@@ -4419,25 +4467,28 @@
             const aS = vpInv ? 0.6 : 0.12,
               aL = vpInv ? 0.12 : 0.6;
             const sb = batch(),
-              /* of: the shade's start, moved from x0 */
-              shade = (sd, m, x0, wf, of) => {
-              const bs = rk.filter((e) => e[5] === sd);
+              /* sd: side (1 P right, -1 D left); wf: the shade's
+                 length, of: its start (raw offsets from the axis) */
+              shade = (sd, m, wf, of) => {
+              const bs = rk.filter((e) => e[5] === sd),
+                X = sd > 0 ? xR : xLf;
               if (bs.length) m.forEach((v, r) => {
                 const c = (r + 0.5) * P.step,
                   b = bs.reduce((a, e) => Math.abs(e[2] - c) <
                     Math.abs(a[2] - c) ? e : a),
-                  w = wf(v, r),
-                  xs = x0 + (of ? of(v, r) : 0),
+                  o = of ? of(v, r) : 0,
+                  xa = X(o),
+                  xb = X(o + wf(v, r)),
                   yT = Y((r + 1) * P.step);
-                if (Math.abs(w) < 0.5 || !b[3]) return;
+                if (Math.abs(xb - xa) < 0.5 || !b[3]) return;
                 sb.rect(b[3] > 0 ? `rgba(8,153,129,${aS})`
-                  : `rgba(229,57,53,${aS})`, Math.min(xs, xs + w), yT,
-                  Math.abs(w), Y(r * P.step) - yT);
+                  : `rgba(229,57,53,${aS})`, Math.min(xa, xb), yT,
+                  Math.abs(xb - xa), Y(r * P.step) - yT);
               });
             };
             /* Miss: the missing part from the axis, the volume
                after it */
-            shade(1, exp, cx0, (v, r) => vpInv || vpMiss
+            shade(1, exp, (v, r) => vpInv || vpMiss
               ? Math.min(v * kv, vw.rw.get(r) || 0) * vs
               : v * kv * vs,
               vpMiss ? (v, r) =>
@@ -4449,15 +4500,15 @@
             const dp = dc.dp || new Map(),
               dMiss = (v, r) =>
                 Math.max(0, v * kv - (dp.get(r) || 0));
-            shade(-1, dc, cx0 - 2, (v, r) =>
-              -Math.min(v * kv, dp.get(r) || 0) * vs,
-              vpMiss ? (v, r) => -dMiss(v, r) * vs : null);
+            shade(-1, dc, (v, r) =>
+              Math.min(v * kv, dp.get(r) || 0) * vs,
+              vpMiss ? (v, r) => dMiss(v, r) * vs : null);
             dp.forEach((q, r) => {
-              const w = q * vs,
+              const x = xLf(q * vs),
                 yT = Y((r + 1) * P.step);
-              if (w >= 0.5 && !dc.has(r))
+              if (cx0 - 2 - x >= 0.5 && !dc.has(r))
                 sb.rect("rgba(67,70,81,.35)",
-                cx0 - 2 - w, yT, w, Y(r * P.step) - yT);
+                x, yT, cx0 - 2 - x, Y(r * P.step) - yT);
             });
             sb.fill();
             /* what a row lacks vs the curve (negative delta),
@@ -4466,37 +4517,40 @@
             const bp = rk.filter((e) => e[5] === 1),
               nb = batch();
             exp.forEach((e, r) => {
-              const x0 = cx0 + (vw.rw.get(r) || 0) * vs,
+              const vr = (vw.rw.get(r) || 0) * vs,
+                cr = e * kv * vs,
+                xa = vpMiss ? xR(0) : xR(vr),
+                xb = vpMiss ? xR(cr - vr) : xR(cr),
                 yT = Y((r + 1) * P.step),
                 c = (r + 0.5) * P.step,
                 b = bp.length && bp.reduce((a, q) =>
                   Math.abs(q[2] - c) < Math.abs(a[2] - c)
                     ? q : a);
-              if (cX(r) - x0 < 0.25 || yT > bot ||
+              if (cr - vr <= 0 || xb - xa < 0.25 || yT > bot ||
                 yT + rowH < top)
                 return;
               nb.rect(!b || !b[3] ? "rgba(67,70,81,.45)"
                 : b[3] > 0 ? `rgba(8,153,129,${aL})`
                   : `rgba(229,57,53,${aL})`,
-                vpMiss ? cx0 : x0, yT,
-                cX(r) - x0, Y(r * P.step) - yT);
+                xa, yT, xb - xa, Y(r * P.step) - yT);
             });
             /* D's: what a row's delta lacks vs its D curve, in
                its nearest D's colour, leftwards */
             const bd = rk.filter((e) => e[5] === -1);
             if (bd.length) dc.forEach((e, r) => {
-              const xb = cx0 - 2 - (dp.get(r) || 0) * vs,
-                xc = cx0 - 2 - e * kv * vs,
+              const br = (dp.get(r) || 0) * vs,
+                cr = e * kv * vs,
+                xa = vpMiss ? xLf(cr - br) : xLf(cr),
+                xb = vpMiss ? xLf(0) : xLf(br),
                 yT = Y((r + 1) * P.step),
                 c = (r + 0.5) * P.step,
                 b = bd.reduce((a, q) =>
                   Math.abs(q[2] - c) < Math.abs(a[2] - c) ? q : a);
-              if (xb - xc < 0.25 || !b[3] || yT > bot ||
-                yT + rowH < top)
+              if (cr - br <= 0 || xb - xa < 0.25 || !b[3] ||
+                yT > bot || yT + rowH < top)
                 return;
               nb.rect(b[3] > 0 ? `rgba(8,153,129,${aL})`
-                : `rgba(229,57,53,${aL})`,
-                vpMiss ? cx0 - 2 - (xb - xc) : xc, yT, xb - xc,
+                : `rgba(229,57,53,${aL})`, xa, yT, xb - xa,
                 Y(r * P.step) - yT);
             });
             nb.fill();
@@ -4506,15 +4560,17 @@
             const bf = bellFill(P, sp, vw, kv, vf, dm);
             const lb = batch();
             bf.ps.forEach((F) => F.lead.forEach((r) => {
-              const x0 = cx0 + (bf.rw.get(r) || 0) * vs,
+              const br = (bf.rw.get(r) || 0) * vs,
+                cr = (exp.get(r) || 0) * kv * vs,
+                xa = vpMiss ? xR(0) : xR(br),
+                xb = vpMiss ? xR(cr - br) : xR(cr),
                 yT = Y((r + 1) * P.step);
-              if (cX(r) - x0 > 0.5)
-                lb.rect("rgba(30,90,220,.85)",
-                  vpMiss ? cx0 : x0, yT,
-                  cX(r) - x0, Y(r * P.step) - yT);
+              if (cr > br && xb - xa > 0.5)
+                lb.rect("rgba(30,90,220,.85)", xa, yT, xb - xa,
+                  Y(r * P.step) - yT);
             }));
             lb.fill();
-            perfLine(P, exp, cx0, (e) => e * kv * vs, "#000");
+            perfLine(P, exp, cx0, (e) => F(e * kv * vs), "#000");
             /* its vipocs: black lines to the curve */
             drawPs(P, sp, cx0, (S) => cX(Math.floor(S.px / P.step)));
             /* the clip ends here: numbers and dots never cut */
@@ -4566,37 +4622,35 @@
               P.bsDots = [];
               sp.forEach((S) => pin(S, "P",
                 cX(Math.floor(S.px / P.step)) + 9));
-              (dc.ps || []).forEach((Q) => pin(Q, "D", cx0 - 11 -
-                (dc.get(Math.floor(Q.px / P.step)) || 0) * kv * vs));
+              (dc.ps || []).forEach((Q) => pin(Q, "D", xLf(
+                (dc.get(Math.floor(Q.px / P.step)) || 0) * kv * vs) -
+                9));
             }
             if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
             g.restore();
-            /* rows cut at the column edge: the bell curve red and
-               bolder on them */
-            g.strokeStyle = "#e53935";
-            g.lineWidth = 3;
-            g.beginPath();
-            vw.rw.forEach((v, r) => {
-              if (v * vs <= colW - 2) return;
-              const x = Math.min(cx0 + colW - 2, cX(r));
-              g.moveTo(x, Y((r + 1) * P.step));
-              g.lineTo(x, Y(r * P.step));
-            });
-            /* D side (P's scale, lmK of a column of room): rows
-               whose delta or curve passes its left edge */
-            const xL = cx0 - lmK * colW,
-              dw = (r) => Math.max((dp.get(r) || 0) * vs,
-                (dc.get(r) || 0) * kv * vs);
-            new Set([...dc.keys(), ...dp.keys()])
-              .forEach((r) => {
-                if (cx0 - 2 - dw(r) >= xL) return;
-                const x = Math.max(xL,
-                  cx0 - 2 - (dc.get(r) || 0) * kv * vs);
-                g.moveTo(x, Y((r + 1) * P.step));
-                g.lineTo(x, Y(r * P.step));
+            /* Fold: a row past its column folds back from the
+               edge, hatched dark red, over what passes (up to a
+               whole column more); volume right, delta left */
+            if (!vpComp) {
+              g.save();
+              g.fillStyle = hatch();
+              const fold = (v, right) => {
+                const ov = Math.min(Cw, v * vs - Cw);
+                return ov > 0.5 ? right ? [cx0 + Cw - ov, ov]
+                  : [cx0 - 2 - Cw, ov] : null;
+              };
+              vw.rw.forEach((v, r) => {
+                const f = fold(v, true),
+                  yT = Y((r + 1) * P.step);
+                if (f) g.fillRect(f[0], yT, f[1], Y(r * P.step) - yT);
               });
-            g.stroke();
-            g.lineWidth = 1;
+              dp.forEach((q, r) => {
+                const f = fold(q, false),
+                  yT = Y((r + 1) * P.step);
+                if (f) g.fillRect(f[0], yT, f[1], Y(r * P.step) - yT);
+              });
+              g.restore();
+            }
           }
           g.restore();
           /*
@@ -7496,7 +7550,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 42;
+      const DEFAULTS_VER = 43;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7525,6 +7579,7 @@
           showScores,
           vpInv,
           vpMiss,
+          vpComp,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -7579,6 +7634,9 @@
         /* Miss: new in version 41, on by default */
         if (st.dv >= 41 && typeof st.vpMiss === "boolean")
           setVpMiss(st.vpMiss);
+        /* Comp: new in version 43, on by default */
+        if (st.dv >= 43 && typeof st.vpComp === "boolean")
+          setVpComp(st.vpComp);
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -7777,6 +7835,7 @@
       $("bsTog").onclick = () => setShowScores(!showScores);
       $("invTog").onclick = () => setVpInv(!vpInv);
       $("missTog").onclick = () => setVpMiss(!vpMiss);
+      $("compTog").onclick = () => setVpComp(!vpComp);
       /* replay at RT: the data cut there (USDT seconds and FDUSD
          trades before it, the 15m candle at RT rebuilt from its
          trades) and the caches, swapped in while the main chart
