@@ -3349,9 +3349,12 @@
           const dayC = cfg.tpo
             ? k15.filter((c) => c.t >= dayStart && okC(c))
             : [];
+          /* replay: the scale fits what is known at RT */
+          const vT = RPL ? vis.filter((c) => c.t < RT) : vis,
+            vS = vT.length ? vT : vis;
           let hi = -1e12,
             lo = 1e12;
-          vis.concat(dayC).forEach((c) => {
+          vS.concat(dayC).forEach((c) => {
             hi = Math.max(hi, c.h);
             lo = Math.min(lo, c.l);
           });
@@ -3359,7 +3362,7 @@
           hi += pad;
           lo -= pad;
           fit = { hi, lo };
-          if (lock) {
+          if (lock && !RPL) {
             hi = lock.hi;
             lo = lock.lo;
           }
@@ -3372,16 +3375,16 @@
              scale still takes the last price and the last
              two zigzag legs (finished and open); not once
              dragged up / down, or the drag squeezes it */
-          const cN = vis[vis.length - 1];
+          const cN = vS[vS.length - 1];
           if (cfg.main && off <= 0 && !ypan) {
-            const pv = zfbPiv(arr),
+            const pv = zfbPiv(arr).filter((q) => !RPL || q.c.t < RT),
               n = pv.length;
             let a = cN.c,
               b = cN.c;
             if (n > 1) {
               const z = pv[n - 1];
               for (let k = arr.indexOf(pv[n - 2].c) + 1;
-                k < arr.length; k++)
+                k < arr.length && (!RPL || arr[k].t < RT); k++)
                 if (okC(arr[k]))
                   if (z.low) a = Math.min(a, arr[k].l);
                   else b = Math.max(b, arr[k].h);
