@@ -91,6 +91,17 @@
         color: var(--mu);
       }
       /* Clear buttons, next to the title */
+      /* the rectangle tool: a plain blue box, as it draws */
+      #rectTog {
+        border: none;
+        background: none;
+        padding: 0 4px;
+        line-height: 0;
+        cursor: pointer;
+      }
+      #rectTog:hover rect {
+        fill: rgba(21, 101, 192, 0.28);
+      }
       .clr {
         display: inline-flex;
         gap: 4px;
@@ -430,7 +441,11 @@
           id="rectTog"
           title="Rectangle: click one corner, then the other"
         >
-          □
+          <svg width="22" height="16" viewBox="0 0 22 16">
+            <rect x="1.5" y="1.5" width="19" height="13" rx="1"
+              fill="rgba(21,101,192,.12)" stroke="#1565c0"
+              stroke-width="1.6" />
+          </svg>
         </button></span
       >
       <div class="ctl">
@@ -5266,6 +5281,7 @@
             pcN: pcShow,
             pcSl,
             tpoSl: cP,
+            lmK,
             colW,
             zp,
             Y,
@@ -5582,19 +5598,49 @@
               }
             } else if (l.k === "b") drawBox(l, sel);
             else if (l.k === "r") {
-              /* rectangle: corner to corner, light blue */
-              const xa = xsOf(l.a),
-                xb = xsOf(l.b),
-                ya = Y(l.a.p),
-                yb = Y(l.b.p);
+              /* rectangle, light blue, on every panel showing its
+                 times (drawn on the profiles: its whole days);
+                 rbx: its boxes on this chart, for the hit */
+              const t1 = Math.min(rTm(l.a, 0), rTm(l.b, 0)),
+                t2 = Math.max(rTm(l.a, 1), rTm(l.b, 1)),
+                yT = Math.min(Y(l.a.p), Y(l.b.p)),
+                yB = Math.max(Y(l.a.p), Y(l.b.p)),
+                bx = [];
+              if (geo.length && !side) {
+                const iv = geo.length > 1
+                    ? geo[1].c.t - geo[0].c.t : 3e5,
+                  xT = (t) => {
+                    const o = geoAt(t);
+                    return o ? o.x + o.w * Math.min(1,
+                      (t - o.c.t) / iv) : x0;
+                  },
+                  xa = Math.max(x0, xT(t1)),
+                  xb = Math.min(px0, xT(t2));
+                if (xb > xa) bx.push([xa, xb, "m"]);
+              }
+              if (cfg.main && pcW && view) {
+                const h = (view.pcSl || 6) / 2,
+                  xa = Math.max(pL, pfXAt(t1) - h),
+                  xb = Math.min(pL + pcW, pfXAt(t2) + h);
+                if (xb > xa) bx.push([xa, xb, "p"]);
+              }
+              if (cfg.main && tpoW) {
+                const ds = profs.filter((P) => P.show &&
+                  P.dS >= dayOf(t1) && P.dS <= dayOf(t2));
+                if (ds.length)
+                  bx.push([Math.max(1, ds[0].cx0 - lmK * colW),
+                    Math.min(tR, ds[ds.length - 1].cx0 + colW),
+                    "v"]);
+              }
+              rbx.set(l, bx);
               g.fillStyle = "rgba(21,101,192,.08)";
-              g.fillRect(Math.min(xa, xb), Math.min(ya, yb),
-                Math.abs(xb - xa), Math.abs(yb - ya));
               g.strokeStyle = "rgba(21,101,192,.7)";
               g.lineWidth = sel ? 2 : 1.2;
               g.setLineDash([]);
-              g.strokeRect(Math.min(xa, xb), Math.min(ya, yb),
-                Math.abs(xb - xa), Math.abs(yb - ya));
+              bx.forEach(([xa, xb]) => {
+                g.fillRect(xa, yT, xb - xa, yB - yT);
+                g.strokeRect(xa, yT, xb - xa, yB - yT);
+              });
             }
             g.lineWidth = 1;
           });
@@ -6154,7 +6200,7 @@
           if (boxTool === 2 && draft && view && geo && geo.length)
             draft.hi = snap(x, y).p;
           if (rectTool === 2 && draft && view && geo && geo.length)
-            draft.b = corner(snap(x, y));
+            draft.b = corner(snap(x, y), x);
           if (drag && view) {
             if (drag.k === "h") drag.p = snap(x, y).p;
             else if (drag.k === "d") {
@@ -6166,6 +6212,33 @@
               drag.lk = sn.anc && sn.anc.lk;
               drag.fr = sn.anc && sn.anc.fr;
               drag.dd = sn.anc && sn.anc.dd;
+            } else if (drag.k === "r") {
+              if (dragEdge && dragEdge.move && moveInfo) {
+                /* moved whole: the price shift; in time by candles
+                   on the chart, by days on the profiles */
+                const m = moveInfo,
+                  dp = (-(y - m.y) / m.ch) * m.rng,
+                  gi = (i) => geo[Math.max(0,
+                    Math.min(geo.length - 1, i))].c.t,
+                  d = m.pn === "v" ? dayAt(x) : null;
+                ["a", "b"].forEach((k) => {
+                  const o = m[k];
+                  drag[k].p = o.p + dp;
+                  if (m.pn === "m" && o.i >= 0 && o.dd == null)
+                    drag[k].t = gi(o.i + cIx(x) - m.ci);
+                  if (d != null && m.day != null) {
+                    drag[k].t = o.t + d - m.day;
+                    if (o.dd != null) drag[k].dd = o.dd + d - m.day;
+                  }
+                });
+              } else if (dragEdge) {
+                /* a side or corner: its time and / or price */
+                const c = corner(snap(x, y), x);
+                if (dragEdge.x)
+                  Object.assign(drag[dragEdge.x], { t: c.t,
+                    dd: c.dd });
+                if (dragEdge.y) drag[dragEdge.y].p = c.p;
+              }
             } else if (drag.k === "b") {
               if (dragEdge === "move" && moveInfo) {
                 const dp =
@@ -6514,16 +6587,25 @@
               )
                 return l;
             } else if (l.k === "r") {
-              /* a rectangle: on or inside it (Delete removes) */
-              const xa = xsOf(l.a),
-                xb = xsOf(l.b),
-                ya = view.Y(l.a.p),
-                yb = view.Y(l.b.p);
-              if (x >= Math.min(xa, xb) - 5 &&
-                x <= Math.max(xa, xb) + 5 &&
-                y >= Math.min(ya, yb) - 5 &&
-                y <= Math.max(ya, yb) + 5)
-                return l;
+              /* a rectangle, on any of its boxes: near a side or
+                 corner drags it (hitEdge x / y: which corner's
+                 time / price), inside moves it (pn: the panel);
+                 Delete removes it */
+              const ya = view.Y(l.a.p),
+                yb = view.Y(l.b.p),
+                kL = rTm(l.a, 0) <= rTm(l.b, 0) ? "a" : "b",
+                kR = kL === "a" ? "b" : "a";
+              for (const [xa, xb, pn] of rbx.get(l) || [])
+                if (x >= xa - 6 && x <= xb + 6 &&
+                  y >= Math.min(ya, yb) - 6 &&
+                  y <= Math.max(ya, yb) + 6) {
+                  const ex = Math.abs(x - xa) <= 6 ? kL
+                      : Math.abs(x - xb) <= 6 ? kR : null,
+                    ey = Math.abs(y - ya) <= 6 ? "a"
+                      : Math.abs(y - yb) <= 6 ? "b" : null;
+                  hitEdge = { x: ex, y: ey, pn, move: !ex && !ey };
+                  return l;
+                }
             } else {
               const xs = xsOf(l);
               for (const e of ["hi", "lo"])
@@ -6572,16 +6654,37 @@
           }
           draw();
         }
-        /* a rectangle's corner: time and price, anchored as a
-           dot is */
-        const corner = (sn) => ({ t: sn.o.c.t, p: sn.p, l: sn.left,
-          ...sn.anc });
+        /* the candle index under x (first / last outside) */
+        const cIx = (x) => {
+          const i = geo.findIndex((q) => x >= q.x && x < q.x + q.w);
+          return i >= 0 ? i : x < geo[0].x ? 0 : geo.length - 1;
+        };
+        /* a rectangle's corner: time and price; set on the
+           profiles (a day's column or its D room), its day too
+           (dd: the rectangle then covers whole days); rTm: a
+           corner's time (e: its day's end) */
+        const corner = (sn, x) => {
+            const d = cfg.main && view && x < view.tR ? dayAt(x)
+              : null;
+            return { t: d != null ? d : sn.o.c.t, p: sn.p, dd: d };
+          },
+          rTm = (c, e) => (c.dd != null
+            ? e ? nextDay(c.dd) - 1 : c.dd : c.t),
+          rbx = new WeakMap(),
+          /* the profile day under x */
+          dayAt = (x) => {
+            const P = profs.find((q) => q.show &&
+              x >= q.cx0 - view.lmK * view.colW &&
+              x <= q.cx0 + view.colW);
+            return P ? P.dS : null;
+          };
         function rectClick(e) {
           if (!view || !geo || !geo.length) return;
           const r = cv.getBoundingClientRect(),
             y = e.clientY - r.top;
           if (y < view.top || y > view.bot) return;
-          const c = corner(snap(e.clientX - r.left, y));
+          const c = corner(snap(e.clientX - r.left, y),
+            e.clientX - r.left);
           if (rectTool === 1) {
             draft = { k: "r", a: c, b: { ...c } };
             lines.push(draft);
@@ -6720,6 +6823,24 @@
             drag = hl;
             dragEdge = hitEdge;
             e.preventDefault();
+            if (hl.k === "r" && dragEdge && dragEdge.move) {
+              /* a rectangle's corners as they were; the candle or
+                 day under the pointer */
+              const rc = cv.getBoundingClientRect(),
+                mx = e.clientX - rc.left,
+                c0 = (k) => ({ p: hl[k].p, t: hl[k].t, dd: hl[k].dd,
+                  i: geo.indexOf(geoAt(hl[k].t)) });
+              moveInfo = {
+                y: e.clientY - rc.top,
+                a: c0("a"),
+                b: c0("b"),
+                pn: dragEdge.pn,
+                ci: cIx(mx),
+                day: dayAt(mx),
+                rng: view.hi - view.lo,
+                ch: view.ch,
+              };
+            }
             if (dragEdge === "move") {
               const rc = cv.getBoundingClientRect(),
                 mx = e.clientX - rc.left,
