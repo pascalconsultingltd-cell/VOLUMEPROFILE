@@ -343,6 +343,9 @@
       #tabs {
         display: none !important;
       }
+      body.phone #rpTog {
+        display: none !important;
+      }
       body.phone #tabs {
         display: inline-flex !important;
         gap: 4px;
@@ -406,6 +409,12 @@
       <span id="volTx" title="Today's vol"></span>
       <button id="ctlTog" title="Hide / show the toggles">▾</button>
       <span id="tabs"></span>
+      <button
+        id="rpTog"
+        title="Replay: click, then a candle; arrows step, Esc ends"
+      >
+        Replay
+      </button>
       <span class="clr"
         ><button
           id="alClr"
@@ -537,6 +546,12 @@
       const PF_MAX = 5000;
       /* V95's window: 750 min, as 150 bars of 5m; its top 8 */
       const VH_MS = 750 * 60000;
+      /* replay (laptop): RT = the time shown; RPL while the main
+         chart draws on the data cut at RT (see replayIn); NOW =
+         the time the profiles and PF are drawn for */
+      let RT = null,
+        RPL = false;
+      const NOW = () => (RPL ? RT : Date.now());
       const BIG_WIN = 150,
         BIG_PERC = 0.95;
       const LET =
@@ -639,7 +654,7 @@
       function subPocs(dS, ps, vol, fine, tpo) {
         if (!ps.length) return [];
         const z = ps[ps.length - 1],
-          te = Math.min(dS + (z.i + 1) * TPO_MS, Date.now()),
+          te = Math.min(dS + (z.i + 1) * TPO_MS, NOW()),
           pv = tpo ? null : perVol(dS, fine),
           vo = pv && (pv.end || pv.last >= te - 12e4) ? pv : null,
           key = [dS, ps.length, z.h, z.l, vol, fine, vo && vo.n];
@@ -828,7 +843,8 @@
         };
         return {
           get: (k) => tx("readonly", (s) => s.get(k)),
-          put: (k, v) => tx("readwrite", (s) => s.put(v, k)),
+          put: (k, v) => RPL ? Promise.resolve()
+            : tx("readwrite", (s) => s.put(v, k)),
           keys: () => tx("readonly", (s) => s.getAllKeys()),
           del: (k) => tx("readwrite", (s) => s.delete(k)),
         };
@@ -850,6 +866,7 @@
       const keepU = (d, dS) => keepDay(d, "u|" + dS, () =>
         Float64Array.from(d.k.flat()));
       async function loadAggr(dS) {
+        if (RPL) return;
         const d0 = aggrT.get(dS);
         if (aggrBusy.has(dS) || (d0 && d0.end)) return;
         /* today: every 5s while the PF shows, else 30s; not
@@ -1054,6 +1071,7 @@
           } catch (e) {}
       }
       async function loadUsdt(dS) {
+        if (RPL) return;
         const d0 = usdtK.get(dS);
         if (usdtBusy.has(dS) || (d0 && d0.end)) return;
         if (d0 && Date.now() - d0.at < 5000) return;
@@ -1715,6 +1733,8 @@
         usdtMBusy = false,
         usdtMAt = 0;
       const usdtMD = new Map();
+      /* (allowed in replay: it reads only k15's start, which the
+         cut keeps, before its first await) */
       async function loadUsdtM() {
         if (usdtMBusy || !k15.length) return;
         if (Date.now() - usdtMAt < 60000 && usdtM.length &&
@@ -2108,7 +2128,7 @@
         for (let d = dayOf(t0); d < t1; d = nextDay(d)) {
           const c = fdSec(d);
           const e = nextDay(d);
-          if (!c || (!c.end && e <= t1 && e <= Date.now()))
+          if (!c || (!c.end && e <= t1 && e <= NOW()))
             return null;
           for (let i = 0; i < c.t.length; i++)
             if (c.t[i] >= t0 && c.t[i] < t1) out.push(c.p[i]);
@@ -2140,14 +2160,14 @@
          finished ones kept, running ones redone each second */
       let bsMemo = { k: "", v: [] };
       function bellScores() {
-        const k = bellVer + "|" + Math.floor(Date.now() / 1000);
+        const k = bellVer + "|" + Math.floor(NOW() / 1000);
         if (bsMemo.k === k) return bsMemo.v;
         const bs = [...bellDays.values()].flatMap((o) => o.bs)
           .sort((a, b) => a.birth - b.birth);
         bs.forEach((b) => {
           if (b.fin) return;
           const nx = bs.find((o) => o.birth > b.birth && !o.child),
-            c = closes(b.birth, nx ? nx.birth : Date.now());
+            c = closes(b.birth, nx ? nx.birth : NOW());
           b.sc = c && c.length > 1 ? gridSc(b, c) : null;
           b.fin = !!nx && b.sc != null;
         });
@@ -2702,7 +2722,9 @@
       function keepK15() {
         if (k15.length > 1) idb.put("k15", k15.slice(0, -1));
       }
+      /* (replay swaps k15: its 15m pages wait; 5m pages go on) */
       async function older(iv) {
+        if (RPL && iv === "15m") return;
         if (olderBusy[iv] || olderEnd[iv] || !store(iv).length)
           return;
         olderBusy[iv] = true;
@@ -3119,6 +3141,8 @@
           Number.isFinite(c.o) &&
           Number.isFinite(c.c);
         function draw() {
+          const rp = cfg.main && !cfg.vp && RT != null;
+          if (rp) replayIn();
           try {
             drawInner();
             if (cfg.main) alignHdr();
@@ -3134,6 +3158,8 @@
               el.style.color = "#c0392b";
               el.textContent = "Draw error: " + e.message;
             }
+          } finally {
+            if (rp) replayOut();
           }
         }
         /*
@@ -3295,7 +3321,8 @@
             wOf = (c) =>
               mode === "eq" ? vcW(c)
                 : mode === "std" ? (vcW(c) > sw ? vcW(c) : sS) : sw;
-          const dayStart = dayOf(vis[vis.length - 1].t);
+          const dayStart = RPL ? dayOf(RT)
+            : dayOf(vis[vis.length - 1].t);
           const dayC = cfg.tpo
             ? k15.filter((c) => c.t >= dayStart && okC(c))
             : [];
@@ -3657,7 +3684,7 @@
           const lastD = tpoDays[tpoDays.length - 1],
             zd = [];
           const zn = cnt && k15.length ? 15 : 0;
-          for (let k = 0, s = dayOf(Date.now()); k < zn; k++)
+          for (let k = 0, s = dayOf(NOW()); k < zn; k++)
             if (dayR.has(s - k * DAY)) zd.unshift(s - k * DAY);
           zd.forEach((dS) => {
             /* a day's points (price, first brick, row length,
@@ -3668,7 +3695,7 @@
                 dS,
                 volFor(dS),
                 k15[0].t,
-                dS < dayOf(Date.now()) ? "" : lk.t + "|" + lk.v,
+                dS < dayOf(NOW()) ? "" : lk.t + "|" + lk.v,
                 usdtV.has(dS) && usdtV.get(dS).n,
               ].join();
             let zc = zCache.get(key);
@@ -3866,8 +3893,10 @@
               /* 4th: 1 vol out (a new vipoc: a move of 1 vol) */
               m.ic = [S.px, (b + 1) * step, a * step, S.px + vf];
             }
-            /* kept once its candles (and volume) are all loaded */
+            /* kept once its candles (and volume) are all loaded;
+               in replay only up to RT (the caches are shared) */
             if (zv && k15.length && k15[0].t <= dS &&
+              !(RPL && t > RT) &&
               k15[k15.length - 1].t >= cut - 9e5) {
               if (stFz.size > 3e4) stFz.clear();
               if (icT.size > 3e4) icT.clear();
@@ -3880,7 +3909,7 @@
              sub POC (the ladder's 0; else the latest POC), 6
              vol steps above and below, once the POCs are in */
           if (pocHome && zp.length && volN > 0) {
-            const yd = prevDay(dayOf(Date.now())),
+            const yd = prevDay(dayOf(NOW())),
               q = zp.filter((z) => z.ds === yd).pop(),
               p = (q || zp[zp.length - 1]).p;
             lock = { hi: p + 6 * volN, lo: p - 6 * volN };
@@ -3956,7 +3985,7 @@
              it (P1: the day before's last), trail = the other;
              dm (DT): P -> its move in the age ranks (P's and D's) */
           const bellFill = (P, sp, vw, kv, vf, dm) => {
-            const nC = Math.floor((Math.min(Date.now(),
+            const nC = Math.floor((Math.min(NOW(),
                 nextDay(P.dS)) - P.dS) / TPO_MS),
               ck = [kv, vf, nC, ...sp.map((S) => S.px),
                 ...(dm ? dm.values() : [])].join();
@@ -4076,14 +4105,15 @@
               u = usdtOf(P.dS),
               zt = u && u.n ? usdtK.get(P.dS).k[u.n - 1][0] : -1,
               cl = P.ps.filter((q) =>
-                P.dS + (q.i + 1) * TPO_MS <= Math.min(Date.now(),
+                P.dS + (q.i + 1) * TPO_MS <= Math.min(NOW(),
                   zt + 1000));
             let o = bellDays.get(P.dS);
             if (!o || o.key !== key) {
+              /* (replay: no stored state, replayed at once) */
               o = { key, n: 0, W: new Map(), bs: [], prev: null,
-                look: true };
+                look: !RPL };
               bellDays.set(P.dS, o);
-              idb.get("b|" + P.dS).then((v) => {
+              if (o.look) idb.get("b|" + P.dS).then((v) => {
                 if (v && v.key === key && bellDays.get(P.dS) === o &&
                   !o.n) {
                   o.bs = v.bs;
@@ -4202,13 +4232,13 @@
             /* one scale for every day: today's row median fills
                a column; a busier row is cut at the column edge */
             const vw = vwOf(P.dS, P.step),
-              rm = rowMedOf(dayOf(Date.now())),
+              rm = rowMedOf(dayOf(NOW())),
               vs = vw && rm > 0 ? (colW - 2) / rm : 0,
               uk = usdtK.get(P.dS),
               at = aggrT.get(P.dS),
               z = uk && uk.k[uk.k.length - 1],
-              full = uk && at && (P.dS === dayOf(Date.now())
-                ? z && z[0] >= Date.now() - 12e4
+              full = uk && at && (P.dS === dayOf(NOW())
+                ? z && z[0] >= NOW() - 12e4
                 : uk.end && at.end);
             if (!full || !vs || !(volOfDay(P.dS) > 0) ||
               !(kvFor(P.dS, "BTCUSDT") > 0)) {
@@ -4235,7 +4265,7 @@
                the lowest P - 1.96 sigma / highest P + 1.96 sigma
                (sigma = vol / 1.2816, the curves'); once per side
                and outermost P */
-            if (P.dS === dayOf(Date.now()) && k15.length &&
+            if (!RPL && P.dS === dayOf(Date.now()) && k15.length &&
               sp.length) {
               const c = k15[k15.length - 1].c,
                 z = (1.96 * vf) / 1.2816,
@@ -4909,7 +4939,7 @@
             const pa = pL;
             /* PF: columns from the last 3 days' trades (2 full
                days back at least), box = the brick */
-            const d1 = dayOf(Date.now()),
+            const d1 = dayOf(NOW()),
               pds = [d1 - 2 * DAY, d1 - DAY, d1],
               bx = [...new Set(pds.map(pfStep))].join(" / ");
             pds.forEach((d) => {
@@ -5017,7 +5047,7 @@
               });
               /* v2: V95 ids by minute (the new ctx resets the
                  ids silently, no repeat on reload) */
-              pfEvS = { ctx: bx + "|v2", ev };
+              if (!RPL) pfEvS = { ctx: bx + "|v2", ev };
             }
             const pts = cv2.map((c, k) => bd[k0 + k] &&
               [pa + sl * jOf(k), bd[k0 + k]]);
@@ -5120,6 +5150,7 @@
             g.arc(o.x + o.w / 2, y, 5, 0, 6.2832);
             g.fill();
           });
+
           /*
            * vertical grid: a line every 6 hours counted from
            * UTC midnight, where the day and its levels change
@@ -5574,6 +5605,18 @@
           if (side) {
             g.fillStyle = "#ffffff";
             g.fillRect(x0 - 2, 0, px0 - x0 + 2, H);
+          }
+          /* replay: all after RT greyed (over the zigzag and
+             lines too), RT a blue line */
+          if (RPL) {
+            const o = geo.find((q) => q.c.t >= RT),
+              xT = o ? o.x : null;
+            if (xT != null) {
+              g.fillStyle = "rgba(245,246,248,0.88)";
+              g.fillRect(xT, top, px0 - xT, bot - top);
+              g.fillStyle = "#1565c0";
+              g.fillRect(xT - 1, top, 2, bot - top);
+            }
           }
           if (cfg.main) {
             /* PF: a cross at its top left closes it; once
@@ -7057,6 +7100,11 @@
           newCandle,
           size,
           full: (k) => setFull(k),
+          /* the candle under x (replay picks it) */
+          candleAt: (x) => {
+            const o = geo.find((q) => x >= q.x && x < q.x + q.w);
+            return o && o.c;
+          },
           resetView: () => {
             /* main: 1 day (288 5m candles; 15s window as set);
                VP 5 days; PF all its 3 days (pfN 0) */
@@ -7502,6 +7550,145 @@
       $("bsTog").onclick = () => setShowScores(!showScores);
       $("invTog").onclick = () => setVpInv(!vpInv);
       $("missTog").onclick = () => setVpMiss(!vpMiss);
+      /* replay at RT: the data cut there (USDT seconds and FDUSD
+         trades before it, the 15m candle at RT rebuilt from its
+         trades) and the caches, swapped in while the main chart
+         draws (synchronous: loads and the stream never see
+         them); finished days before RT's day keep their final
+         results; nothing is loaded or saved meanwhile */
+      let rpS = null,
+        rpPick = false;
+      /* (IC / zigzag caches are shared: keyed by time, a candle
+         before RT gives the same as live; see icFor) */
+      const rpMaps = () => [usdtK, aggrT, usdtV, pvCur, vwS,
+        bellDays, hotD, fdC, volHys, pfC, rowsK, xK];
+      function replayBuild(T) {
+        const d0 = dayOf(T),
+          lo = (a, x) => {
+            let i = 0, j = a.length;
+            while (i < j) {
+              const m = (i + j) >> 1;
+              if (a[m][0] < x) i = m + 1;
+              else j = m;
+            }
+            return i;
+          },
+          U = new Map(),
+          A = new Map(),
+          old = (m) => new Map([...m].filter(([d]) => d < d0));
+        usdtK.forEach((x, d) => {
+          if (nextDay(d) <= T) U.set(d, x);
+          else if (d < T)
+            U.set(d, { k: x.k.slice(0, lo(x.k, T - 999)),
+              end: false, at: Infinity });
+        });
+        aggrT.forEach((x, d) => {
+          if (nextDay(d) <= T) A.set(d, x);
+          else if (d < T) A.set(d, { tr: x.tr.slice(0, lo(x.tr, T)),
+            last: null, end: false, at: Infinity });
+        });
+        /* bells of the days before: copies, scored again at RT */
+        const bd = new Map([...bellDays].filter(([d]) => d < d0)
+          .map(([d, o]) => [d, { ...o, look: false,
+            bs: o.bs.map((b) => ({ ...b, fin: false })) }]));
+        /* 15m candles closed by RT, the one at RT from trades */
+        const k = k15.filter((c) => c.t + 9e5 <= T),
+          c0 = Math.floor(T / 9e5) * 9e5,
+          tr = c0 < T ? (A.get(dayOf(c0)) || { tr: [] }).tr
+            .filter((q) => q[0] >= c0) : [];
+        if (tr.length) {
+          const ps = tr.map((q) => q[1]);
+          k.push({ t: c0, o: ps[0], h: Math.max(...ps),
+            l: Math.min(...ps), c: ps[ps.length - 1],
+            v: tr.reduce((a, q) => a + q[2], 0),
+            bv: tr.reduce((a, q) => a + (q[3] ? 0 : q[2]), 0) });
+        }
+        return { T, k15: k, hs: null, pfHotC: null, pfSeen: "",
+          pfBd: null, bsMemo: { k: "", v: [] },
+          maps: [U, A, old(usdtV), old(pvCur), old(vwS), bd,
+            old(hotD), old(fdC), new Map(), new Map(), old(rowsK),
+            old(xK)] };
+      }
+      /* the days RT needs, loaded live (before the swap); the
+         cut rebuilt when one of them comes in */
+      function replayVer() {
+        const d0 = dayOf(RT);
+        let v = k15.length + "|" + (k15.length && k15[0].t);
+        for (let i = 0; i <= nTpo + 1; i++) {
+          const d = d0 - i * 864e5,
+            u = usdtK.get(d),
+            a = aggrT.get(d);
+          loadUsdt(d);
+          loadAggr(d);
+          v += ";" + (u ? (u.end ? 2 : u.k.length &&
+            u.k[u.k.length - 1][0] >= RT - 1000 ? 1 : 0) : 0) +
+            (a ? (a.end ? 2 : a.at > 0 ? 1 : 0) : 0);
+        }
+        if (k15.length && k15[0].t > d0 - 40 * 864e5) older("15m");
+        return v;
+      }
+      function replayIn() {
+        const v = replayVer();
+        if (!rpS || rpS.T !== RT || rpS.v !== v)
+          rpS = Object.assign(replayBuild(RT), { v });
+        rpS.live = rpMaps().map((m, i) => {
+          const l = new Map(m);
+          m.clear();
+          rpS.maps[i].forEach((v, k) => m.set(k, v));
+          return l;
+        });
+        rpS.lv = [k15, hs, pfHotC, pfSeen, pfBd, bsMemo];
+        [k15, hs, pfHotC, pfSeen, pfBd, bsMemo] = [rpS.k15, rpS.hs,
+          rpS.pfHotC, rpS.pfSeen, rpS.pfBd, rpS.bsMemo];
+        RPL = true;
+      }
+      function replayOut() {
+        RPL = false;
+        rpMaps().forEach((m, i) => {
+          rpS.maps[i] = new Map(m);
+          m.clear();
+          rpS.live[i].forEach((v, k) => m.set(k, v));
+        });
+        [rpS.k15, rpS.hs, rpS.pfHotC, rpS.pfSeen, rpS.pfBd,
+          rpS.bsMemo] = [k15, hs, pfHotC, pfSeen, pfBd, bsMemo];
+        [k15, hs, pfHotC, pfSeen, pfBd, bsMemo] = rpS.lv;
+      }
+      /* the button, the pick, ← → one candle, Esc ends */
+      const rpIv = () => (TF === "5m" ? 3e5 : 15000);
+      function setRT(t) {
+        if (t != null && t >= Date.now()) return;
+        RT = t;
+        if (t == null) rpS = null;
+        const b = $("rpTog");
+        b.className = RT != null || rpPick ? "a" : "";
+        b.textContent = rpPick ? "Pick a candle" : RT == null
+          ? "Replay" : "Replay " + new Date(RT).toLocaleString([],
+            { weekday: "short", hour: "2-digit", minute: "2-digit" });
+        schedule();
+      }
+      $("rpTog").onclick = () => {
+        rpPick = RT == null && !rpPick;
+        setRT(null);
+      };
+      $("c").addEventListener("pointerdown", (e) => {
+        if (!rpPick) return;
+        const c = mainChart.candleAt(e.clientX -
+          $("c").getBoundingClientRect().left);
+        if (!c) return;
+        e.stopImmediatePropagation();
+        rpPick = false;
+        setRT(c.t + rpIv());
+      }, true);
+      addEventListener("keydown", (e) => {
+        if (RT == null) return;
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          e.preventDefault();
+          setRT(RT + (e.key === "ArrowLeft" ? -1 : 1) * rpIv());
+        } else if (e.key === "Escape") {
+          e.stopImmediatePropagation();
+          setRT(null);
+        }
+      }, true);
       /* phone: tabs Main / VP / PF / 15s, each its chart full
          screen (15s: the floating window over everything) */
       if (matchMedia("(pointer: coarse)").matches &&
