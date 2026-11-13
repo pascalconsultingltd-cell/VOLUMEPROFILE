@@ -468,13 +468,6 @@
                 title="Missing part from the axis, volume after it"
               >
                 Miss
-              </button
-              ><button
-                id="compTog"
-                class="a"
-                title="Comp: squeezed past 80%; off: Fold"
-              >
-                Comp
               </button></span></span
         ></span>
         <span class="grp" title="Main chart"
@@ -2119,31 +2112,6 @@
         vpInv = !!v;
         $("invTog").className = vpInv ? "a" : "";
         schedule();
-      }
-      /* Comp: VP widths squeezed past 80% of a column (nothing
-         cut); off = Fold, cut rows hatched back from the edge */
-      let vpComp = true;
-      function setVpComp(v) {
-        vpComp = !!v;
-        $("compTog").className = vpComp ? "a" : "";
-        schedule();
-      }
-      /* Fold's hatch: dark red diagonals, made once */
-      let hatchP = null;
-      function hatch() {
-        if (hatchP) return hatchP;
-        const c = document.createElement("canvas"),
-          x = c.getContext("2d");
-        c.width = c.height = 6;
-        x.fillStyle = "rgba(140,0,0,.25)";
-        x.fillRect(0, 0, 6, 6);
-        x.strokeStyle = "rgba(140,0,0,.85)";
-        x.lineWidth = 1.2;
-        x.beginPath();
-        x.moveTo(0, 6);
-        x.lineTo(6, 0);
-        x.stroke();
-        return (hatchP = x.createPattern(c, "repeat"));
       }
       /* Miss: P and D bells, missing part from the axis */
       let vpMiss = true;
@@ -4313,22 +4281,11 @@
             g.rect(cx0 - lmK * colW, top, (1 + lmK) * colW - 2,
               bot - top);
             g.clip();
-            /* offsets (px from the axis, either side) as drawn:
-               Comp squeezes past 80% of a column so nothing is cut
-               (that zone shaded); Fold keeps them, cut rows fold
-               back from the edge (see below) */
-            const Cw = colW - 2,
-              kn = 0.8 * Cw,
-              Rr = Cw - kn,
-              F = (o) => (!vpComp || o <= kn ? o
-                : kn + (Rr * (o - kn)) / (o - kn + Rr)),
-              xR = (o) => cx0 + F(o),
-              xLf = (o) => cx0 - 2 - F(o);
-            if (vpComp) {
-              g.fillStyle = "rgba(0,0,0,.04)";
-              g.fillRect(cx0 + kn, top, Rr, bot - top);
-              g.fillRect(cx0 - 2 - Cw, top, Rr, bot - top);
-            }
+            /* x of an offset (px) from the axis: right (P Bells)
+               or left (D Bells) */
+            const F = (o) => o,
+              xR = (o) => cx0 + o,
+              xLf = (o) => cx0 - 2 - o;
             const vf = volFor(P.dS) > 0 ? volFor(P.dS) : P.step * 10;
             const sp = byAge(P, subPocs(P.dS, P.ps, vf, P.step));
             /* BS: this day's bells, then every bell's score */
@@ -4628,29 +4585,23 @@
             }
             if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
             g.restore();
-            /* Fold: a row past its column folds back from the
-               edge, hatched dark red, over what passes (up to a
-               whole column more); volume right, delta left */
-            if (!vpComp) {
-              g.save();
-              g.fillStyle = hatch();
-              const fold = (v, right) => {
-                const ov = Math.min(Cw, v * vs - Cw);
-                return ov > 0.5 ? right ? [cx0 + Cw - ov, ov]
-                  : [cx0 - 2 - Cw, ov] : null;
-              };
-              vw.rw.forEach((v, r) => {
-                const f = fold(v, true),
-                  yT = Y((r + 1) * P.step);
-                if (f) g.fillRect(f[0], yT, f[1], Y(r * P.step) - yT);
-              });
-              dp.forEach((q, r) => {
-                const f = fold(q, false),
-                  yT = Y((r + 1) * P.step);
-                if (f) g.fillRect(f[0], yT, f[1], Y(r * P.step) - yT);
-              });
-              g.restore();
-            }
+            /* D Bells: rows whose delta or curve passes the left
+               edge of their room, the D curve red and bolder
+               there (the P side needs none: what passes a P
+               Bell's curve is the surplus the D Bells take) */
+            const xL = cx0 - lmK * colW;
+            g.strokeStyle = "#e53935";
+            g.lineWidth = 3;
+            g.beginPath();
+            new Set([...dc.keys(), ...dp.keys()]).forEach((r) => {
+              if (xLf(Math.max((dp.get(r) || 0) * vs,
+                (dc.get(r) || 0) * kv * vs)) >= xL) return;
+              const x = Math.max(xL, xLf((dc.get(r) || 0) * kv * vs));
+              g.moveTo(x, Y((r + 1) * P.step));
+              g.lineTo(x, Y(r * P.step));
+            });
+            g.stroke();
+            g.lineWidth = 1;
           }
           g.restore();
           /*
@@ -7579,7 +7530,6 @@
           showScores,
           vpInv,
           vpMiss,
-          vpComp,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -7634,9 +7584,6 @@
         /* Miss: new in version 41, on by default */
         if (st.dv >= 41 && typeof st.vpMiss === "boolean")
           setVpMiss(st.vpMiss);
-        /* Comp: new in version 43, on by default */
-        if (st.dv >= 43 && typeof st.vpComp === "boolean")
-          setVpComp(st.vpComp);
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -7835,7 +7782,6 @@
       $("bsTog").onclick = () => setShowScores(!showScores);
       $("invTog").onclick = () => setVpInv(!vpInv);
       $("missTog").onclick = () => setVpMiss(!vpMiss);
-      $("compTog").onclick = () => setVpComp(!vpComp);
       /* replay at RT: the data cut there (USDT seconds and FDUSD
          trades before it, the 15m candle at RT rebuilt from its
          trades) and the caches, swapped in while the main chart
