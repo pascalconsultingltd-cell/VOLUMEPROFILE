@@ -475,6 +475,13 @@
                 title="P Bells: birth to death on the PF"
               >
                 PB
+              </button
+              ><button
+                id="bzTog"
+                class="a"
+                title="Blue zones (lead wings still empty) on the PF"
+              >
+                BZ
               </button></span></span
         ></span>
         <span class="grp" title="Main chart"
@@ -2118,6 +2125,13 @@
       function setVpInv(v) {
         vpInv = !!v;
         $("invTog").className = vpInv ? "a" : "";
+        schedule();
+      }
+      /* BZ: the bells' blue zones drawn on the PF */
+      let showBZ = true;
+      function setShowBZ(v) {
+        showBZ = !!v;
+        $("bzTog").className = showBZ ? "a" : "";
         schedule();
       }
       /* PB: P Bells' births and deaths drawn on the PF */
@@ -4265,7 +4279,10 @@
             };
           };
           /* DT: each day's last bell (by age), for the next day */
-          const rkEnd = new Map();
+          const rkEnd = new Map(),
+            /* BZ: the blue zones of the days drawn (lead wings'
+               empty rows, merged), for the PF: { lo, hi, t0, t1 } */
+            blueZ = [];
           for (let d = 0; d < cnt + ex; d++) {
             const Q = dayProf(tpoDays[d]),
               cx0 = x6 + (d - ex + tf) * cP,
@@ -4579,6 +4596,30 @@
                   Y(r * P.step) - yT);
             }));
             lb.fill();
+            /* BZ: each lead wing's empty rows as price bands, from
+               the bell's birth (its day's start if not found) to
+               the day's end */
+            const zOf = (W, fl, cur, kind) => W.ps.forEach((B) => {
+              const px = B.S.px,
+                rs = B.lead.filter((r) => cur(r) > (fl.get(r) || 0))
+                  .sort((a, b) => a - b),
+                bs = ((bellDays.get(P.dS) || {}).bs || [])
+                  .filter((b) => b.kind === kind),
+                dl = (b) => Math.abs(b.last - px),
+                bl = bs.reduce((a, b) => !a || dl(b) < dl(a) ? b : a,
+                  null),
+                t0 = bl && dl(bl) < vf ? bl.birth : P.dS;
+              for (let i = 0; i < rs.length; ) {
+                let j = i;
+                while (j + 1 < rs.length && rs[j + 1] === rs[j] + 1)
+                  j++;
+                blueZ.push({ lo: rs[i] * P.step,
+                  hi: (rs[j] + 1) * P.step, t0, t1: nextDay(P.dS) });
+                i = j + 1;
+              }
+            });
+            zOf(bf, bf.rw, (r) => (exp.get(r) || 0) * kv, "P");
+            zOf(bfD, bfD.rw, (r) => (dc.get(r) || 0) * kv, "D");
             perfLine(P, exp, cx0, (e) => F(e * kv * vs), "#000");
             /* its vipocs: black lines to the curve */
             drawPs(P, sp, cx0, (S) => cX(Math.floor(S.px / P.step)));
@@ -4990,6 +5031,25 @@
             });
             g.fillStyle = "#434651";
             g.fill(bp);
+            /* BZ: the blue zones (P and D Bells' lead wings still
+               empty) as light blue bands over their time */
+            if (showBZ) {
+              const xAt = (t) => {
+                let x = null;
+                for (const [t0, xx] of pfX)
+                  if (t0 <= t) x = xx;
+                  else break;
+                return x;
+              };
+              g.fillStyle = "rgba(30,90,220,.22)";
+              blueZ.forEach((z) => {
+                const xa = xAt(z.t0),
+                  xb = xAt(Math.min(z.t1, NOW()));
+                if (xa == null || xb == null) return;
+                g.fillRect(xa, Y(z.hi), Math.max(2, xb - xa + sl / 2),
+                  Y(z.lo) - Y(z.hi));
+              });
+            }
             /* PB: each P Bell of the days shown, from its birth to
                its death (or now), a fat line on its price close by
                close; a dot at birth, a tick at death */
@@ -7605,7 +7665,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 44;
+      const DEFAULTS_VER = 45;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7635,6 +7695,7 @@
           vpInv,
           vpMiss,
           showPB,
+          showBZ,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -7692,6 +7753,9 @@
         /* PB: new in version 44, on by default */
         if (st.dv >= 44 && typeof st.showPB === "boolean")
           setShowPB(st.showPB);
+        /* BZ: new in version 45, on by default */
+        if (st.dv >= 45 && typeof st.showBZ === "boolean")
+          setShowBZ(st.showBZ);
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -7891,6 +7955,7 @@
       $("invTog").onclick = () => setVpInv(!vpInv);
       $("missTog").onclick = () => setVpMiss(!vpMiss);
       $("pbTog").onclick = () => setShowPB(!showPB);
+      $("bzTog").onclick = () => setShowBZ(!showBZ);
       /* replay at RT: the data cut there (USDT seconds and FDUSD
          trades before it, the 15m candle at RT rebuilt from its
          trades) and the caches, swapped in while the main chart
