@@ -425,6 +425,12 @@
         </button>
         <button id="drawClr" title="Delete all drawings">
           Drawings ×
+        </button>
+        <button
+          id="rectTog"
+          title="Rectangle: click one corner, then the other"
+        >
+          □
         </button></span
       >
       <div class="ctl">
@@ -3025,6 +3031,8 @@
           dragEdge = null,
           boxTool = 0,
           dotTool = 0,
+          /* rectangle: 1 = first corner next, 2 = second */
+          rectTool = 0,
           draft = null,
           off = -Math.round(slotsFor(cfg.N) * ROOM),
           pan = null,
@@ -5573,6 +5581,21 @@
                 ptag(y, l.p.toFixed(DP), col);
               }
             } else if (l.k === "b") drawBox(l, sel);
+            else if (l.k === "r") {
+              /* rectangle: corner to corner, light blue */
+              const xa = xsOf(l.a),
+                xb = xsOf(l.b),
+                ya = Y(l.a.p),
+                yb = Y(l.b.p);
+              g.fillStyle = "rgba(21,101,192,.08)";
+              g.fillRect(Math.min(xa, xb), Math.min(ya, yb),
+                Math.abs(xb - xa), Math.abs(yb - ya));
+              g.strokeStyle = "rgba(21,101,192,.7)";
+              g.lineWidth = sel ? 2 : 1.2;
+              g.setLineDash([]);
+              g.strokeRect(Math.min(xa, xb), Math.min(ya, yb),
+                Math.abs(xb - xa), Math.abs(yb - ya));
+            }
             g.lineWidth = 1;
           });
           if (dotTool) {
@@ -5585,6 +5608,16 @@
               x0 + 8,
               top + 10,
             );
+          }
+          if (rectTool) {
+            g.font = "11px ui-monospace,Menlo,monospace";
+            g.fillStyle = "#1565c0";
+            g.textAlign = "left";
+            g.textBaseline = "middle";
+            g.fillText(rectTool === 1
+              ? "Rectangle: click the first corner"
+              : "Rectangle: click the other corner (Esc cancels)",
+            x0 + 8, top + 10);
           }
           if (boxTool) {
             g.font = "11px ui-monospace,Menlo,monospace";
@@ -6120,6 +6153,8 @@
           }
           if (boxTool === 2 && draft && view && geo && geo.length)
             draft.hi = snap(x, y).p;
+          if (rectTool === 2 && draft && view && geo && geo.length)
+            draft.b = corner(snap(x, y));
           if (drag && view) {
             if (drag.k === "h") drag.p = snap(x, y).p;
             else if (drag.k === "d") {
@@ -6235,6 +6270,7 @@
             full ||
             boxTool ||
             dotTool ||
+            rectTool ||
             y < view.top ||
             y > view.bot
           )
@@ -6447,7 +6483,8 @@
           draw();
         }
         function hit(x, y) {
-          if (!view || !geo || boxTool || dotTool) return null;
+          if (!view || !geo || boxTool || dotTool || rectTool)
+            return null;
           for (let i = lines.length - 1; i >= 0; i--) {
             const l = lines[i];
             if (l.k === "h") {
@@ -6475,6 +6512,17 @@
                 x >= xs - 6 &&
                 x <= view.px0
               )
+                return l;
+            } else if (l.k === "r") {
+              /* a rectangle: on or inside it (Delete removes) */
+              const xa = xsOf(l.a),
+                xb = xsOf(l.b),
+                ya = view.Y(l.a.p),
+                yb = view.Y(l.b.p);
+              if (x >= Math.min(xa, xb) - 5 &&
+                x <= Math.max(xa, xb) + 5 &&
+                y >= Math.min(ya, yb) - 5 &&
+                y <= Math.max(ya, yb) + 5)
                 return l;
             } else {
               const xs = xsOf(l);
@@ -6521,6 +6569,27 @@
                 )) ||
               geo[geo.length - 1];
             lines.push({ k: "v", t: o.c.t });
+          }
+          draw();
+        }
+        /* a rectangle's corner: time and price, anchored as a
+           dot is */
+        const corner = (sn) => ({ t: sn.o.c.t, p: sn.p, l: sn.left,
+          ...sn.anc });
+        function rectClick(e) {
+          if (!view || !geo || !geo.length) return;
+          const r = cv.getBoundingClientRect(),
+            y = e.clientY - r.top;
+          if (y < view.top || y > view.bot) return;
+          const c = corner(snap(e.clientX - r.left, y));
+          if (rectTool === 1) {
+            draft = { k: "r", a: c, b: { ...c } };
+            lines.push(draft);
+            rectTool = 2;
+          } else {
+            draft.b = c;
+            draft = null;
+            rectTool = 0;
           }
           draw();
         }
@@ -6627,6 +6696,11 @@
           }
           if (boxTool) {
             boxClick(e);
+            e.preventDefault();
+            return;
+          }
+          if (rectTool) {
+            rectClick(e);
             e.preventDefault();
             return;
           }
@@ -6790,11 +6864,13 @@
               dotTool = 0;
             }
             draw();
-          } else if (e.key === "Escape" && (boxTool || dotTool)) {
+          } else if (e.key === "Escape" &&
+            (boxTool || dotTool || rectTool)) {
             if (draft) lines = lines.filter((l) => l !== draft);
             draft = null;
             boxTool = 0;
             dotTool = 0;
+            rectTool = 0;
             draw();
           } else if (
             (e.key === "Delete" || e.key === "Backspace") &&
@@ -7100,6 +7176,14 @@
           newCandle,
           size,
           full: (k) => setFull(k),
+          /* the □ button: draw a rectangle */
+          rect: () => {
+            if (draft) lines = lines.filter((l) => l !== draft);
+            draft = null;
+            boxTool = dotTool = 0;
+            rectTool = 1;
+            draw();
+          },
           /* the candle under x (replay picks it) */
           candleAt: (x) => {
             const o = geo.find((q) => x >= q.x && x < q.x + q.w);
@@ -7125,6 +7209,7 @@
             draft = null;
             boxTool = 0;
             dotTool = 0;
+            rectTool = 0;
             hl = null;
             drag = null;
             if (cfg.main) ui();
@@ -7236,6 +7321,7 @@
           draft = null;
           boxTool = 0;
           dotTool = 0;
+          rectTool = 0;
           $("sym").textContent = SYM + " " + v;
           draw();
         }
@@ -7530,6 +7616,7 @@
           toast("Charts reset to default, drawings deleted");
         }
       });
+      $("rectTog").onclick = () => mainChart.rect();
       /* Drawings Clear button: delete every drawing */
       $("drawClr").onclick = () => {
         if (!lines.length) return toast("No drawings");
