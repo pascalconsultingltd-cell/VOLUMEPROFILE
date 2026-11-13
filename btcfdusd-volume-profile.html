@@ -468,6 +468,13 @@
                 title="Missing part from the axis, volume after it"
               >
                 Miss
+              </button
+              ><button
+                id="pbTog"
+                class="a"
+                title="P Bells: birth to death on the PF"
+              >
+                PB
               </button></span></span
         ></span>
         <span class="grp" title="Main chart"
@@ -2111,6 +2118,13 @@
       function setVpInv(v) {
         vpInv = !!v;
         $("invTog").className = vpInv ? "a" : "";
+        schedule();
+      }
+      /* PB: P Bells' births and deaths drawn on the PF */
+      let showPB = true;
+      function setShowPB(v) {
+        showPB = !!v;
+        $("pbTog").className = showPB ? "a" : "";
         schedule();
       }
       /* Miss: P and D bells, missing part from the axis */
@@ -4133,7 +4147,7 @@
              bells, the last close's P's / D's as bell indexes)
              kept in the browser ("b|day") with its vol, step, kv */
           const dayBells = (P, vw, kv, vf) => {
-            const key = [vf, P.step, kv].join(),
+            const key = [vf, P.step, kv, 2].join(),
               u = usdtOf(P.dS),
               zt = u && u.n ? usdtK.get(P.dS).k[u.n - 1][0] : -1,
               cl = P.ps.filter((q) =>
@@ -4171,6 +4185,7 @@
             let prev = o.prev || { P: [], D: [] };
             for (let n = o.n; n < cl.length; n++) {
               const q = cl[n],
+                tc = P.dS + (q.i + 1) * TPO_MS,
                 cp = subPocs(P.dS, cl.slice(0, n + 1), vf, st);
               if (!cp.vol) break;
               (byI.get(q.i) || []).forEach(([r, v]) =>
@@ -4188,14 +4203,20 @@
                   b = near.reduce((a, z) => Math.abs(z[0] - px) <
                     Math.abs(a[0] - px) ? z : a)[1];
                   b.last = px;
-                } else out.push(b = { px, last: px, kind,
-                  birth: P.dS + (q.i + 1) * TPO_MS,
-                  sigma: vf / 1.2816,
+                  b.path.push([tc, px]);
+                } else out.push(b = { px, last: px, kind, birth: tc,
+                  sigma: vf / 1.2816, path: [[tc, px]], death: null,
                   child: kind === "D" && cur.P.concat(out.filter(
                     (z) => z.kind === "P").map((z) => z.last))
                     .some((x) => Math.abs(x - px) < vf) });
                 now[kind].push([px, b]);
               }));
+              /* a bell of the close before not followed: dead here */
+              ["P", "D"].forEach((kind) =>
+                prev[kind].forEach(([, b]) => {
+                  if (b.death == null &&
+                    !now[kind].some((z) => z[1] === b)) b.death = tc;
+                }));
               prev = now;
               o.n = n + 1;
             }
@@ -4969,6 +4990,58 @@
             });
             g.fillStyle = "#434651";
             g.fill(bp);
+            /* PB: each P Bell of the days shown, from its birth to
+               its death (or now), a fat line on its price close by
+               close; a dot at birth, a tick at death */
+            if (showPB) {
+              const xAt = (t) => {
+                  let x = null;
+                  for (const [t0, xx] of pfX)
+                    if (t0 <= t) x = xx;
+                    else break;
+                  return x;
+                },
+                cols = ["#6a1b9a", "#ef6c00", "#00838f", "#ad1457",
+                  "#2e7d32", "#4527a0"];
+              g.save();
+              g.globalAlpha = 0.6;
+              g.lineCap = "butt";
+              let k = 0;
+              const pbs = [...bellDays.values()].flatMap((o) => o.bs);
+              pbs.forEach((b) => {
+                if (b.kind !== "P" || !b.path) return;
+                const pts = b.path.concat([[b.death || NOW(),
+                    b.path[b.path.length - 1][1]]]),
+                  col = cols[k++ % cols.length];
+                g.strokeStyle = g.fillStyle = col;
+                g.lineWidth = 5;
+                g.beginPath();
+                for (let i = 0; i + 1 < pts.length; i++) {
+                  const xa = xAt(pts[i][0]),
+                    xb = xAt(pts[i + 1][0]);
+                  if (xa == null || xb == null) continue;
+                  g.moveTo(xa, Y(pts[i][1]));
+                  g.lineTo(xb, Y(pts[i][1]));
+                }
+                g.stroke();
+                const x0 = xAt(pts[0][0]),
+                  xe = b.death ? xAt(b.death) : null;
+                if (x0 != null) {
+                  g.beginPath();
+                  g.arc(x0, Y(pts[0][1]), 4, 0, 6.2832);
+                  g.fill();
+                }
+                if (xe != null) {
+                  const ye = Y(pts[pts.length - 1][1]);
+                  g.lineWidth = 2;
+                  g.beginPath();
+                  g.moveTo(xe, ye - 7);
+                  g.lineTo(xe, ye + 7);
+                  g.stroke();
+                }
+              });
+              g.restore();
+            }
             /* V95 boxes: a circle green / red by the box's delta,
                bigger with it (1px, +0.5px per 10 BTC, 3px at most) */
             const hs = pfHot(all),
@@ -7532,7 +7605,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 43;
+      const DEFAULTS_VER = 44;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7561,6 +7634,7 @@
           showScores,
           vpInv,
           vpMiss,
+          showPB,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -7615,6 +7689,9 @@
         /* Miss: new in version 41, on by default */
         if (st.dv >= 41 && typeof st.vpMiss === "boolean")
           setVpMiss(st.vpMiss);
+        /* PB: new in version 44, on by default */
+        if (st.dv >= 44 && typeof st.showPB === "boolean")
+          setShowPB(st.showPB);
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -7813,6 +7890,7 @@
       $("bsTog").onclick = () => setShowScores(!showScores);
       $("invTog").onclick = () => setVpInv(!vpInv);
       $("missTog").onclick = () => setVpMiss(!vpMiss);
+      $("pbTog").onclick = () => setShowPB(!showPB);
       /* replay at RT: the data cut there (USDT seconds and FDUSD
          trades before it, the 15m candle at RT rebuilt from its
          trades) and the caches, swapped in while the main chart
