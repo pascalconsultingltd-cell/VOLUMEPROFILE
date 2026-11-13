@@ -5696,6 +5696,22 @@
               g.fillStyle = "#1565c0";
               g.fillRect(xT - 1, top, 2, bot - top);
             }
+            /* the last price at RT (last FDUSD trade before it):
+               a grey line across every panel, its tag */
+            const A = aggrT.get(dayOf(RT - 1)),
+              q = A && A.tr[A.tr.length - 1];
+            if (q && Y(q[1]) >= top && Y(q[1]) <= bot) {
+              const y = Y(q[1]);
+              g.strokeStyle = "#8a94a3";
+              g.lineWidth = 1.5;
+              g.setLineDash([]);
+              g.beginPath();
+              g.moveTo(0, y);
+              g.lineTo(px0, y);
+              g.stroke();
+              g.lineWidth = 1;
+              ptag(y, q[1].toFixed(DP), "#8a94a3");
+            }
           }
           if (cfg.main) {
             /* PF: a cross at its top left closes it; once
