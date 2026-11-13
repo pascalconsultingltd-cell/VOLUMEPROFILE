@@ -4314,7 +4314,7 @@
             }
             /* the delta's normal curve, left of the axis */
             const dc = dCurve(P, vw, sp, kv, vf, exp);
-            perfLine(P, dc, cx0 - 2, (e) => (-e * kv * vs) / 2,
+            perfLine(P, dc, cx0 - 2, (e) => -e * kv * vs,
               "#000");
             /* its P's: a black line to the curve; age = the
                average period of the row's bricks */
@@ -4330,8 +4330,8 @@
               g.beginPath();
               /* to the delta's curve */
               g.moveTo(cx0 - 2, y);
-              g.lineTo(cx0 - 2 - ((dc.get(Math.floor(Q.px /
-                P.step)) || 0) * kv * vs) / 2, y);
+              g.lineTo(cx0 - 2 - (dc.get(Math.floor(Q.px /
+                P.step)) || 0) * kv * vs, y);
               g.stroke();
               g.setLineDash([]);
             });
@@ -4342,7 +4342,7 @@
               rk.push([ag(S), cx0 + wx(exp, S) / 2, S.px, 0, S,
                 1]));
             (dc.ps || []).forEach((Q) =>
-              rk.push([ag(Q), cx0 - 2 - wx(dc, Q) / 4, Q.px, 0, 0,
+              rk.push([ag(Q), cx0 - 2 - wx(dc, Q) / 2, Q.px, 0, 0,
                 -1]));
             /* by age; each one's move vs the one before (1: the
                day before's last bell, else its last vipoc): its
@@ -4393,10 +4393,10 @@
               dMiss = (v, r) =>
                 Math.max(0, v * kv - (dp.get(r) || 0));
             shade(-1, dc, cx0 - 2, (v, r) =>
-              (-Math.min(v * kv, dp.get(r) || 0) * vs) / 2,
-              vpMiss ? (v, r) => (-dMiss(v, r) * vs) / 2 : null);
+              -Math.min(v * kv, dp.get(r) || 0) * vs,
+              vpMiss ? (v, r) => -dMiss(v, r) * vs : null);
             dp.forEach((q, r) => {
-              const w = (q * vs) / 2,
+              const w = q * vs,
                 yT = Y((r + 1) * P.step);
               if (w >= 0.5 && !dc.has(r))
                 sb.rect("rgba(67,70,81,.35)",
@@ -4428,8 +4428,8 @@
                its nearest D's colour, leftwards */
             const bd = rk.filter((e) => e[5] === -1);
             if (bd.length) dc.forEach((e, r) => {
-              const xb = cx0 - 2 - ((dp.get(r) || 0) * vs) / 2,
-                xc = cx0 - 2 - (e * kv * vs) / 2,
+              const xb = cx0 - 2 - (dp.get(r) || 0) * vs,
+                xc = cx0 - 2 - e * kv * vs,
                 yT = Y((r + 1) * P.step),
                 c = (r + 0.5) * P.step,
                 b = bd.reduce((a, q) =>
@@ -4510,8 +4510,7 @@
               sp.forEach((S) => pin(S, "P",
                 cX(Math.floor(S.px / P.step)) + 9));
               (dc.ps || []).forEach((Q) => pin(Q, "D", cx0 - 11 -
-                ((dc.get(Math.floor(Q.px / P.step)) || 0) * kv * vs)
-                / 2));
+                (dc.get(Math.floor(Q.px / P.step)) || 0) * kv * vs));
             }
             if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
             g.restore();
@@ -4526,16 +4525,16 @@
               g.moveTo(x, Y((r + 1) * P.step));
               g.lineTo(x, Y(r * P.step));
             });
-            /* D side (half scale, lmK of a column of room): rows
+            /* D side (P's scale, lmK of a column of room): rows
                whose delta or curve passes its left edge */
             const xL = cx0 - lmK * colW,
               dw = (r) => Math.max((dp.get(r) || 0) * vs,
-                (dc.get(r) || 0) * kv * vs) / 2;
+                (dc.get(r) || 0) * kv * vs);
             new Set([...dc.keys(), ...dp.keys()])
               .forEach((r) => {
                 if (cx0 - 2 - dw(r) >= xL) return;
                 const x = Math.max(xL,
-                  cx0 - 2 - ((dc.get(r) || 0) * kv * vs) / 2);
+                  cx0 - 2 - (dc.get(r) || 0) * kv * vs);
                 g.moveTo(x, Y((r + 1) * P.step));
                 g.lineTo(x, Y(r * P.step));
               });
