@@ -4523,6 +4523,19 @@
               g.moveTo(x, Y((r + 1) * P.step));
               g.lineTo(x, Y(r * P.step));
             });
+            /* D side (half scale, lmK of a column of room): rows
+               whose delta or curve passes its left edge */
+            const xL = cx0 - lmK * colW,
+              dw = (r) => Math.max((dp.get(r) || 0) * vs,
+                (dc.get(r) || 0) * kv * vs) / 2;
+            new Set([...dc.keys(), ...dp.keys()])
+              .forEach((r) => {
+                if (cx0 - 2 - dw(r) >= xL) return;
+                const x = Math.max(xL,
+                  cx0 - 2 - ((dc.get(r) || 0) * kv * vs) / 2);
+                g.moveTo(x, Y((r + 1) * P.step));
+                g.lineTo(x, Y(r * P.step));
+              });
             g.stroke();
             g.lineWidth = 1;
           }
