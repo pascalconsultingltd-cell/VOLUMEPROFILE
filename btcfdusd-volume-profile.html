@@ -1808,22 +1808,24 @@
       /* PF box of a day: a tenth of its vol, as its profile
          rows, else 25 */
       /* a day's VP scale: the median busiest-row volume (USDT
-         1m, rows of vol / 10) of the 5 finished days before it.
-         Days before only: final, kept like the vol ("rmeds");
+         1m, rows of the day's vol / 10) of the 5 finished days
+         before it, as row_med() in imports.py writes it into
+         vol.js with the vol (ROWMED, used for today when there);
+         days before only: final, kept like the vol ("rmeds");
          0 until those days are in */
       const rowMeds = new Map();
       function rowMedOf(dS) {
         if (rowMeds.has(dS)) return rowMeds.get(dS);
         const M = usdtM,
+          v = volOfDay(dS),
+          st = Math.max(1, Math.ceil(v / 10)),
           tops = [];
+        if (!(v > 0)) return 0;
         for (let d = dS - 5 * 864e5; d < dS; d += 864e5) {
-          const v = volOfDay(d);
-          if (!(v > 0)) return 0;
           if (!M.length || M[0][0] > d ||
             M[M.length - 1][0] < d + 864e5 - 6e4)
             return loadUsdtM(), 0;
-          const st = Math.max(1, Math.ceil(v / 10)),
-            m = new Map();
+          const m = new Map();
           let i = 0, j = M.length;
           while (i < j) {
             const k = (i + j) >> 1;
@@ -2227,10 +2229,19 @@
         volFile = false;
       function loadVol() {
         const s = document.createElement("script");
-        window.VOL = undefined;
+        window.VOL = window.ROWMED = undefined;
         s.onload = s.onerror = () => {
           s.remove();
-          const v = window.VOL;
+          const v = window.VOL,
+            rm = window.ROWMED,
+            t = dayOf(Date.now());
+          /* Python's VP scale for today wins over the chart's */
+          if (Number.isFinite(rm) && rm > 0 &&
+            rowMeds.get(t) !== rm) {
+            rowMeds.set(t, rm);
+            idb.put("rmeds", [...rowMeds]);
+            schedule();
+          }
           if (Number.isFinite(v) && v > 0) {
             volFile = true;
             if (volN !== Math.round(v)) {
