@@ -4460,12 +4460,16 @@
             shade(-1, dc, (v, r) =>
               Math.min(v * kv, dp.get(r) || 0) * vs,
               vpMiss ? (v, r) => dMiss(v, r) * vs : null);
+            /* grey: delta out of any D Bell (whole bar), and the
+               part of a bar past its D Bell's curve (the extra) */
             dp.forEach((q, r) => {
               const x = xLf(q * vs),
+                xc = dc.has(r) ? xLf((dc.get(r) || 0) * kv * vs)
+                  : cx0 - 2,
                 yT = Y((r + 1) * P.step);
-              if (cx0 - 2 - x >= 0.5 && !dc.has(r))
+              if (xc - x >= 0.5)
                 sb.rect("rgba(67,70,81,.35)",
-                x, yT, cx0 - 2 - x, Y(r * P.step) - yT);
+                x, yT, xc - x, Y(r * P.step) - yT);
             });
             sb.fill();
             /* what a row lacks vs the curve (negative delta),
