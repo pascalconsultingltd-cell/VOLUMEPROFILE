@@ -4512,17 +4512,19 @@
             if (rk.length) rkEnd.set(P.dS, rk[rk.length - 1][2]);
             g.restore();
             g.restore();
-            /* rows cut at the column edge: a small mark there */
-            g.fillStyle = "#e65100";
+            /* rows cut at the column edge: the bell curve red and
+               bolder on them */
+            g.strokeStyle = "#e53935";
+            g.lineWidth = 3;
+            g.beginPath();
             vw.rw.forEach((v, r) => {
               if (v * vs <= colW - 2) return;
-              const y = Y((r + 0.5) * P.step);
-              g.beginPath();
-              g.moveTo(cx0 + colW - 2, y);
-              g.lineTo(cx0 + colW - 7, y - 4);
-              g.lineTo(cx0 + colW - 7, y + 4);
-              g.fill();
+              const x = Math.min(cx0 + colW - 2, cX(r));
+              g.moveTo(x, Y((r + 1) * P.step));
+              g.lineTo(x, Y(r * P.step));
             });
+            g.stroke();
+            g.lineWidth = 1;
           }
           g.restore();
           /*
