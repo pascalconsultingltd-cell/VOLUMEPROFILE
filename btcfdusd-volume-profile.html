@@ -5241,7 +5241,8 @@
             g.beginPath();
             g.rect(x0, top, px0 - x0, bot - top);
             g.clip();
-            g.fillStyle = "rgba(30,90,220,.18)";
+            /* the VP lead wing blue, lighter so candles show */
+            g.fillStyle = "rgba(30,90,220,.55)";
             blueZ.forEach((z) => {
               const xa = xT(z.t0),
                 xb = xT(Math.min(z.t1, NOW()));
