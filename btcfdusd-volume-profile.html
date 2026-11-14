@@ -479,7 +479,7 @@
               ><button
                 id="bzTog"
                 class="a"
-                title="Blue zones (lead wings still empty) on the PF"
+                title="Blue zones (lead wings still empty) on the chart"
               >
                 BZ
               </button></span></span
@@ -5031,28 +5031,12 @@
             });
             g.fillStyle = "#434651";
             g.fill(bp);
-            /* BZ: the blue zones (P and D Bells' lead wings still
-               empty) as light blue bands over their time */
-            if (showBZ) {
-              const xAt = (t) => {
-                let x = null;
-                for (const [t0, xx] of pfX)
-                  if (t0 <= t) x = xx;
-                  else break;
-                return x;
-              };
-              g.fillStyle = "rgba(30,90,220,.22)";
-              blueZ.forEach((z) => {
-                const xa = xAt(z.t0),
-                  xb = xAt(Math.min(z.t1, NOW()));
-                if (xa == null || xb == null) return;
-                g.fillRect(xa, Y(z.hi), Math.max(2, xb - xa + sl / 2),
-                  Y(z.lo) - Y(z.hi));
-              });
-            }
             /* PB: each P Bell of the days shown, from its birth to
-               its death (or now), a fat line on its price close by
-               close; a dot at birth, a tick at death */
+               its death (or now), on its price close by close: a
+               line in its birth's session colour (Asia to US), and
+               beside it green / red: born above / below the latest
+               P Bell alive then (else the latest before); a dot at
+               birth, a tick at death */
             if (showPB) {
               const xAt = (t) => {
                   let x = null;
@@ -5061,29 +5045,46 @@
                     else break;
                   return x;
                 },
-                cols = ["#6a1b9a", "#ef6c00", "#00838f", "#ad1457",
-                  "#2e7d32", "#4527a0"];
+                /* a bell's price at time t (its path) */
+                pAt = (b, t) => {
+                  let v = b.px;
+                  for (const [tt, px] of b.path)
+                    if (tt <= t) v = px;
+                  return v;
+                };
               g.save();
-              g.globalAlpha = 0.6;
+              g.globalAlpha = 0.75;
               g.lineCap = "butt";
-              let k = 0;
-              const pbs = [...bellDays.values()].flatMap((o) => o.bs);
+              const pbs = [...bellDays.values()].flatMap((o) => o.bs)
+                .filter((b) => b.kind === "P" && b.path)
+                .sort((a, b) => a.birth - b.birth);
               pbs.forEach((b) => {
-                if (b.kind !== "P" || !b.path) return;
                 const pts = b.path.concat([[b.death || NOW(),
                     b.path[b.path.length - 1][1]]]),
-                  col = cols[k++ % cols.length];
+                  pre = pbs.filter((o) => o.birth < b.birth),
+                  alive = pre.filter((o) => !o.death ||
+                    o.death >= b.birth),
+                  ref = (alive.length ? alive : pre).pop(),
+                  mv = ref ? Math.sign(b.px - pAt(ref, b.birth)) : 0,
+                  col = tpoColor(Math.floor(((b.birth - 1) % 864e5) /
+                    TPO_MS));
+                const seg = (dy, w, c) => {
+                  g.strokeStyle = c;
+                  g.lineWidth = w;
+                  g.beginPath();
+                  for (let i = 0; i + 1 < pts.length; i++) {
+                    const xa = xAt(pts[i][0]),
+                      xb = xAt(pts[i + 1][0]);
+                    if (xa == null || xb == null) continue;
+                    g.moveTo(xa, Y(pts[i][1]) + dy);
+                    g.lineTo(xb, Y(pts[i][1]) + dy);
+                  }
+                  g.stroke();
+                };
+                seg(-2.5, 4, col);
+                seg(2.5, 3, mv > 0 ? "#089981" : mv < 0 ? "#e53935"
+                  : "#8a94a3");
                 g.strokeStyle = g.fillStyle = col;
-                g.lineWidth = 5;
-                g.beginPath();
-                for (let i = 0; i + 1 < pts.length; i++) {
-                  const xa = xAt(pts[i][0]),
-                    xb = xAt(pts[i + 1][0]);
-                  if (xa == null || xb == null) continue;
-                  g.moveTo(xa, Y(pts[i][1]));
-                  g.lineTo(xb, Y(pts[i][1]));
-                }
-                g.stroke();
                 const x0 = xAt(pts[0][0]),
                   xe = b.death ? xAt(b.death) : null;
                 if (x0 != null) {
@@ -5284,6 +5285,29 @@
 
           }
 
+          /* BZ: the bells' blue zones (P and D Bells' lead wings
+             still empty) as light blue bands on the main chart,
+             from the bell's birth to its day's end (or now) */
+          if (cfg.main && showBZ && !side && geo.length) {
+            const iv = geo.length > 1 ? geo[1].c.t - geo[0].c.t : 3e5,
+              xT = (t) => {
+                const o = geoAt(t);
+                return o ? o.x + o.w * Math.min(1, (t - o.c.t) / iv)
+                  : x0;
+              };
+            g.save();
+            g.beginPath();
+            g.rect(x0, top, px0 - x0, bot - top);
+            g.clip();
+            g.fillStyle = "rgba(30,90,220,.18)";
+            blueZ.forEach((z) => {
+              const xa = xT(z.t0),
+                xb = xT(Math.min(z.t1, NOW()));
+              if (xb > xa)
+                g.fillRect(xa, Y(z.hi), xb - xa, Y(z.lo) - Y(z.hi));
+            });
+            g.restore();
+          }
           /* candles */
 
           /* big candles: their circles, and HA shows only them */
