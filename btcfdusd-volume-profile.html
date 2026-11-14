@@ -559,6 +559,8 @@
       const SYM = "BTCFDUSD",
         IV = "5m",
         TPO_MS = 1800000,
+        /* the bells' check: each 5m close (volume kept per 5m) */
+        PV_MS = 300000,
         DP = 0;
       /*
        * TPO letter colours by UTC hour: Asia (red) →
@@ -655,7 +657,7 @@
       /* first brick of the sub POC search: SUB_K x the vol
          step, whatever the view, so every device agrees */
       const SUB_K = 5;
-      /* a day's USDT volume per 30m period and row of st (on
+      /* a day's USDT volume per 5m period and row of st (on
          FDUSD prices, split by overlap); null until loaded */
       const pvCur = new Map();
       function perVol(dS, st) {
@@ -665,7 +667,7 @@
         let v = pvCur.get(dS);
         if (!v || v.st !== st || v.n > u.n) {
           const r = rowsK.get(dS);
-          v = r && r.p.st === st && r.p.n <= u.n
+          v = r && r.p.st === st && r.p.n <= u.n && r.p.u === PV_MS
             ? { st, n: r.p.n, p: r.p.p.map((m) => m && new Map(m)) }
             : { st, n: 0, p: [] };
           pvCur.set(dS, v);
@@ -673,7 +675,7 @@
         for (const a = d.k; v.n < u.n; v.n++) {
           const e = u.rt[v.n],
             [t, h, l, , q] = a[v.n],
-            i = Math.floor((t - dS) / TPO_MS);
+            i = Math.floor((t - dS) / PV_MS);
           if (e == null) continue;
           const m = v.p[i] || (v.p[i] = new Map());
           spread(l * e, h * e, st, (r, k) =>
@@ -684,15 +686,16 @@
         return v;
       }
       /* P's by the shrinking brick on the USDT volume of the
-         periods ps (live: the forming one so far); TPO counts
-         while it loads, or if tpo. .vol: on volume */
+         periods ps (live: the forming one so far; q.u its
+         length, 30m if unset); TPO counts while it loads, or
+         if tpo. .vol: on volume */
       function subPocs(dS, ps, vol, fine, tpo) {
         if (!ps.length) return [];
         const z = ps[ps.length - 1],
-          te = Math.min(dS + (z.i + 1) * TPO_MS, NOW()),
+          te = Math.min(dS + (z.i + 1) * (z.u || TPO_MS), NOW()),
           pv = tpo ? null : perVol(dS, fine),
           vo = pv && (pv.end || pv.last >= te - 12e4) ? pv : null,
-          key = [dS, ps.length, z.h, z.l, vol, fine, vo && vo.n];
+          key = [dS, ps.length, z.h, z.l, z.u, vol, fine, vo && vo.n];
         if (subCache.has(key.join())) return subCache.get(key.join());
         let lo = Infinity,
           hi = -Infinity;
@@ -704,12 +707,16 @@
         const pocs = pocsBy(lo, hi, vol, fine, (s) => {
           const c = [];
           ps.forEach((q) => {
-            if (vo)
+            if (vo) {
+              const n = (q.u || TPO_MS) / PV_MS;
               /* split by overlap: whole rows alias */
-              return (vo.p[q.i] || []).forEach((x, r) =>
-                spread(r * fine - lo, (r + 1) * fine - lo, s,
-                  (j, k) => (c[Math.max(0, j)] =
-                    (c[Math.max(0, j)] || 0) + x * k)));
+              for (let i = q.i * n; i < (q.i + 1) * n; i++)
+                (vo.p[i] || []).forEach((x, r) =>
+                  spread(r * fine - lo, (r + 1) * fine - lo, s,
+                    (j, k) => (c[Math.max(0, j)] =
+                      (c[Math.max(0, j)] || 0) + x * k)));
+              return;
+            }
             const a = Math.floor((q.l - lo) / s),
               b = Math.floor((q.h - lo) / s);
             for (let r = a; r <= b; r++) c[r] = (c[r] || 0) + 1;
@@ -1124,7 +1131,8 @@
             d.end = d.kept = d.k[d.k.length - 1][0] >= dE - 1000;
             const r = d.end && (await idb.get("r|" + dS)),
               x = d.end && (await idb.get("x|" + dS));
-            if (r) rowsK.set(dS, r);
+            /* rows kept before the 5m volume: redone */
+            if (r && r.p.u === PV_MS) rowsK.set(dS, r);
             if (x) xK.set(dS, x);
           }
           for (let n = 0; n < 120 && !d.end; n++) {
@@ -1232,7 +1240,7 @@
           r = {
             u: { ...sc, px: nn(px), rt: nn(rt), rows: [...rows],
               dl: [...dl] },
-            p: { st: p.st, n: p.n,
+            p: { st: p.st, n: p.n, u: PV_MS,
               p: Array.from(p.p, (m) => m && [...m]) },
             w: { st: w.st, n: w.n, m: [...w.m] },
           };
@@ -4150,8 +4158,9 @@
             vw.dc = [ck, out];
             return out;
           };
-          /* BS: the day's bells as they first show at each 30m
-             close: P's of the closed periods, D's of their volume
+          /* BS: the day's bells as they first show at each 5m
+             close (FDUSD trades' 5m high / low, the USDT volume
+             of those 5m): P's of the closed periods, D's of their volume
              above those P's curves. One within vol of a P (D) of
              the close before follows it (last = where it is
              now), else a new bell born at that close; a D within
@@ -4160,13 +4169,25 @@
              seconds all in first; the state (n closes, W rows,
              bells, the last close's P's / D's as bell indexes)
              kept in the browser ("b|day") with its vol, step, kv */
-          const dayBells = (P, vw, kv, vf) => {
-            const key = [vf, P.step, kv, 3].join(),
+          const dayBells = (P, kv, vf) => {
+            const key = [vf, P.step, kv, 4].join(),
               u = usdtOf(P.dS),
               zt = u && u.n ? usdtK.get(P.dS).k[u.n - 1][0] : -1,
-              cl = P.ps.filter((q) =>
-                P.dS + (q.i + 1) * TPO_MS <= Math.min(NOW(),
-                  zt + 1000));
+              f = aggrT.get(P.dS),
+              /* the day's 5m periods from its FDUSD trades, so far */
+              h5 = f && (f.h5 && f.h5.n <= f.tr.length ? f.h5
+                : (f.h5 = { n: 0, m: new Map() }));
+            if (!h5) return;
+            for (; h5.n < f.tr.length; h5.n++) {
+              const [t, px] = f.tr[h5.n],
+                i = Math.floor((t - P.dS) / PV_MS),
+                q = h5.m.get(i);
+              if (!q) h5.m.set(i, { i, h: px, l: px, u: PV_MS });
+              else (q.h = Math.max(q.h, px)), (q.l = Math.min(q.l, px));
+            }
+            const cl = [...h5.m.values()].filter((q) =>
+                P.dS + (q.i + 1) * PV_MS <= Math.min(NOW(),
+                  zt + 1000)).sort((a, b) => a.i - b.i);
             let o = bellDays.get(P.dS);
             if (!o || o.key !== key) {
               /* (replay: no stored state, replayed at once) */
@@ -4189,20 +4210,14 @@
             }
             if (o.look || o.n >= cl.length) return;
             const st = P.step,
-              byI = new Map(),
               out = o.bs;
-            vw.forEach((v, k) => {
-              const [r, i] = k.split("|").map(Number);
-              if (!byI.has(i)) byI.set(i, []);
-              byI.get(i).push([r, v]);
-            });
             let prev = o.prev || { P: [], D: [] };
             for (let n = o.n; n < cl.length; n++) {
               const q = cl[n],
-                tc = P.dS + (q.i + 1) * TPO_MS,
+                tc = P.dS + (q.i + 1) * PV_MS,
                 cp = subPocs(P.dS, cl.slice(0, n + 1), vf, st);
               if (!cp.vol) break;
-              (byI.get(q.i) || []).forEach(([r, v]) =>
+              (perVol(P.dS, st).p[q.i] || []).forEach((v, r) =>
                 o.W.set(r, (o.W.get(r) || 0) + v));
               const d = dPs(o.W, expOf(P, cp, vf), kv, vf, st),
                 cur = { P: cp.map((S) => S.px),
@@ -4347,7 +4362,7 @@
             const vf = volFor(P.dS) > 0 ? volFor(P.dS) : P.step * 10;
             const sp = byAge(P, subPocs(P.dS, P.ps, vf, P.step));
             /* BS: this day's bells, then every bell's score */
-            dayBells(P, vw, kvFor(P.dS, "BTCUSDT"), vf);
+            dayBells(P, kvFor(P.dS, "BTCUSDT"), vf);
             keepRows(P.dS);
             scores = bellScores();
             /* VP alert: the live price out of today's bells, past
