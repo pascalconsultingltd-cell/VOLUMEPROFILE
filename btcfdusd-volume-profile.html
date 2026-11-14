@@ -479,7 +479,7 @@
               ><button
                 id="bzTog"
                 class="a"
-                title="Blue zones (lead wings still empty) on the chart"
+                title="Blue zones (empty lead wings) on the chart"
               >
                 BZ
               </button></span></span
@@ -4161,7 +4161,7 @@
              bells, the last close's P's / D's as bell indexes)
              kept in the browser ("b|day") with its vol, step, kv */
           const dayBells = (P, vw, kv, vf) => {
-            const key = [vf, P.step, kv, 2].join(),
+            const key = [vf, P.step, kv, 3].join(),
               u = usdtOf(P.dS),
               zt = u && u.n ? usdtK.get(P.dS).k[u.n - 1][0] : -1,
               cl = P.ps.filter((q) =>
@@ -4218,11 +4218,25 @@
                     Math.abs(a[0] - px) ? z : a)[1];
                   b.last = px;
                   b.path.push([tc, px]);
-                } else out.push(b = { px, last: px, kind, birth: tc,
-                  sigma: vf / 1.2816, path: [[tc, px]], death: null,
-                  child: kind === "D" && cur.P.concat(out.filter(
-                    (z) => z.kind === "P").map((z) => z.last))
-                    .some((x) => Math.abs(x - px) < vf) });
+                } else {
+                  /* a same-day bell of its kind, dead, within vol:
+                     reborn (its birth kept; its path stops at the
+                     death, "x", and goes on here), else new */
+                  const dead = out.filter((z) => z.kind === kind &&
+                    z.death != null && Math.abs(z.last - px) < vf &&
+                    !now[kind].some((w) => w[1] === z));
+                  if (dead.length) {
+                    b = dead.reduce((a, z) => Math.abs(z.last - px) <
+                      Math.abs(a.last - px) ? z : a);
+                    b.path.push([b.death, b.last, "x"], [tc, px]);
+                    b.death = null;
+                    b.last = px;
+                  } else out.push(b = { px, last: px, kind, birth: tc,
+                    sigma: vf / 1.2816, path: [[tc, px]], death: null,
+                    child: kind === "D" && cur.P.concat(out.filter(
+                      (z) => z.kind === "P").map((z) => z.last))
+                      .some((x) => Math.abs(x - px) < vf) });
+                }
                 now[kind].push([px, b]);
               }));
               /* a bell of the close before not followed: dead here */
@@ -5075,7 +5089,9 @@
                   for (let i = 0; i + 1 < pts.length; i++) {
                     const xa = xAt(pts[i][0]),
                       xb = xAt(pts[i + 1][0]);
-                    if (xa == null || xb == null) continue;
+                    /* "x": dead from there till its rebirth */
+                    if (xa == null || xb == null || pts[i][2] === "x")
+                      continue;
                     g.moveTo(xa, Y(pts[i][1]) + dy);
                     g.lineTo(xb, Y(pts[i][1]) + dy);
                   }
