@@ -2086,6 +2086,19 @@
         const now = Date.now();
         if (now - alT < 1000) return;
         alT = now;
+        /* line alerts (right click on a horizontal line): once,
+           when the price reaches the line from the side it was
+           on when armed (al: 1 above, -1 below) */
+        const lp = mid != null ? mid : k5.length ? k5[k5.length - 1].c
+          : null;
+        if (!RPL && lp != null)
+          lines.forEach((l) => {
+            if (l.k !== "h" || !l.al || (lp - l.p) * l.al > 0) return;
+            notify("Line " + (l.al < 0 ? "▲ over " : "▼ under ") +
+              l.p.toFixed(0), l.al < 0);
+            delete l.al;
+            schedule();
+          });
         Object.keys(alerts).forEach((k) => {
           const [w, dir] = k.split("|"),
             a = alerts[k],
@@ -5808,6 +5821,12 @@
                 g.stroke();
                 g.globalAlpha = 1;
                 ptag(y, l.p.toFixed(DP), col);
+                /* armed: a bell at its left end */
+                if (l.al) {
+                  g.font = "13px sans-serif";
+                  g.textBaseline = "bottom";
+                  g.fillText("\u{1F514}", 8, y - 3);
+                }
               }
             } else if (l.k === "v") {
               /* a time has no side: black */
@@ -6997,6 +7016,21 @@
           }
           draw();
         }
+        /* right click on a horizontal line: an alert once when the
+           price crosses it (again: off). Kept with the drawings
+           (Ctrl+S) */
+        cv.addEventListener("contextmenu", (e) => {
+          const r = cv.getBoundingClientRect(),
+            l = hit(e.clientX - r.left, e.clientY - r.top);
+          if (!l || l.k !== "h") return;
+          e.preventDefault();
+          const lp = mid != null ? mid : src()[src().length - 1].c;
+          if (l.al) delete l.al;
+          else l.al = lp >= l.p ? 1 : -1;
+          toast(l.al ? "Alert once when the price crosses " +
+            l.p.toFixed(0) : "Alert off on " + l.p.toFixed(0));
+          draw();
+        });
         cv.addEventListener("pointerdown", (e) => {
           if (e.isPrimary) pts.clear();
           pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
