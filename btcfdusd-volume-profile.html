@@ -5046,11 +5046,10 @@
             g.fillStyle = "#434651";
             g.fill(bp);
             /* PB: each P Bell of the days shown, from its birth to
-               its death (or now), on its price close by close: a
-               line in its birth's session colour (Asia to US), and
-               beside it green / red: born above / below the latest
-               P Bell alive then (else the latest before); a dot at
-               birth, a tick at death */
+               its death (or now), on its price close by close:
+               green / red, born above / below the
+               latest P Bell alive then (else the latest before),
+               grey with none; a dot at birth, a tick at death */
             if (showPB) {
               const xAt = (t) => {
                   let x = null;
@@ -5080,8 +5079,8 @@
                     o.death >= b.birth),
                   ref = (alive.length ? alive : pre).pop(),
                   mv = ref ? Math.sign(b.px - pAt(ref, b.birth)) : 0,
-                  col = tpoColor(Math.floor(((b.birth - 1) % 864e5) /
-                    TPO_MS));
+                  col = mv > 0 ? "#089981" : mv < 0 ? "#e53935"
+                    : "#8a94a3";
                 const seg = (dy, w, c) => {
                   g.strokeStyle = c;
                   g.lineWidth = w;
@@ -5097,9 +5096,7 @@
                   }
                   g.stroke();
                 };
-                seg(-2.5, 4, col);
-                seg(2.5, 3, mv > 0 ? "#089981" : mv < 0 ? "#e53935"
-                  : "#8a94a3");
+                seg(0, 5, col);
                 g.strokeStyle = g.fillStyle = col;
                 const x0 = xAt(pts[0][0]),
                   xe = b.death ? xAt(b.death) : null;
