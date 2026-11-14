@@ -2111,7 +2111,8 @@
           alSave();
           if (seen) return;
           const mk = e.dir ? " ● " : e.up ? " ▲ " : " ▼ ";
-          notify(alName[w] + mk + e.txt, e.up);
+          /* e.name: its own name (PF channel: "Channel") */
+          notify((e.name || alName[w]) + mk + e.txt, e.up);
         });
       }
       /* a tab behind other windows slows its timers to once a
@@ -5206,10 +5207,10 @@
                   q = items[k - 1];
                 if (!b || !a) continue;
                 if (c.ph > b[0] && q.ph <= a[0])
-                  ev.push({ id: "icu" + c.t0, up: true,
+                  ev.push({ id: "icu" + c.t0, up: true, name: "Channel",
                     txt: "over " + b[0].toFixed(0) });
                 if (c.pl < b[1] && q.pl >= a[1])
-                  ev.push({ id: "icd" + c.t0, up: false,
+                  ev.push({ id: "icd" + c.t0, up: false, name: "Channel",
                     txt: "under " + b[1].toFixed(0) });
               }
               /* V95: a new box in the last 4 columns, any side;
