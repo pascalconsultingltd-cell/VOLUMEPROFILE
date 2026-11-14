@@ -1923,8 +1923,9 @@
        * Saved per device. alerts["w|dir"] = { ctx, ids }:
        * the bars already rung or there when armed, ctx =
        * what they were computed on (a new ctx resets them,
-       * no alert); .rec: [text, time] rung lately. The same
-       * text (window, side, level) within 15 min: no ring.
+       * no alert); .rec: [key, time] rung lately. The same
+       * key (e.key, else its text: window, side, level)
+       * within 15 min: no ring.
        */
       const ALK = "btcfdusd-alerts",
         alName = {
@@ -2097,8 +2098,9 @@
           /* stays armed; this bar is done */
           a.ids = a.ids.concat(e.id).slice(-50);
           const rec = (a.rec || []).filter((x) => x[1] > now - 9e5),
-            seen = rec.some((x) => x[0] === e.txt);
-          a.rec = seen ? rec : rec.concat([[e.txt, now]]);
+            kx = e.key || e.txt,
+            seen = rec.some((x) => x[0] === kx);
+          a.rec = seen ? rec : rec.concat([[kx, now]]);
           alSave();
           if (seen) return;
           const mk = e.dir ? " ● " : e.up ? " ▲ " : " ▼ ";
@@ -4373,7 +4375,7 @@
             /* VP alert: the live price out of today's bells, past
                the lowest P - 1.96 sigma / highest P + 1.96 sigma
                (sigma = vol / 1.2816, the curves'); once per side
-               and outermost P */
+               and outermost P; key: muted by side, not by price */
             if (!RPL && P.dS === dayOf(Date.now()) && k15.length &&
               sp.length) {
               const c = k15[k15.length - 1].c,
@@ -4383,10 +4385,10 @@
                 ev = [];
               if (c > hiP + z)
                 ev.push({ id: "s" + P.dS + "|u|" + hiP.toFixed(0),
-                  up: true, txt: "above +1.96σ " + c.toFixed(0) });
+                  up: true, key: "u", txt: "above +1.96σ " + c.toFixed(0) });
               if (c < loP - z)
                 ev.push({ id: "s" + P.dS + "|d|" + loP.toFixed(0),
-                  up: false, txt: "below -1.96σ " + c.toFixed(0) });
+                  up: false, key: "d", txt: "below -1.96σ " + c.toFixed(0) });
               /* BS: a bell of the last day whose grid ended under
                  0.25 sigma (red / pale red dot), dir "bs" */
               scores.forEach((q) => {
