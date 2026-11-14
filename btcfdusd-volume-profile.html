@@ -5167,22 +5167,32 @@
             const bd = pfBd.bd;
             /* alerts: a column (of the last 2) whose high first
                goes over the channel's upper line, or low under
-               the lower one, edges as at its start */
+               the lower one, edges as at its start; not again
+               over / under the same line within 15 min */
             if (k1 === items.length) {
-              const ev = [];
-              for (let k = Math.max(1, k1 - 2); k < k1; k++) {
-                const b = bd[k],
-                  a = bd[k - 1],
-                  c = items[k],
-                  q = items[k - 1];
-                if (!b || !a) continue;
-                if (c.ph > b[0] && q.ph <= a[0])
-                  ev.push({ id: "icu" + c.t0, up: true,
-                    txt: "over " + b[0].toFixed(0) });
-                if (c.pl < b[1] && q.pl >= a[1])
-                  ev.push({ id: "icd" + c.t0, up: false,
-                    txt: "under " + b[1].toFixed(0) });
-              }
+              const ev = [],
+                /* column k crossing: its line (j 0 over, 1 under) */
+                xg = (k, j) => {
+                  const b = bd[k], a = bd[k - 1];
+                  if (!b || !a) return null;
+                  const c = items[k], q = items[k - 1];
+                  return (j ? c.pl < b[1] && q.pl >= a[1]
+                    : c.ph > b[0] && q.ph <= a[0]) ? b[j] : null;
+                },
+                rep = (k, j, v) => {
+                  for (let i = k - 1; i > 0 &&
+                    items[i].t0 > items[k].t0 - 9e5; i--)
+                    if (xg(i, j) === v) return true;
+                  return false;
+                };
+              for (let k = Math.max(1, k1 - 2); k < k1; k++)
+                [0, 1].forEach((j) => {
+                  const v = xg(k, j);
+                  if (v != null && !rep(k, j, v))
+                    ev.push({ id: (j ? "icd" : "icu") + items[k].t0,
+                      up: !j, txt: (j ? "under " : "over ") +
+                        v.toFixed(0) });
+                });
               /* V95: a new box in the last 4 columns, any side;
                  once per minute and side (its id: the box's minute,
                  not its column, which is rebuilt while it forms) */
