@@ -1942,6 +1942,13 @@
       try {
         alerts = JSON.parse(localStorage.getItem(ALK)) || {};
       } catch (e) {}
+      /* VP +/-1.96 sigma: the side rung, till the price comes
+         back 1/3 vol: { u / d: { id, x extreme, txt } } */
+      const VPA = "btcfdusd-vparm";
+      let vpArm = {};
+      try {
+        vpArm = JSON.parse(localStorage.getItem(VPA)) || {};
+      } catch (e) {}
       /* drop alerts of windows gone (FB) */
       Object.keys(alerts).forEach((k) =>
         (alName[k.split("|")[0]] && k !== "pf|calm") ||
@@ -4374,21 +4381,36 @@
             scores = bellScores();
             /* VP alert: the live price out of today's bells, past
                the lowest P - 1.96 sigma / highest P + 1.96 sigma
-               (sigma = vol / 1.2816, the curves'); once per side
-               and outermost P; key: muted by side, not by price */
+               (sigma = vol / 1.2816, the curves'). Once per side
+               until the price comes back a third of a vol from its
+               extreme since (vpArm, kept per device: a reload
+               does not ring again) */
             if (!RPL && P.dS === dayOf(Date.now()) && k15.length &&
               sp.length) {
               const c = k15[k15.length - 1].c,
                 z = (1.96 * vf) / 1.2816,
                 hiP = Math.max(...sp.map((S) => S.px)),
                 loP = Math.min(...sp.map((S) => S.px)),
-                ev = [];
-              if (c > hiP + z)
-                ev.push({ id: "s" + P.dS + "|u|" + hiP.toFixed(0),
-                  up: true, key: "u", txt: "above +1.96σ " + c.toFixed(0) });
-              if (c < loP - z)
-                ev.push({ id: "s" + P.dS + "|d|" + loP.toFixed(0),
-                  up: false, key: "d", txt: "below -1.96σ " + c.toFixed(0) });
+                ev = [],
+                arm = (sd, out, dn) => {
+                  const m = vpArm[sd];
+                  if (m) {
+                    m.x = dn ? Math.min(m.x, c) : Math.max(m.x, c);
+                    if (dn ? c >= m.x + vf / 3 : c <= m.x - vf / 3)
+                      delete vpArm[sd];
+                  }
+                  if (out && !vpArm[sd])
+                    vpArm[sd] = { id: "s" + Date.now() + sd, x: c,
+                      txt: (dn ? "below -1.96σ " : "above +1.96σ ") +
+                        c.toFixed(0) };
+                  if (vpArm[sd]) ev.push({ id: vpArm[sd].id, up: !dn,
+                    txt: vpArm[sd].txt });
+                };
+              arm("u", c > hiP + z, false);
+              arm("d", c < loP - z, true);
+              try {
+                localStorage.setItem(VPA, JSON.stringify(vpArm));
+              } catch (e) {}
               /* BS: a bell of the last day whose grid ended under
                  0.25 sigma (red / pale red dot), dir "bs" */
               scores.forEach((q) => {
