@@ -532,7 +532,7 @@
                   <button
                     id="szTog"
                     class="a"
-                    title="Sub-zigzags: each depth half the ZFB height (click: off, 1, 2, 3)"
+                    title="Sub-zigzags on the last ZFB leg and the open one: each depth half the height (click: off, 1 to 5)"
                   >
                     SZ2
                   </button></span
@@ -2180,7 +2180,7 @@
       /* SZ: sub-zigzag depth, 0 = off; depth d turns at the ZFB height / 2^d */
       let szDepth = 2;
       function setSzDepth(v) {
-        szDepth = Math.max(0, Math.min(3, v | 0));
+        szDepth = Math.max(0, Math.min(5, v | 0));
         $("szTog").className = szDepth ? "a" : "";
         $("szTog").textContent = szDepth ? "SZ" + szDepth : "SZ";
         schedule();
@@ -5688,14 +5688,16 @@
             g.beginPath();
             g.rect(x0, top, x1 - x0, bot - top);
             g.clip();
-            /* sub-zigzags, deepest first and palest, under the ZFB */
+            /* sub-zigzags, deepest first and palest, under the ZFB:
+               only from the last finished leg's start on */
+            const t0 = nP > 2 ? piv[nP - 3].c.t : -Infinity;
             for (let d = szDepth; d >= 1; d--) {
-              const sp = subPiv(arr, d), al = 0.75 - 0.15 * d;
-              g.lineWidth = 1;
+              const sp = subPiv(arr, d), al = 0.85 - 0.12 * d;
+              g.lineWidth = 1.5;
               sp.forEach((z, i) => {
                 if (!i) return;
                 const a = sp[i - 1], xa = xOf(a), xb = xOf(z);
-                if (xb < x0 || xa > px0 || a.c.t < warm) return;
+                if (a.c.t < t0 || xb < x0 || xa > px0 || a.c.t < warm) return;
                 g.strokeStyle = z.low
                   ? "rgba(230,159,0," + al + ")"
                   : "rgba(41,98,255," + al + ")";
@@ -8158,7 +8160,7 @@
       $("missTog").onclick = () => setVpMiss(!vpMiss);
       $("pbTog").onclick = () => setShowPB(!showPB);
       $("bzTog").onclick = () => setShowBZ(!showBZ);
-      $("szTog").onclick = () => setSzDepth((szDepth + 1) % 4);
+      $("szTog").onclick = () => setSzDepth((szDepth + 1) % 6);
       /* replay at RT: the data cut there (USDT seconds and FDUSD
          trades before it, the 15m candle at RT rebuilt from its
          trades) and the caches, swapped in while the main chart
