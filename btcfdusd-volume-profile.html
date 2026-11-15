@@ -532,7 +532,7 @@
                   <button
                     id="szTog"
                     class="a"
-                    title="Sub-zigzags on the last ZFB leg and the open one: each depth half the height (click: off, 1 to 5)"
+                    title="Sub-zigzag on the last ZFB leg and the open one, at one depth: height / 2^depth (click: off, 1 to 5)"
                   >
                     SZ2
                   </button></span
@@ -5688,11 +5688,11 @@
             g.beginPath();
             g.rect(x0, top, x1 - x0, bot - top);
             g.clip();
-            /* sub-zigzags, deepest first and palest, under the ZFB:
-               only from the last finished leg's start on */
+            /* the chosen sub-zigzag depth only, under the ZFB:
+               from the last finished leg's start on */
             const t0 = nP > 2 ? piv[nP - 3].c.t : -Infinity;
-            for (let d = szDepth; d >= 1; d--) {
-              const sp = subPiv(arr, d), al = 0.85 - 0.12 * d;
+            for (let d = szDepth; d >= 1 && d === szDepth; d--) {
+              const sp = subPiv(arr, d), al = 0.75;
               g.lineWidth = 1.5;
               sp.forEach((z, i) => {
                 if (!i) return;
