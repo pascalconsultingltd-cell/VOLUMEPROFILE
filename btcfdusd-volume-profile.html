@@ -7740,8 +7740,8 @@
          * leg B->C and the retrace C->M, each split where it first touches
          * M (the mid); on each side the max drawdown against the leg (as if
          * short on a zag, long on a zig), on BTCUSDT 1s (prices to FDUSD by
-         * the previous 5m's ratio): its high on the side over M (a sell),
-         * its low on the side under it (a buy).
+         * the previous 5m's ratio): its middle on the side over M (a sell),
+         * on the side under it (a buy).
          * Returns [{ g: "f" | "o" | "r", hi, lo }], or null.
          */
         let sscC = null;
@@ -7780,15 +7780,16 @@
               }
               if (m < 0 || (up ? r[1] > S[m][1] : r[2] < S[m][2])) m = i;
             }
-            return h < 0 ? {} : { hi: { t: S[h][0], p: fd(S[h][0], S[h][1]), low: false }, lo: { t: S[l][0], p: fd(S[l][0], S[l][2]), low: true } };
+            /* the swing's middle, from its end on */
+            return h < 0 ? null : { t: S[Math.max(h, l)][0], p: (fd(S[h][0], S[h][1]) + fd(S[l][0], S[l][2])) / 2 };
           };
-          /* one leg from S[i0] (a low when up), split where it first touches M: the high of the max
-             drawdown on the side over M (a sell), the low of the one on the side under it (a buy) */
+          /* one leg from S[i0] (a low when up), split where it first touches M: the middle of the max
+             drawdown on the side over M (a sell), of the one on the side under it (a buy) */
           const leg = (i0, i1, up, p0) => {
             let im = i1 + 1;
             for (let i = i0; i <= i1; i++) if (fd(S[i][0], S[i][2]) <= last && fd(S[i][0], S[i][1]) >= last) { im = i; break; }
             const [ov, un] = p0 > last ? [mdd(i0, im - 1, up), mdd(im, i1, up)] : [mdd(im, i1, up), mdd(i0, im - 1, up)];
-            return { hi: ov.hi && ov.hi.p > last ? ov.hi : null, lo: un.lo && un.lo.p < last ? un.lo : null };
+            return { hi: ov && ov.p > last ? ov : null, lo: un && un.p < last ? { ...un, low: true } : null };
           };
           const ia = ex(A), ib = ex(B), ic = ex(C);
           if (ia < 0 || ib < 0 || ic < 0) return null;
