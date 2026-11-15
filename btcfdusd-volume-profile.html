@@ -535,6 +535,13 @@
                     title="Sub-zigzags on 1s data in the last ZFB leg (buy levels) and the open one (sell levels), 1 to 5 levels each (click: up, right click: down)"
                   >
                     SZ3
+                  </button>
+                  <button
+                    id="sscTog"
+                    class="a"
+                    title="Simple scalp (being designed): each leg's (fixed, open, retrace) greatest swing high over the mid (sell) and swing low under it (buy)"
+                  >
+                    SSC
                   </button></span
                 ></span
               ></span
@@ -2185,6 +2192,13 @@
         $("szTog").textContent = szDepth ? "SZ" + szDepth : "SZ";
         schedule();
       }
+      /* SSC: the simple scalp's levels drawn (see sscTree) */
+      let showSsc = true;
+      function setShowSsc(v) {
+        showSsc = !!v;
+        $("sscTog").className = showSsc ? "a" : "";
+        schedule();
+      }
       /* PB: P Bells' births and deaths drawn on the PF */
       let showPB = true;
       function setShowPB(v) {
@@ -3195,10 +3209,8 @@
         }
         /* phone: opens (and resets) on the chart full screen */
         /* (phone split: the VP pane always on the profiles) */
-        const fs0 = cfg.vp ? "tpo" : cfg.main &&
-          matchMedia("(pointer: coarse)").matches &&
-          Math.min(screen.width, screen.height) < 600
-          ? "main" : null;
+        /* main opens full screen while SSC is being designed */
+        const fs0 = cfg.vp ? "tpo" : cfg.main ? "main" : null;
         if (fs0) setFull(fs0);
         function size() {
           const r = cv.getBoundingClientRect(),
@@ -5717,6 +5729,16 @@
                 g.beginPath(); g.moveTo(xS(n.t), Y(n.p)); g.lineTo(px0, Y(n.p)); g.stroke();
               });
             });
+            /* SSC: each leg's greatest swings, a line to the right edge */
+            const ss = showSsc && !RPL && sscTree(piv);
+            g.lineWidth = 1;
+            g.setLineDash([8, 3]);
+            const ssl = ss ? ss.flatMap(({ g: n, hi, lo }) => [hi && { ...hi, n: n + "S" }, lo && { ...lo, n: n + "B" }]).filter(Boolean) : [];
+            ssl.forEach((z) => {
+              g.strokeStyle = z.low ? "rgb(0,121,107)" : "rgb(198,40,40)";
+              g.beginPath(); g.moveTo(xS(z.t), Y(z.p)); g.lineTo(px0, Y(z.p)); g.stroke();
+            });
+            g.lineWidth = 2;
             piv.forEach((z, i) => {
               if (!i) return;
               const a = piv[i - 1],
@@ -5746,6 +5768,8 @@
             if (sz) sz.forEach(({ nodes }, j) => nodes.forEach((n, m) => ptag(Y(n.p),
               (j ? "S" : "B") + (m + 1) + " " + n.p.toFixed(0), j ? "rgb(239,83,80)" : "rgb(38,166,154)")));
             if (sz) sz[1].s0.forEach((n) => ptag(Y(n.p), "S0 " + n.p.toFixed(0), "rgb(239,83,80)"));
+            /* SSC: fS / fB (fixed leg), oS / oB (open leg), rS / rB (retrace) */
+            ssl.forEach((z) => ptag(Y(z.p), z.n + " " + z.p.toFixed(0), z.low ? "rgb(0,121,107)" : "rgb(198,40,40)"));
           };
           zLegs = [];
           /* zOk: see the top; the first 3 x BIG_WIN candles warm up
@@ -7710,6 +7734,73 @@
           szC = { key, out: [zi, za] };
           return szC.out;
         }
+
+        /*
+         * SSC (simple scalp, being designed): the fixed leg A->B, the open
+         * leg B->C and the retrace C->M, each split where it first touches
+         * M (the mid): the greatest swing high on the side over M (a sell),
+         * the greatest swing low on the side under it (a buy). Swings: a zigzag of BTCUSDT 1s closes turning by
+         * vol/32 (prices to FDUSD by the previous 5m's ratio); a swing's
+         * size is its smaller side, so a leg's ends never count.
+         * Returns [{ g: "f" | "o" | "r", hi, lo }], or null.
+         */
+        let sscC = null;
+        function sscTree(piv) {
+          const nP = piv.length;
+          if (nP < 3) return null;
+          const A = piv[nP - 3], B = piv[nP - 2], C = piv[nP - 1], S = [];
+          for (let dS = dayOf(A.c.t); dS <= dayOf(Date.now()); dS = nextDay(dS)) {
+            const d = usdtK.get(dS);
+            if (!d || !d.k.length) return loadUsdt(dS), null;
+            const k = d.k, i = k[0][0] >= A.c.t ? 0 : szBs(k, A.c.t);
+            for (let j = i; j < k.length; j++) S.push(k[j]);
+          }
+          const last = mid != null ? mid : k5.length ? k5[k5.length - 1].c : null;
+          if (!S.length || last == null) return null;
+          const key = [A.c.t, B.c.t, C.c.t, C.p, S.length, S[S.length - 1][0], Math.round(last)].join();
+          if (sscC && sscC.key === key) return sscC.out;
+          const fd = (t, u) => {
+            const t5 = Math.floor(t / 3e5) * 3e5 - 3e5, q = uk5.get(t5), c = k5[szBs(k5, t5)];
+            return q && c && c.t === t5 ? u * c.c / q[3] : u;
+          };
+          const ex = (z) => {
+            let i = szBs(S, z.c.t), b = -1;
+            for (; i < S.length && S[i][0] < z.c.t + 3e5; i++)
+              if (b < 0 || (z.low ? S[i][2] < S[b][2] : S[i][1] > S[b][1])) b = i;
+            return b;
+          };
+          const F = (volOfDay(dayOf(A.c.t)) || volN) / 32;
+          /* one leg from S[i0] (a low when up), split where it first touches M: the greatest swing on
+             each side of that touch, a high (sell) on the side over M, a low (buy) on the side under it */
+          const leg = (i0, i1, up, p0) => {
+            const pts = [{ p: p0, low: up }], above = p0 > last;
+            let dn = !up, e = up ? S[i0][1] : S[i0][2], at = i0, tm = Infinity;
+            for (let i = i0; i <= i1; i++) {
+              const r = S[i];
+              if (tm === Infinity && fd(r[0], r[2]) <= last && fd(r[0], r[1]) >= last) tm = r[0];
+              if (dn ? r[2] < e : r[1] > e) { e = dn ? r[2] : r[1]; at = i; }
+              if (dn ? r[3] > e + F : r[3] < e - F) {
+                pts.push({ t: S[at][0], p: fd(S[at][0], e), low: dn });
+                dn = !dn; e = dn ? r[2] : r[1]; at = i;
+              }
+            }
+            pts.push({ p: fd(S[at][0], e) });
+            let hi = null, lo = null;
+            for (let j = 1; j < pts.length - 1; j++) {
+              const z = pts[j], over = (z.t < tm) === above;  /* on the side of the touch over M */
+              z.w = Math.min(Math.abs(z.p - pts[j - 1].p), Math.abs(pts[j + 1].p - z.p));
+              if (over && !z.low && z.p > last && (!hi || z.w > hi.w)) hi = z;
+              if (!over && z.low && z.p < last && (!lo || z.w > lo.w)) lo = z;
+            }
+            return { hi, lo };
+          };
+          const ia = ex(A), ib = ex(B), ic = ex(C);
+          if (ia < 0 || ib < 0 || ic < 0) return null;
+          const out = [["f", ia, ib, A], ["o", ib, ic, B], ["r", ic, S.length - 1, C]]
+            .map(([g, i0, i1, Z]) => ({ g, ...(i1 > i0 ? leg(i0, i1, Z.low, Z.p) : {}) }));
+          sscC = { key, out };
+          return out;
+        }
         /*
          * alerts: the ZFB zigzag breaking the other way from its
          * last break. A break up = a high past the high before
@@ -7969,7 +8060,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 48;
+      const DEFAULTS_VER = 49;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -8001,6 +8092,7 @@
           showPB,
           showBZ,
           szDepth,
+          showSsc,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -8064,6 +8156,9 @@
         /* SZ: SZ3 by default since version 48 */
         if (st.dv >= 48 && typeof st.szDepth === "number")
           setSzDepth(st.szDepth);
+        /* SSC: new in version 49, on by default */
+        if (st.dv >= 49 && typeof st.showSsc === "boolean")
+          setShowSsc(st.showSsc);
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -8264,6 +8359,7 @@
       $("missTog").onclick = () => setVpMiss(!vpMiss);
       $("pbTog").onclick = () => setShowPB(!showPB);
       $("bzTog").onclick = () => setShowBZ(!showBZ);
+      $("sscTog").onclick = () => setShowSsc(!showSsc);
       $("szTog").onclick = () => setSzDepth((szDepth + 1) % 6);
       $("szTog").oncontextmenu = (e) => (e.preventDefault(), setSzDepth((szDepth + 5) % 6));
       /* replay at RT: the data cut there (USDT seconds and FDUSD
