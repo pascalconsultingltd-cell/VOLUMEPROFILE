@@ -7700,7 +7700,11 @@
             }
             return { out, nodes };
           };
-          szC = { key, out: [chain(A, ia, ib, B, true), chain(B, ib, S.length - 1, null, false)] };
+          const zi = chain(A, ia, ib, B, true), za = chain(B, ib, S.length - 1, null, false), seen = new Set(zi.nodes.map((n) => n.t));
+          /* buys: zago's swing lows under the price join zigo's; the depth nearest, farthest first */
+          const lows = za.out.flatMap((L) => L.pts.slice(1, -1)).filter((z) => z.low && z.p < last && !seen.has(z.t) && seen.add(z.t));
+          zi.nodes = [...zi.nodes, ...lows].sort((a, b) => a.p - b.p).slice(-depth);
+          szC = { key, out: [zi, za] };
           return szC.out;
         }
         /*
