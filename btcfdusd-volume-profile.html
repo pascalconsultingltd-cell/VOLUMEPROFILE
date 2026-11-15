@@ -528,6 +528,13 @@
                     title="Bell grid scores"
                   >
                     BS
+                  </button>
+                  <button
+                    id="szTog"
+                    class="a"
+                    title="Sub-zigzags: each depth half the ZFB height (click: off, 1, 2, 3)"
+                  >
+                    SZ2
                   </button></span
                 ></span
               ></span
@@ -2168,6 +2175,14 @@
       function setShowBZ(v) {
         showBZ = !!v;
         $("bzTog").className = showBZ ? "a" : "";
+        schedule();
+      }
+      /* SZ: sub-zigzag depth, 0 = off; depth d turns at the ZFB height / 2^d */
+      let szDepth = 2;
+      function setSzDepth(v) {
+        szDepth = Math.max(0, Math.min(3, v | 0));
+        $("szTog").className = szDepth ? "a" : "";
+        $("szTog").textContent = szDepth ? "SZ" + szDepth : "SZ";
         schedule();
       }
       /* PB: P Bells' births and deaths drawn on the PF */
@@ -5673,6 +5688,24 @@
             g.beginPath();
             g.rect(x0, top, x1 - x0, bot - top);
             g.clip();
+            /* sub-zigzags, deepest first and palest, under the ZFB */
+            for (let d = szDepth; d >= 1; d--) {
+              const sp = subPiv(arr, d), al = 0.75 - 0.15 * d;
+              g.lineWidth = 1;
+              sp.forEach((z, i) => {
+                if (!i) return;
+                const a = sp[i - 1], xa = xOf(a), xb = xOf(z);
+                if (xb < x0 || xa > px0 || a.c.t < warm) return;
+                g.strokeStyle = z.low
+                  ? "rgba(230,159,0," + al + ")"
+                  : "rgba(41,98,255," + al + ")";
+                g.setLineDash(i === sp.length - 1 ? [3, 3] : []);
+                g.beginPath();
+                g.moveTo(xa, Y(a.p));
+                g.lineTo(xb, Y(z.p));
+                g.stroke();
+              });
+            }
             g.lineWidth = 2;
             piv.forEach((z, i) => {
               if (!i) return;
@@ -7480,6 +7513,7 @@
             zfbC.piv.every((o) => has(o.c)))
             return zfbC.piv.map((o) => ({ ...o }));
           const piv = [],
+            hs = new Array(T.length).fill(0),
             /* a twin's pivot on its FDUSD candle, in FDUSD */
             pv = (low, p, q) => ({ low, c: q.fd || q,
               p: q.fd ? (low ? q.fd.l : q.fd.h) : p });
@@ -7519,6 +7553,7 @@
                 at = q;
               }
             } else if (!seen) ht = volOfDay(dayOf(q.t)) || volN;
+            hs[k] = ht;
             if (!big && !live &&
               (dn ? q.c > ext + ht : q.c < ext - ht)) {
               piv.push(pv(dn, ext, at));
@@ -7528,7 +7563,45 @@
             }
           }
           if (dn !== null) piv.push(pv(dn, ext, at));
-          zfbC = { key, T, piv: piv.map((o) => ({ ...o })) };
+          zfbC = { key, T, hs, sub: [], piv: piv.map((o) => ({ ...o })) };
+          return piv;
+        }
+        /* sub-zigzag pivots at depth d: the same twins, one run over
+           all of them (no repaint), turning on a close past the
+           extreme by the ZFB height there / 2^d; the forming candle
+           only extends; the last pivot is the open leg's extreme */
+        function subPiv(arr, d) {
+          zfbPiv(arr);
+          const { T, hs, sub } = zfbC;
+          if (sub[d]) return sub[d].map((o) => ({ ...o }));
+          const piv = [],
+            pv = (low, p, q) => ({ low, c: q.fd || q,
+              p: q.fd ? (low ? q.fd.l : q.fd.h) : p });
+          let dn = null, ext = 0, at = null;
+          for (let k = 0; k < T.length; k++) {
+            const q = T[k];
+            if (!okC(q) || !hs[k]) continue;
+            if (dn === null) {
+              dn = q.c < q.o;
+              ext = dn ? q.l : q.h;
+              at = q;
+              piv.push(pv(!dn, dn ? q.h : q.l, q));
+            }
+            if (dn ? q.l < ext : q.h > ext) {
+              ext = dn ? q.l : q.h;
+              at = q;
+            }
+            const h = hs[k] / 2 ** d;
+            if (k < T.length - 1 &&
+              (dn ? q.c > ext + h : q.c < ext - h)) {
+              piv.push(pv(dn, ext, at));
+              dn = !dn;
+              ext = dn ? q.l : q.h;
+              at = q;
+            }
+          }
+          if (dn !== null) piv.push(pv(dn, ext, at));
+          sub[d] = piv.map((o) => ({ ...o }));
           return piv;
         }
         /*
@@ -7790,7 +7863,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 45;
+      const DEFAULTS_VER = 46;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -7821,6 +7894,7 @@
           vpMiss,
           showPB,
           showBZ,
+          szDepth,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -7881,6 +7955,9 @@
         /* BZ: new in version 45, on by default */
         if (st.dv >= 45 && typeof st.showBZ === "boolean")
           setShowBZ(st.showBZ);
+        /* SZ: new in version 46, depth 2 by default */
+        if (st.dv >= 46 && typeof st.szDepth === "number")
+          setSzDepth(st.szDepth);
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -8081,6 +8158,7 @@
       $("missTog").onclick = () => setVpMiss(!vpMiss);
       $("pbTog").onclick = () => setShowPB(!showPB);
       $("bzTog").onclick = () => setShowBZ(!showBZ);
+      $("szTog").onclick = () => setSzDepth((szDepth + 1) % 4);
       /* replay at RT: the data cut there (USDT seconds and FDUSD
          trades before it, the 15m candle at RT rebuilt from its
          trades) and the caches, swapped in while the main chart
