@@ -5713,7 +5713,7 @@
               out.forEach((L) => line(L.pts, L.open, L.k));
               g.strokeStyle = j ? "rgb(239,83,80)" : "rgb(38,166,154)";
               g.setLineDash([2, 3]);
-              [...nodes, ...(j && sz[1].s0 ? [sz[1].s0] : [])].forEach((n) => {
+              [...nodes, ...(j ? sz[1].s0 : [])].forEach((n) => {
                 g.beginPath(); g.moveTo(xS(n.t), Y(n.p)); g.lineTo(px0, Y(n.p)); g.stroke();
               });
             });
@@ -5742,10 +5742,10 @@
               g.stroke();
             });
             g.restore();
-            /* the levels on the axis: B1.. buy (zigo), S0 (the main top), S1.. sell (zago) */
-            if (sz && sz[1].s0) ptag(Y(sz[1].s0.p), "S0 " + sz[1].s0.p.toFixed(0), "rgb(239,83,80)");
+            /* the levels on the axis: B1.. buy (zigo), S1.. sell (zago), S0 (the main highs) last, on top */
             if (sz) sz.forEach(({ nodes }, j) => nodes.forEach((n, m) => ptag(Y(n.p),
               (j ? "S" : "B") + (m + 1) + " " + n.p.toFixed(0), j ? "rgb(239,83,80)" : "rgb(38,166,154)")));
+            if (sz) sz[1].s0.forEach((n) => ptag(Y(n.p), "S0 " + n.p.toFixed(0), "rgb(239,83,80)"));
           };
           zLegs = [];
           /* zOk: see the top; the first 3 x BIG_WIN candles warm up
@@ -7705,9 +7705,8 @@
           /* buys: zago's swing lows under the price join zigo's; the depth nearest, farthest first */
           const lows = za.out.flatMap((L) => L.pts.slice(1, -1)).filter((z) => z.low && z.p < last && !seen.has(z.t) && seen.add(z.t));
           zi.nodes = [...zi.nodes, ...lows].sort((a, b) => a.p - b.p).slice(-depth);
-          /* S0: the main zigzag's top (of its last two legs), when over the price */
-          const top = [A, B, piv[nP - 1]].reduce((a, z) => z.p > a.p ? z : a);
-          if (top.p > last) za.s0 = pt(top, -1);
+          /* S0: the main zigzag's highs of its last two legs over the price (a rising open leg: its top so far too) */
+          za.s0 = [A, B, piv[nP - 1]].filter((z) => !z.low && z.p > last).sort((a, b) => b.p - a.p).map((z) => pt(z, -1));
           szC = { key, out: [zi, za] };
           return szC.out;
         }
