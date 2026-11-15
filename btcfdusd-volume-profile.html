@@ -531,10 +531,10 @@
                   </button>
                   <button
                     id="szTog"
-                    class="a"
-                    title="Sub-zigzag on the last ZFB leg and the open one, at one depth: height / 2^depth (click: off, 1 to 5)"
+                    class=""
+                    title="Sub-zigzag in place of the last ZFB leg and the open one: height / 2^depth (click: off, 1 to 5)"
                   >
-                    SZ2
+                    SZ
                   </button></span
                 ></span
               ></span
@@ -2178,7 +2178,7 @@
         schedule();
       }
       /* SZ: sub-zigzag depth, 0 = off; depth d turns at the ZFB height / 2^d */
-      let szDepth = 2;
+      let szDepth = 0;
       function setSzDepth(v) {
         szDepth = Math.max(0, Math.min(5, v | 0));
         $("szTog").className = szDepth ? "a" : "";
@@ -5688,19 +5688,19 @@
             g.beginPath();
             g.rect(x0, top, x1 - x0, bot - top);
             g.clip();
-            /* the chosen sub-zigzag depth only, under the ZFB:
-               from the last finished leg's start on */
+            /* the chosen sub-zigzag depth in place of the ZFB's
+               last finished leg and the open one */
             const t0 = nP > 2 ? piv[nP - 3].c.t : -Infinity;
             if (szDepth) {
               const sp = subPiv(arr, szDepth);
-              g.lineWidth = 1.5;
+              g.lineWidth = 2;
               sp.forEach((z, i) => {
                 if (!i) return;
                 const a = sp[i - 1], xa = xOf(a), xb = xOf(z);
                 if (a.c.t < t0 || xb < x0 || xa > px0 || a.c.t < warm) return;
                 g.strokeStyle = z.low
-                  ? "rgba(230,159,0,0.75)" : "rgba(41,98,255,0.75)";
-                g.setLineDash(i === sp.length - 1 ? [3, 3] : []);
+                  ? "rgb(230,159,0)" : "rgb(41,98,255)";
+                g.setLineDash(i === sp.length - 1 ? [6, 4] : []);
                 g.beginPath();
                 g.moveTo(xa, Y(a.p));
                 g.lineTo(xb, Y(z.p));
@@ -5718,6 +5718,7 @@
               /* both ends on one candle (it wicked and turned):
                  drawn vertical */
               if (xb < x0 || xa > px0 || a.c.t < warm) return;
+              if (szDepth && i >= nP - 2) return;
               g.strokeStyle = z.low
                 ? "rgb(230,159,0)"
                 : "rgb(41,98,255)";
@@ -7956,7 +7957,7 @@
         /* BZ: new in version 45, on by default */
         if (st.dv >= 45 && typeof st.showBZ === "boolean")
           setShowBZ(st.showBZ);
-        /* SZ: new in version 46, depth 2 by default */
+        /* SZ: new in version 46, off by default */
         if (st.dv >= 46 && typeof st.szDepth === "number")
           setSzDepth(st.szDepth);
         /*
