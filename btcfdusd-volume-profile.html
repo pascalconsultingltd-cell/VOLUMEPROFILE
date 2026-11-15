@@ -5733,7 +5733,8 @@
             const ss = showSsc && !RPL && sscTree(piv);
             g.lineWidth = 1;
             g.setLineDash([8, 3]);
-            const ssl = ss ? ss.flatMap(({ g: n, hi, lo }) => [hi && { ...hi, n: n + "S" }, lo && { ...lo, n: n + "B" }]).filter(Boolean) : [];
+            const ssl = ss ? ss.flatMap(({ g: n, hi = [], lo = [] }) =>
+              [...hi.map((z, k) => ({ ...z, n: n + "S" + (k + 1) })), ...lo.map((z, k) => ({ ...z, n: n + "B" + (k + 1) }))]) : [];
             ssl.forEach((z) => {
               g.strokeStyle = z.low ? "rgb(0,121,107)" : "rgb(198,40,40)";
               g.beginPath(); g.moveTo(xS(z.t), Y(z.p)); g.lineTo(px0, Y(z.p)); g.stroke();
@@ -5768,7 +5769,7 @@
             if (sz) sz.forEach(({ nodes }, j) => nodes.forEach((n, m) => ptag(Y(n.p),
               (j ? "S" : "B") + (m + 1) + " " + n.p.toFixed(0), j ? "rgb(239,83,80)" : "rgb(38,166,154)")));
             if (sz) sz[1].s0.forEach((n) => ptag(Y(n.p), "S0 " + n.p.toFixed(0), "rgb(239,83,80)"));
-            /* SSC: fS / fB (fixed leg), oS / oB (open leg), rS / rB (retrace) */
+            /* SSC: fS1 / fB1 (fixed leg), oS / oB (open leg), rS / rB (retrace); 1 the worst drawdown, 2 the next */
             ssl.forEach((z) => ptag(Y(z.p), z.n + " " + z.p.toFixed(0), z.low ? "rgb(0,121,107)" : "rgb(198,40,40)"));
           };
           zLegs = [];
@@ -7781,15 +7782,29 @@
               if (m < 0 || (up ? r[1] > S[m][1] : r[2] < S[m][2])) m = i;
             }
             /* the swing's middle, from its end on */
-            return h < 0 ? null : { t: S[Math.max(h, l)][0], p: (fd(S[h][0], S[h][1]) + fd(S[l][0], S[l][2])) / 2 };
+            return h < 0 ? null : { w: best, a, b, s: Math.min(h, l), e: Math.max(h, l), t: S[Math.max(h, l)][0],
+              p: (fd(S[h][0], S[h][1]) + fd(S[l][0], S[l][2])) / 2 };
           };
-          /* one leg from S[i0] (a low when up), split where it first touches M: the middle of the max
-             drawdown on the side over M (a sell), of the one on the side under it (a buy) */
+          /* the SSC_N worst drawdowns of S[a..b], ranked: each next one in what the swings found leave */
+          const SSC_N = 2;
+          const rank = (a, b, up) => {
+            const out = [];
+            let parts = [[a, b]];
+            while (out.length < SSC_N) {
+              const w = parts.map(([x, y]) => mdd(x, y, up)).filter(Boolean).reduce((m, z) => !m || z.w > m.w ? z : m, null);
+              if (!w) break;
+              out.push(w);
+              parts = parts.flatMap(([x, y]) => x === w.a && y === w.b ? [[x, w.s - 1], [w.e + 1, y]] : [[x, y]]).filter(([x, y]) => y > x);
+            }
+            return out;
+          };
+          /* one leg from S[i0] (a low when up), split where it first touches M: the middles of the worst
+             drawdowns on the side over M (sells), of those on the side under it (buys) */
           const leg = (i0, i1, up, p0) => {
             let im = i1 + 1;
             for (let i = i0; i <= i1; i++) if (fd(S[i][0], S[i][2]) <= last && fd(S[i][0], S[i][1]) >= last) { im = i; break; }
-            const [ov, un] = p0 > last ? [mdd(i0, im - 1, up), mdd(im, i1, up)] : [mdd(im, i1, up), mdd(i0, im - 1, up)];
-            return { hi: ov && ov.p > last ? ov : null, lo: un && un.p < last ? { ...un, low: true } : null };
+            const [ov, un] = p0 > last ? [rank(i0, im - 1, up), rank(im, i1, up)] : [rank(im, i1, up), rank(i0, im - 1, up)];
+            return { hi: ov.filter((z) => z.p > last), lo: un.filter((z) => z.p < last).map((z) => ({ ...z, low: true })) };
           };
           const ia = ex(A), ib = ex(B), ic = ex(C);
           if (ia < 0 || ib < 0 || ic < 0) return null;
