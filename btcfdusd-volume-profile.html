@@ -5287,7 +5287,8 @@
 
           /* BZ: the bells' blue zones (P and D Bells' lead wings
              still empty) as light blue bands on the main chart,
-             from the bell's birth to its day's end (or now) */
+             from the bell's birth to its day's end (or now, then
+             half way into the blank space on the right) */
           if (cfg.main && showBZ && !side && geo.length) {
             const iv = geo.length > 1 ? geo[1].c.t - geo[0].c.t : 3e5,
               xT = (t) => {
@@ -5301,9 +5302,13 @@
             g.clip();
             /* the VP lead wing blue, lighter so candles show */
             g.fillStyle = "rgba(30,90,220,.55)";
+            /* a zone still open: on to half way across the blank
+               space right of the last candle */
+            const xn = xT(NOW()),
+              xr = geoAt(NOW()) ? xn + (px0 - xn) / 2 : xn;
             blueZ.forEach((z) => {
               const xa = xT(z.t0),
-                xb = xT(Math.min(z.t1, NOW()));
+                xb = z.t1 > NOW() ? xr : xT(z.t1);
               if (xb > xa)
                 g.fillRect(xa, Y(z.hi), xb - xa, Y(z.lo) - Y(z.hi));
             });
