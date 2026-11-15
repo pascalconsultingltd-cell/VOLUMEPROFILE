@@ -5691,16 +5691,15 @@
             /* the chosen sub-zigzag depth only, under the ZFB:
                from the last finished leg's start on */
             const t0 = nP > 2 ? piv[nP - 3].c.t : -Infinity;
-            for (let d = szDepth; d >= 1 && d === szDepth; d--) {
-              const sp = subPiv(arr, d), al = 0.75;
+            if (szDepth) {
+              const sp = subPiv(arr, szDepth);
               g.lineWidth = 1.5;
               sp.forEach((z, i) => {
                 if (!i) return;
                 const a = sp[i - 1], xa = xOf(a), xb = xOf(z);
                 if (a.c.t < t0 || xb < x0 || xa > px0 || a.c.t < warm) return;
                 g.strokeStyle = z.low
-                  ? "rgba(230,159,0," + al + ")"
-                  : "rgba(41,98,255," + al + ")";
+                  ? "rgba(230,159,0,0.75)" : "rgba(41,98,255,0.75)";
                 g.setLineDash(i === sp.length - 1 ? [3, 3] : []);
                 g.beginPath();
                 g.moveTo(xa, Y(a.p));
