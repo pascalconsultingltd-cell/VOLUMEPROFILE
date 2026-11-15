@@ -7686,12 +7686,14 @@
                 nodes.push(n); far = n.p;
                 if (nodes.length === depth) break;
               }
-              /* the newest segment the price crosses */
-              let k = -1;
+              /* the newest segment the price crosses, a falling one first for sells
+                 (its pullbacks are swing highs), a rising one for buys */
+              let k = -1, kw = -1;
               for (let j = 0; j < L.pts.length - 1; j++) {
                 const a = L.pts[j].p, b = L.pts[j + 1].p;
-                if (last >= Math.min(a, b) && last <= Math.max(a, b)) k = j;
+                if (last >= Math.min(a, b) && last <= Math.max(a, b)) { k = j; if (L.pts[j].low === buy) kw = j; }
               }
+              if (kw >= 0) k = kw;
               if (k < 0) break;
               L.k = k; h = L.h; P = L.pts[k];
               Q = L.open && k === L.pts.length - 2 ? null : L.pts[k + 1];
