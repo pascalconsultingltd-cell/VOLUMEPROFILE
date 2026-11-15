@@ -532,7 +532,7 @@
                   <button
                     id="szTog"
                     class=""
-                    title="Sub-zigzags on 1s data in place of the last ZFB leg and the open one; each level on the newest branch of the one above (click: off, 1 to 5)"
+                    title="Sub-zigzags on 1s data in the last ZFB leg (buy levels) and the open one (sell levels), 1 to 5 levels each (click: up, right click: down)"
                   >
                     SZ
                   </button></span
@@ -5709,13 +5709,13 @@
             g.lineWidth = 2;
             /* each split in place of the segment it splits; the open
                end dashed; the nodes found: a line to the right edge */
-            if (sz) sz.forEach(({ out, node }, j) => {
+            if (sz) sz.forEach(({ out, nodes }, j) => {
               out.forEach((L) => line(L.pts, L.open, L.k));
-              if (!node) return;
-              const y = Y(node.p);
               g.strokeStyle = j ? "rgb(239,83,80)" : "rgb(38,166,154)";
               g.setLineDash([2, 3]);
-              g.beginPath(); g.moveTo(xS(node.t), y); g.lineTo(px0, y); g.stroke();
+              nodes.forEach((n) => {
+                g.beginPath(); g.moveTo(xS(n.t), Y(n.p)); g.lineTo(px0, Y(n.p)); g.stroke();
+              });
             });
             piv.forEach((z, i) => {
               if (!i) return;
@@ -5742,9 +5742,9 @@
               g.stroke();
             });
             g.restore();
-            /* the nodes on the axis: B buy (zigo), S sell (zago) */
-            if (sz) sz.forEach(({ node }, j) => node && ptag(Y(node.p),
-              (j ? "S " : "B ") + node.p.toFixed(0), j ? "rgb(239,83,80)" : "rgb(38,166,154)"));
+            /* the levels on the axis: B1.. buy (zigo), S1.. sell (zago) */
+            if (sz) sz.forEach(({ nodes }, j) => nodes.forEach((n, m) => ptag(Y(n.p),
+              (j ? "S" : "B") + (m + 1) + " " + n.p.toFixed(0), j ? "rgb(239,83,80)" : "rgb(38,166,154)")));
           };
           zLegs = [];
           /* zOk: see the top; the first 3 x BIG_WIN candles warm up
@@ -7590,13 +7590,15 @@
          * height x 0.95^n shrunk until the segment holds an inner
          * turn (the shrinking brick), i.e. the largest step under its
          * biggest pullback (vol/32 at least); a close past the
-         * extreme by it turns. Zigo looks for a node under the last
-         * price (a buy), zago one over it (a sell): an inner node of
-         * the split past the price is kept (the nearest), else the
-         * newest segment the price crosses is split, up to `depth`
-         * times. Pivots can move (a bigger bounce): order levels,
-         * meant to follow. Returns [zigo, zago], each { out: splits,
-         * node } (a split's k: the segment split further), or null.
+         * extreme by it turns. Zigo looks for buy levels under the
+         * last price, zago for sell levels over it, `depth` each:
+         * an inner node of the split between the last level found
+         * and the price is kept (the nearest to the price), else the
+         * newest segment the price crosses is split; each new level
+         * is closer to the price. Pivots can move (a bigger bounce):
+         * order levels, meant to follow. Returns [zigo, zago], each
+         * { out: splits, nodes } (a split's k: the segment split
+         * further), or null.
          */
         let szC = null;
         /* first index at or after t (rows [t, ...] or candles) */
@@ -7667,20 +7669,22 @@
           /* main pivots drawn at their candle's middle, as the ZFB */
           const pt = (Z, i) => ({ t: Z.c.t + 15e4, p: Z.p, low: Z.low, i });
           /* a leg's splits from main pivot Z to S[i1] (E: its end
-             pivot, none on the open leg), toward a node past the
+             pivot, none on the open leg), toward levels past the
              price: under it when buy */
           const chain = (Z, i, i1, E, buy) => {
-            const out = [];
-            let P = pt(Z, i), Q = E ? pt(E, i1) : null, h = Z.h, node = null;
-            for (let d = 1; d <= depth; d++) {
+            const out = [], nodes = [];
+            let P = pt(Z, i), Q = E ? pt(E, i1) : null, h = Z.h, far = buy ? -Infinity : Infinity;
+            while (nodes.length < depth && out.length < 40) {
               const L = level(P.i, Q ? Q.i : i1, P.low, h, P.p, P.t);
               if (!L) break;
               if (Q) L.pts[L.pts.length - 1] = Q; else L.open = true;
               out.push(L);
-              const past = L.pts.slice(1, -1).filter((z) => buy ? z.p < last : z.p > last);
-              if (past.length) {
-                node = past.reduce((a, z) => (buy ? z.p > a.p : z.p < a.p) ? z : a);
-                break;
+              /* inner nodes between the last level found and the price */
+              const band = L.pts.slice(1, -1).filter((z) => buy ? z.p < last && z.p > far : z.p > last && z.p < far);
+              if (band.length) {
+                const n = band.reduce((a, z) => (buy ? z.p > a.p : z.p < a.p) ? z : a);
+                nodes.push(n); far = n.p;
+                if (nodes.length === depth) break;
               }
               /* the newest segment the price crosses */
               let k = -1;
@@ -7692,7 +7696,7 @@
               L.k = k; h = L.h; P = L.pts[k];
               Q = L.open && k === L.pts.length - 2 ? null : L.pts[k + 1];
             }
-            return { out, node };
+            return { out, nodes };
           };
           szC = { key, out: [chain(A, ia, ib, B, true), chain(B, ib, S.length - 1, null, false)] };
           return szC.out;
@@ -8252,6 +8256,7 @@
       $("pbTog").onclick = () => setShowPB(!showPB);
       $("bzTog").onclick = () => setShowBZ(!showBZ);
       $("szTog").onclick = () => setSzDepth((szDepth + 1) % 6);
+      $("szTog").oncontextmenu = (e) => (e.preventDefault(), setSzDepth((szDepth + 5) % 6));
       /* replay at RT: the data cut there (USDT seconds and FDUSD
          trades before it, the 15m candle at RT rebuilt from its
          trades) and the caches, swapped in while the main chart
