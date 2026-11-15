@@ -532,7 +532,7 @@
                   <button
                     id="szTog"
                     class=""
-                    title="Sub-zigzag in place of the last ZFB leg and the open one: height / 2^depth (click: off, 1 to 5)"
+                    title="Sub-zigzags on 1s data in place of the last ZFB leg and the open one; each level on the newest branch of the one above (click: off, 1 to 5)"
                   >
                     SZ
                   </button></span
@@ -2177,7 +2177,7 @@
         $("bzTog").className = showBZ ? "a" : "";
         schedule();
       }
-      /* SZ: sub-zigzag depth, 0 = off; depth d turns at the ZFB height / 2^d */
+      /* SZ: sub-zigzag levels drawn, 0 = off (see szTree) */
       let szDepth = 0;
       function setSzDepth(v) {
         szDepth = Math.max(0, Math.min(5, v | 0));
@@ -5688,26 +5688,28 @@
             g.beginPath();
             g.rect(x0, top, x1 - x0, bot - top);
             g.clip();
-            /* the chosen sub-zigzag depth in place of the ZFB's
-               last finished leg and the open one */
-            const t0 = nP > 2 ? piv[nP - 3].c.t : -Infinity;
-            if (szDepth) {
-              const sp = subPiv(arr, szDepth);
-              g.lineWidth = 2;
-              sp.forEach((z, i) => {
-                if (!i) return;
-                const a = sp[i - 1], xa = xOf(a), xb = xOf(z);
-                if (a.c.t < t0 || xb < x0 || xa > px0 || a.c.t < warm) return;
-                g.strokeStyle = z.low
-                  ? "rgb(230,159,0)" : "rgb(41,98,255)";
-                g.setLineDash(i === sp.length - 1 ? [6, 4] : []);
-                g.beginPath();
-                g.moveTo(xa, Y(a.p));
-                g.lineTo(xb, Y(z.p));
-                g.stroke();
-              });
-            }
+            /* SZ: polylines of {t, p}; a second's x within its candle */
+            const xS = (t) => {
+              const t5 = Math.floor(t / 3e5) * 3e5;
+              return gx0 + (iOf(t5) - i0 + (t - t5) / 3e5 - 0.5) * sw;
+            };
+            const line = (pts, dash) => pts.forEach((z, i) => {
+              if (!i) return;
+              const a = pts[i - 1], xa = xS(a.t), xb = xS(z.t);
+              if (xb < x0 || xa > px0) return;
+              g.strokeStyle = z.low ? "rgb(230,159,0)" : "rgb(41,98,255)";
+              g.setLineDash(dash && i === pts.length - 1 ? [6, 4] : []);
+              g.beginPath(); g.moveTo(xa, Y(a.p)); g.lineTo(xb, Y(z.p)); g.stroke();
+            });
+            const sz = szDepth && !RPL && szTree(piv, szDepth);
             g.lineWidth = 2;
+            if (sz) {
+              const [L1, open] = sz;
+              if (L1) line(L1.pts);
+              /* each level up to its newest branch, the deepest whole */
+              open.forEach((L, d) => line(d < open.length - 1
+                ? L.pts.slice(0, Math.max(1, L.pts.length - 1)) : L.pts, d === open.length - 1));
+            }
             piv.forEach((z, i) => {
               if (!i) return;
               const a = piv[i - 1],
@@ -5718,7 +5720,9 @@
               /* both ends on one candle (it wicked and turned):
                  drawn vertical */
               if (xb < x0 || xa > px0 || a.c.t < warm) return;
-              if (szDepth && i >= nP - 2) return;
+              /* SZ draws these: the finished leg if it has a level,
+                 the open one if a level has formed in it */
+              if (sz && ((i === nP - 2 && sz[0]) || (i === nP - 1 && sz[1].length))) return;
               g.strokeStyle = z.low
                 ? "rgb(230,159,0)"
                 : "rgb(41,98,255)";
@@ -7515,9 +7519,10 @@
             zfbC.piv.every((o) => has(o.c)))
             return zfbC.piv.map((o) => ({ ...o }));
           const piv = [],
-            hs = new Array(T.length).fill(0),
-            /* a twin's pivot on its FDUSD candle, in FDUSD */
-            pv = (low, p, q) => ({ low, c: q.fd || q,
+            dt = T.length > 1 ? T[1].t - T[0].t : 300000,
+            /* a twin's pivot on its FDUSD candle, in FDUSD; ct: when
+               it was confirmed, h: the ZFB height then */
+            pv = (low, p, q, ct) => ({ low, c: q.fd || q, ct, h: ht,
               p: q.fd ? (low ? q.fd.l : q.fd.h) : p });
           let dn = null,
             ht = 0,
@@ -7537,7 +7542,8 @@
               dn = way;
               ext = dn ? q.l : q.h;
               at = q;
-              piv.push(pv(!dn, dn ? q.h : q.l, q));
+              ht = volOfDay(dayOf(q.t)) || volN;
+              piv.push(pv(!dn, dn ? q.h : q.l, q, q.t));
             }
             /* the extreme first: a big candle turning the leg
                can wick past it (the pivot is then its wick) */
@@ -7549,62 +7555,116 @@
               seen = true;
               ht = q.h - q.l;
               if (way !== dn) {
-                piv.push(pv(dn, ext, at));
+                piv.push(pv(dn, ext, at, q.t + dt));
                 dn = way;
                 ext = dn ? q.l : q.h;
                 at = q;
               }
             } else if (!seen) ht = volOfDay(dayOf(q.t)) || volN;
-            hs[k] = ht;
             if (!big && !live &&
               (dn ? q.c > ext + ht : q.c < ext - ht)) {
-              piv.push(pv(dn, ext, at));
+              piv.push(pv(dn, ext, at, q.t + dt));
               dn = !dn;
               ext = dn ? q.l : q.h;
               at = q;
             }
           }
-          if (dn !== null) piv.push(pv(dn, ext, at));
-          zfbC = { key, T, hs, sub: [], piv: piv.map((o) => ({ ...o })) };
+          if (dn !== null) piv.push(pv(dn, ext, at, Infinity));
+          zfbC = { key, T, piv: piv.map((o) => ({ ...o })) };
           return piv;
         }
-        /* sub-zigzag pivots at depth d: the same twins, one run over
-           all of them (no repaint), turning on a close past the
-           extreme by the ZFB height there / 2^d; the forming candle
-           only extends; the last pivot is the open leg's extreme */
-        function subPiv(arr, d) {
-          zfbPiv(arr);
-          const { T, hs, sub } = zfbC;
-          if (sub[d]) return sub[d].map((o) => ({ ...o }));
-          const piv = [],
-            pv = (low, p, q) => ({ low, c: q.fd || q,
-              p: q.fd ? (low ? q.fd.l : q.fd.h) : p });
-          let dn = null, ext = 0, at = null;
-          for (let k = 0; k < T.length; k++) {
-            const q = T[k];
-            if (!okC(q) || !hs[k]) continue;
-            if (dn === null) {
-              dn = q.c < q.o;
-              ext = dn ? q.l : q.h;
-              at = q;
-              piv.push(pv(!dn, dn ? q.h : q.l, q));
-            }
-            if (dn ? q.l < ext : q.h > ext) {
-              ext = dn ? q.l : q.h;
-              at = q;
-            }
-            const h = hs[k] / 2 ** d;
-            if (k < T.length - 1 &&
-              (dn ? q.c > ext + h : q.c < ext - h)) {
-              piv.push(pv(dn, ext, at));
-              dn = !dn;
-              ext = dn ? q.l : q.h;
-              at = q;
-            }
+        /*
+         * SZ: sub-zigzags on BTCUSDT 1s closes (prices to FDUSD by
+         * the previous 5m's ratio) in the last finished ZFB leg and
+         * the open one. A level's height is locked once, when its
+         * start is confirmed and a close has pulled back from the
+         * leg's extreme by vol/32 or more: the largest parent
+         * height x 0.95^n under that pullback (the shrinking brick,
+         * stopped at the first inner turn); then a close past the
+         * extreme by it turns. Each deeper level runs on the newest
+         * branch of the one above. Nothing drawn moves (no repaint).
+         * Returns [finished leg's points, [open leg's levels]] or null.
+         */
+        let szC = null;
+        /* first index at or after t (rows [t, ...] or candles) */
+        const szBs = (a, t) => {
+          let lo = 0, hi = a.length;
+          while (lo < hi) {
+            const m = (lo + hi) >> 1;
+            if ((a[m].t ?? a[m][0]) < t) lo = m + 1; else hi = m;
           }
-          if (dn !== null) piv.push(pv(dn, ext, at));
-          sub[d] = piv.map((o) => ({ ...o }));
-          return piv;
+          return lo;
+        };
+        function szTree(piv, depth) {
+          const nP = piv.length;
+          if (nP < 3) return null;
+          const A = piv[nP - 3], B = piv[nP - 2],
+            S = [];
+          for (let dS = dayOf(A.c.t); dS <= dayOf(Date.now()); dS = nextDay(dS)) {
+            const d = usdtK.get(dS);
+            if (!d || !d.k.length) return loadUsdt(dS), null;
+            const k = d.k, i = k[0][0] >= A.c.t ? 0 : szBs(k, A.c.t);
+            for (let j = i; j < k.length; j++) S.push(k[j]);
+          }
+          if (!S.length) return null;
+          const key = [A.c.t, B.c.t, B.ct, S.length, S[S.length - 1][0], depth].join();
+          if (szC && szC.key === key) return szC.out;
+          /* FDUSD price of a USDT second: the previous 5m's ratio */
+          const fd = (t, u) => {
+            const t5 = Math.floor(t / 3e5) * 3e5 - 3e5, q = uk5.get(t5),
+              c = k5[szBs(k5, t5)];
+            return q && c && c.t === t5 ? u * c.c / q[3] : u;
+          };
+          /* index of a pivot's extreme second in its candle */
+          const ex = (z) => {
+            let i = szBs(S, z.c.t), b = -1;
+            for (; i < S.length && S[i][0] < z.c.t + 3e5; i++)
+              if (b < 0 || (z.low ? S[i][2] < S[b][2] : S[i][1] > S[b][1])) b = i;
+            return b;
+          };
+          const F = (volOfDay(dayOf(A.c.t)) || volN) / 32;
+          /* one level from S[i0] (a low when up) to S[i1] */
+          const level = (i0, i1, up, H, ct, p0, t0) => {
+            let e = up ? -Infinity : Infinity, mp = 0, h = 0;
+            for (let i = i0; i <= i1 && !h; i++) {
+              const r = S[i];
+              e = up ? Math.max(e, r[1]) : Math.min(e, r[2]);
+              mp = Math.max(mp, up ? e - r[3] : r[3] - e);
+              if (r[0] + 1000 >= ct && mp >= F)
+                for (h = H; h > mp; ) h *= 0.95;
+            }
+            if (!h) return null;
+            const pts = [{ t: t0, p: p0, low: up, ct, i: i0 }];
+            let dn = !up, at = i0;
+            e = up ? S[i0][1] : S[i0][2];
+            for (let i = i0; i <= i1; i++) {
+              const r = S[i];
+              if (dn ? r[2] < e : r[1] > e) { e = dn ? r[2] : r[1]; at = i; }
+              if (dn ? r[3] > e + h : r[3] < e - h) {
+                pts.push({ t: S[at][0], p: fd(S[at][0], e), low: dn, ct: r[0] + 1000, i: at });
+                dn = !dn; e = dn ? r[2] : r[1]; at = i;
+              }
+            }
+            pts.push({ t: S[at][0], p: fd(S[at][0], e), low: dn, i: at });
+            return { h, pts };
+          };
+          const ia = ex(A), ib = ex(B);
+          if (ia < 0 || ib < 0) return null;
+          /* main pivots drawn at their candle's middle, as the ZFB */
+          const L1 = level(ia, ib, A.low, A.h, A.ct, A.p, A.c.t + 15e4);
+          /* the finished leg ends on B itself */
+          if (L1) L1.pts[L1.pts.length - 1] = { t: B.c.t + 15e4, p: B.p, low: B.low };
+          const open = [];
+          let par = { h: B.h, pts: [{ t: B.c.t + 15e4, p: B.p, low: B.low, ct: B.ct, i: ib }] };
+          for (let d = 1; d <= depth; d++) {
+            /* the newest branch of the level above: from its last confirmed pivot */
+            const P = par.pts[Math.max(0, par.pts.length - 2)],
+              L = level(P.i, S.length - 1, P.low, par.h, P.ct, P.p, P.t);
+            if (!L) break;
+            open.push(L); par = L;
+          }
+          szC = { key, out: [L1, open] };
+          return szC.out;
         }
         /*
          * alerts: the ZFB zigzag breaking the other way from its
