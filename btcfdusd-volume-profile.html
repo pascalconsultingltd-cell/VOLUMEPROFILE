@@ -7677,8 +7677,8 @@
               if (!L) break;
               if (Q) L.pts[L.pts.length - 1] = Q; else L.open = true;
               out.push(L);
-              /* inner swing lows (buy) or highs (sell) between the last level found and the price */
-              const band = L.pts.slice(1, -1).filter((z) => buy ? z.low && z.p < last && z.p > far : !z.low && z.p > last && z.p < far);
+              /* between the last level found and the price: zigo's swing lows and highs (buy), zago's highs (sell) */
+              const band = L.pts.slice(1, -1).filter((z) => buy ? z.p < last && z.p > far : !z.low && z.p > last && z.p < far);
               if (band.length) {
                 const n = band.reduce((a, z) => (buy ? z.p > a.p : z.p < a.p) ? z : a);
                 nodes.push(n); far = n.p;
