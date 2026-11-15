@@ -5733,8 +5733,7 @@
             const ss = showSsc && !RPL && sscTree(piv);
             g.lineWidth = 1;
             g.setLineDash([8, 3]);
-            const ssl = ss ? ss.flatMap(({ g: n, hi = [], lo = [] }) =>
-              [...hi.map((z, k) => ({ ...z, n: n + "S" + (k + 1) })), ...lo.map((z, k) => ({ ...z, n: n + "B" + (k + 1) }))]) : [];
+            const ssl = ss || [];
             ssl.forEach((z) => {
               g.strokeStyle = z.low ? "rgb(0,121,107)" : "rgb(198,40,40)";
               g.beginPath(); g.moveTo(xS(z.t), Y(z.p)); g.lineTo(px0, Y(z.p)); g.stroke();
@@ -5769,7 +5768,8 @@
             if (sz) sz.forEach(({ nodes }, j) => nodes.forEach((n, m) => ptag(Y(n.p),
               (j ? "S" : "B") + (m + 1) + " " + n.p.toFixed(0), j ? "rgb(239,83,80)" : "rgb(38,166,154)")));
             if (sz) sz[1].s0.forEach((n) => ptag(Y(n.p), "S0 " + n.p.toFixed(0), "rgb(239,83,80)"));
-            /* SSC: fS1 / fB1 (fixed leg), oS / oB (open leg), rS / rB (retrace); 1 the worst drawdown, 2 the next */
+            /* SSC: f (fixed leg), o (open leg), r (retrace); H / h a zag's start and swing high, L / l a zig's start
+               and swing low, m the swing's middle; sells red, buys green */
             ssl.forEach((z) => ptag(Y(z.p), z.n + " " + z.p.toFixed(0), z.low ? "rgb(0,121,107)" : "rgb(198,40,40)"));
           };
           zLegs = [];
@@ -7738,12 +7738,12 @@
 
         /*
          * SSC (simple scalp, being designed): the fixed leg A->B, the open
-         * leg B->C and the retrace C->M, each split where it first touches
-         * M (the mid); on each side the max drawdown against the leg (as if
-         * short on a zag, long on a zig), on BTCUSDT 1s (prices to FDUSD by
-         * the previous 5m's ratio): its middle on the side over M (a sell),
-         * on the side under it (a buy).
-         * Returns [{ g: "f" | "o" | "r", hi, lo }], or null.
+         * leg B->C and the retrace C->M, each from its start until it first
+         * touches M (the mid), a zag from over M (sells), a zig from under it
+         * (buys): its start, and its max drawdown (as if short on a zag, long
+         * on a zig), on BTCUSDT 1s (prices to FDUSD by the previous 5m's
+         * ratio): that swing's far end and middle.
+         * Returns [{ n, t, p, low }], or null.
          */
         let sscC = null;
         function sscTree(piv) {
@@ -7781,35 +7781,25 @@
               }
               if (m < 0 || (up ? r[1] > S[m][1] : r[2] < S[m][2])) m = i;
             }
-            /* the swing's middle, from its end on */
-            return h < 0 ? null : { w: best, a, b, s: Math.min(h, l), e: Math.max(h, l), t: S[Math.max(h, l)][0],
-              p: (fd(S[h][0], S[h][1]) + fd(S[l][0], S[l][2])) / 2 };
+            return h < 0 ? null : { h: { t: S[h][0], p: fd(S[h][0], S[h][1]) }, l: { t: S[l][0], p: fd(S[l][0], S[l][2]) } };
           };
-          /* the SSC_N worst drawdowns of S[a..b], ranked: each next one in what the swings found leave */
-          const SSC_N = 2;
-          const rank = (a, b, up) => {
-            const out = [];
-            let parts = [[a, b]];
-            while (out.length < SSC_N) {
-              const w = parts.map(([x, y]) => mdd(x, y, up)).filter(Boolean).reduce((m, z) => !m || z.w > m.w ? z : m, null);
-              if (!w) break;
-              out.push(w);
-              parts = parts.flatMap(([x, y]) => x === w.a && y === w.b ? [[x, w.s - 1], [w.e + 1, y]] : [[x, y]]).filter(([x, y]) => y > x);
-            }
-            return out;
-          };
-          /* one leg from S[i0] (a low when up), split where it first touches M: the middles of the worst
-             drawdowns on the side over M (sells), of those on the side under it (buys) */
-          const leg = (i0, i1, up, p0) => {
+          /* one leg from S[i0] to S[i1], from pivot Z, on its side of M only (a zag from over M, a zig from
+             under it) until it first touches M: its start, its max drawdown's far end and middle (from its end on) */
+          const leg = (g, i0, i1, Z) => {
+            const up = Z.low, x = up ? "L" : "H";
+            if (i1 <= i0 || (up ? Z.p >= last : Z.p <= last)) return [];
             let im = i1 + 1;
             for (let i = i0; i <= i1; i++) if (fd(S[i][0], S[i][2]) <= last && fd(S[i][0], S[i][1]) >= last) { im = i; break; }
-            const [ov, un] = p0 > last ? [rank(i0, im - 1, up), rank(im, i1, up)] : [rank(im, i1, up), rank(i0, im - 1, up)];
-            return { hi: ov.filter((z) => z.p > last), lo: un.filter((z) => z.p < last).map((z) => ({ ...z, low: true })) };
+            const w = mdd(i0, im - 1, up), lv = [{ n: g + x, t: Z.c.t + 15e4, p: Z.p }];
+            if (w) {
+              const f = up ? w.l : w.h, m = (w.h.p + w.l.p) / 2;
+              lv.push({ n: g + x.toLowerCase(), ...f }, { n: g + "m", t: Math.max(w.h.t, w.l.t), p: m });
+            }
+            return lv.filter((z) => up ? z.p < last : z.p > last).map((z) => ({ ...z, low: up }));
           };
           const ia = ex(A), ib = ex(B), ic = ex(C);
           if (ia < 0 || ib < 0 || ic < 0) return null;
-          const out = [["f", ia, ib, A], ["o", ib, ic, B], ["r", ic, S.length - 1, C]]
-            .map(([g, i0, i1, Z]) => ({ g, ...(i1 > i0 ? leg(i0, i1, Z.low, Z.p) : {}) }));
+          const out = [leg("f", ia, ib, A), leg("o", ib, ic, B), leg("r", ic, S.length - 1, C)].flat();
           sscC = { key, out };
           return out;
         }
