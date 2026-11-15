@@ -7741,7 +7741,7 @@
          * leg B->C and the retrace C->M, each from its start until it first
          * touches M (the mid), a zag from over M (sells), a zig from under it
          * (buys): its start, and its max drawdown (as if short on a zag, long
-         * on a zig), on BTCUSDT 1s (prices to FDUSD by the previous 5m's
+         * on a zig; a worse one after the touch when it goes further), on BTCUSDT 1s (prices to FDUSD by the previous 5m's
          * ratio): that swing's far end and middle.
          * Returns [{ n, t, p, low }], or null.
          */
@@ -7781,7 +7781,7 @@
               }
               if (m < 0 || (up ? r[1] > S[m][1] : r[2] < S[m][2])) m = i;
             }
-            return h < 0 ? null : { h: { t: S[h][0], p: fd(S[h][0], S[h][1]) }, l: { t: S[l][0], p: fd(S[l][0], S[l][2]) } };
+            return h < 0 ? null : { d: best, h: { t: S[h][0], p: fd(S[h][0], S[h][1]) }, l: { t: S[l][0], p: fd(S[l][0], S[l][2]) } };
           };
           /* one leg from S[i0] to S[i1], from pivot Z, on its side of M only (a zag from over M, a zig from
              under it) until it first touches M: its start, its max drawdown's far end and middle (from its end on) */
@@ -7790,7 +7790,9 @@
             if (i1 <= i0 || (up ? Z.p >= last : Z.p <= last)) return [];
             let im = i1 + 1;
             for (let i = i0; i <= i1; i++) if (fd(S[i][0], S[i][2]) <= last && fd(S[i][0], S[i][1]) >= last) { im = i; break; }
-            const w = mdd(i0, im - 1, up), lv = [{ n: g + x, t: Z.c.t + 15e4, p: Z.p }];
+            /* a worse drawdown after the touch takes over when its far end goes past the one before it */
+            const w0 = mdd(i0, im - 1, up), w1 = mdd(im, i1, up), lv = [{ n: g + x, t: Z.c.t + 15e4, p: Z.p }];
+            const w = w1 && w1.d > (w0 ? w0.d : -1) && (!w0 || (up ? w1.l.p < w0.l.p : w1.h.p > w0.h.p)) ? w1 : w0;
             if (w) {
               const f = up ? w.l : w.h, m = (w.h.p + w.l.p) / 2;
               lv.push({ n: g + x.toLowerCase(), ...f }, { n: g + "m", t: Math.max(w.h.t, w.l.t), p: m });
