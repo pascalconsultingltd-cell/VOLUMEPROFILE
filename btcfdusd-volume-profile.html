@@ -7519,10 +7519,9 @@
             zfbC.piv.every((o) => has(o.c)))
             return zfbC.piv.map((o) => ({ ...o }));
           const piv = [],
-            dt = T.length > 1 ? T[1].t - T[0].t : 300000,
-            /* a twin's pivot on its FDUSD candle, in FDUSD; ct: when
-               it was confirmed, h: the ZFB height then */
-            pv = (low, p, q, ct) => ({ low, c: q.fd || q, ct, h: ht,
+            /* a twin's pivot on its FDUSD candle, in FDUSD; h: the
+               ZFB height when it was set */
+            pv = (low, p, q) => ({ low, c: q.fd || q, h: ht,
               p: q.fd ? (low ? q.fd.l : q.fd.h) : p });
           let dn = null,
             ht = 0,
@@ -7543,7 +7542,7 @@
               ext = dn ? q.l : q.h;
               at = q;
               ht = volOfDay(dayOf(q.t)) || volN;
-              piv.push(pv(!dn, dn ? q.h : q.l, q, q.t));
+              piv.push(pv(!dn, dn ? q.h : q.l, q));
             }
             /* the extreme first: a big candle turning the leg
                can wick past it (the pivot is then its wick) */
@@ -7555,7 +7554,7 @@
               seen = true;
               ht = q.h - q.l;
               if (way !== dn) {
-                piv.push(pv(dn, ext, at, q.t + dt));
+                piv.push(pv(dn, ext, at));
                 dn = way;
                 ext = dn ? q.l : q.h;
                 at = q;
@@ -7563,26 +7562,26 @@
             } else if (!seen) ht = volOfDay(dayOf(q.t)) || volN;
             if (!big && !live &&
               (dn ? q.c > ext + ht : q.c < ext - ht)) {
-              piv.push(pv(dn, ext, at, q.t + dt));
+              piv.push(pv(dn, ext, at));
               dn = !dn;
               ext = dn ? q.l : q.h;
               at = q;
             }
           }
-          if (dn !== null) piv.push(pv(dn, ext, at, Infinity));
+          if (dn !== null) piv.push(pv(dn, ext, at));
           zfbC = { key, T, piv: piv.map((o) => ({ ...o })) };
           return piv;
         }
         /*
          * SZ: sub-zigzags on BTCUSDT 1s closes (prices to FDUSD by
          * the previous 5m's ratio) in the last finished ZFB leg and
-         * the open one. A level's height is locked once, when its
-         * start is confirmed and a close has pulled back from the
-         * leg's extreme by vol/32 or more: the largest parent
-         * height x 0.95^n under that pullback (the shrinking brick,
-         * stopped at the first inner turn); then a close past the
+         * the open one. A level's height, in hindsight: the parent
+         * height x 0.95^n shrunk until the leg holds an inner turn
+         * (the shrinking brick), i.e. the largest step under its
+         * biggest pullback (vol/32 at least); a close past the
          * extreme by it turns. Each deeper level runs on the newest
-         * branch of the one above. Nothing drawn moves (no repaint).
+         * branch of the one above. The open leg's pivots can move
+         * (a bigger bounce): order levels, meant to follow.
          * Returns [finished leg's points, [open leg's levels]] or null.
          */
         let szC = null;
@@ -7607,7 +7606,7 @@
             for (let j = i; j < k.length; j++) S.push(k[j]);
           }
           if (!S.length) return null;
-          const key = [A.c.t, B.c.t, B.ct, S.length, S[S.length - 1][0], depth].join();
+          const key = [A.c.t, B.c.t, S.length, S[S.length - 1][0], depth].join();
           if (szC && szC.key === key) return szC.out;
           /* FDUSD price of a USDT second: the previous 5m's ratio */
           const fd = (t, u) => {
@@ -7624,24 +7623,23 @@
           };
           const F = (volOfDay(dayOf(A.c.t)) || volN) / 32;
           /* one level from S[i0] (a low when up) to S[i1] */
-          const level = (i0, i1, up, H, ct, p0, t0) => {
-            let e = up ? -Infinity : Infinity, mp = 0, h = 0;
-            for (let i = i0; i <= i1 && !h; i++) {
+          const level = (i0, i1, up, H, p0, t0) => {
+            let e = up ? -Infinity : Infinity, mp = 0, h = H;
+            for (let i = i0; i <= i1; i++) {
               const r = S[i];
               e = up ? Math.max(e, r[1]) : Math.min(e, r[2]);
               mp = Math.max(mp, up ? e - r[3] : r[3] - e);
-              if (r[0] + 1000 >= ct && mp >= F)
-                for (h = H; h > mp; ) h *= 0.95;
             }
-            if (!h) return null;
-            const pts = [{ t: t0, p: p0, low: up, ct, i: i0 }];
+            if (mp < F) return null;
+            while (h > mp) h *= 0.95;
+            const pts = [{ t: t0, p: p0, low: up, i: i0 }];
             let dn = !up, at = i0;
             e = up ? S[i0][1] : S[i0][2];
             for (let i = i0; i <= i1; i++) {
               const r = S[i];
               if (dn ? r[2] < e : r[1] > e) { e = dn ? r[2] : r[1]; at = i; }
               if (dn ? r[3] > e + h : r[3] < e - h) {
-                pts.push({ t: S[at][0], p: fd(S[at][0], e), low: dn, ct: r[0] + 1000, i: at });
+                pts.push({ t: S[at][0], p: fd(S[at][0], e), low: dn, i: at });
                 dn = !dn; e = dn ? r[2] : r[1]; at = i;
               }
             }
@@ -7651,15 +7649,15 @@
           const ia = ex(A), ib = ex(B);
           if (ia < 0 || ib < 0) return null;
           /* main pivots drawn at their candle's middle, as the ZFB */
-          const L1 = level(ia, ib, A.low, A.h, A.ct, A.p, A.c.t + 15e4);
+          const L1 = level(ia, ib, A.low, A.h, A.p, A.c.t + 15e4);
           /* the finished leg ends on B itself */
           if (L1) L1.pts[L1.pts.length - 1] = { t: B.c.t + 15e4, p: B.p, low: B.low };
           const open = [];
-          let par = { h: B.h, pts: [{ t: B.c.t + 15e4, p: B.p, low: B.low, ct: B.ct, i: ib }] };
+          let par = { h: B.h, pts: [{ t: B.c.t + 15e4, p: B.p, low: B.low, i: ib }] };
           for (let d = 1; d <= depth; d++) {
-            /* the newest branch of the level above: from its last confirmed pivot */
+            /* the newest branch of the level above: from its last inner pivot */
             const P = par.pts[Math.max(0, par.pts.length - 2)],
-              L = level(P.i, S.length - 1, P.low, par.h, P.ct, P.p, P.t);
+              L = level(P.i, S.length - 1, P.low, par.h, P.p, P.t);
             if (!L) break;
             open.push(L); par = L;
           }
