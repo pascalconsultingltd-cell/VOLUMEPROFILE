@@ -534,7 +534,7 @@
                     class="a"
                     title="Sub-zigzags on 1s data in the last ZFB leg (buy levels) and the open one (sell levels), 1 to 5 levels each (click: up, right click: down)"
                   >
-                    SZ1
+                    SZ3
                   </button></span
                 ></span
               ></span
@@ -2178,7 +2178,7 @@
         schedule();
       }
       /* SZ: sub-zigzag levels drawn, 0 = off (see szTree) */
-      let szDepth = 1;
+      let szDepth = 3;
       function setSzDepth(v) {
         szDepth = Math.max(0, Math.min(5, v | 0));
         $("szTog").className = szDepth ? "a" : "";
@@ -3195,8 +3195,10 @@
         }
         /* phone: opens (and resets) on the chart full screen */
         /* (phone split: the VP pane always on the profiles) */
-        /* main opens full screen while SZ is being designed */
-        const fs0 = cfg.vp ? "tpo" : cfg.main ? "main" : null;
+        const fs0 = cfg.vp ? "tpo" : cfg.main &&
+          matchMedia("(pointer: coarse)").matches &&
+          Math.min(screen.width, screen.height) < 600
+          ? "main" : null;
         if (fs0) setFull(fs0);
         function size() {
           const r = cv.getBoundingClientRect(),
@@ -7964,7 +7966,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 47;
+      const DEFAULTS_VER = 48;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -8056,8 +8058,8 @@
         /* BZ: new in version 45, on by default */
         if (st.dv >= 45 && typeof st.showBZ === "boolean")
           setShowBZ(st.showBZ);
-        /* SZ: SZ1 by default since version 47 */
-        if (st.dv >= 47 && typeof st.szDepth === "number")
+        /* SZ: SZ3 by default since version 48 */
+        if (st.dv >= 48 && typeof st.szDepth === "number")
           setSzDepth(st.szDepth);
         /*
          * A reload behaves like Alt+X, except that drawings
