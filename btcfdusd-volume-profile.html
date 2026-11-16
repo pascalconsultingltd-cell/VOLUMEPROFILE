@@ -7739,12 +7739,11 @@
 
         /*
          * SSC (simple scalp, being designed): the fixed leg A->B, the open
-         * leg B->C and the retrace C->M, each from its start until it first
-         * touches M (the mid), a zag from over M (sells), a zig from under it
-         * (buys): its start, and its max drawdown (as if short on a zag, long
-         * on a zig; a worse one after the touch when it goes further), on BTCUSDT 1s (prices to FDUSD by the previous 5m's
-         * ratio): that swing's far end and middle; each next level (to
-         * `depth`) the same from the last far end on, nearer M.
+         * leg B->C and the retrace C->M on BTCUSDT 1s (prices to FDUSD by the
+         * previous 5m's ratio): each leg's drawdowns against it (as if short
+         * on a zag, long on a zig), vol/10 at least, ranked by size; then the
+         * mid filter: the `depth` biggest with their far end over M on a zag
+         * (sells), under it on a zig (buys): far end and middle.
          * Returns [{ n, t, p, low }], or null.
          */
         let sscC = null;
@@ -7772,41 +7771,29 @@
               if (b < 0 || (z.low ? S[i][2] < S[b][2] : S[i][1] > S[b][1])) b = i;
             return b;
           };
-          /* the max drawdown of S[a..b] against the leg (short on a zag: the biggest rise from a
-             low to a later high; long on a zig: the biggest drop from a high to a later low) */
-          const mdd = (a, b, up) => {
-            let best = -1, h = -1, l = -1, m = -1;
-            for (let i = a; i <= b; i++) {
-              const r = S[i];
-              if (m >= 0 && (up ? S[m][1] - r[2] : r[1] - S[m][2]) > best) {
-                best = up ? S[m][1] - r[2] : r[1] - S[m][2]; h = up ? m : i; l = up ? i : m;
-              }
-              if (m < 0 || (up ? r[1] > S[m][1] : r[2] < S[m][2])) m = i;
-            }
-            return h < 0 ? null : { d: best, i: up ? l : h, h: { t: S[h][0], p: fd(S[h][0], S[h][1]) }, l: { t: S[l][0], p: fd(S[l][0], S[l][2]) } };
-          };
-          /* one leg from S[i0] to S[i1], from pivot Z, on its side of M only (a zag from over M, a zig from
-             under it): its start, then its worst drawdown until it first touches M (a worse one after the
-             touch takes over when it goes further): that swing's far end and middle (from its end on); each
-             next level the same from the last far end on, `depth` levels at most */
+          const V = volOfDay(dayOf(Date.now())) || volN;
+          /* one leg from S[i0] to S[i1], from pivot Z: its drawdowns against it (down: each new low starts
+             one, the highest rise before the next new low; up: the mirror), vol/10 at least, ranked by size;
+             the `depth` biggest whose far end is on the leg's side of M (over it down: sells, under it up:
+             buys): that far end and the swing's middle if on that side too; and the leg's start */
           const leg = (g, i0, i1, Z, depth) => {
-            const up = Z.low, x = up ? "L" : "H", side = (p) => up ? p < last : p > last, lv = [{ n: g + x, t: Z.c.t + 15e4, p: Z.p }];
-            if (i1 <= i0 || !side(Z.p)) return [];
-            for (let k = 1, a = i0; k <= depth && a < i1; k++) {
-              let im = i1 + 1;
-              for (let i = a; i <= i1; i++) if (fd(S[i][0], S[i][2]) <= last && fd(S[i][0], S[i][1]) >= last) { im = i; break; }
-              /* first step: the worst drawdown after the touch takes over when worse and further, else it
-                 is a level of its own (t) if its far end is back on the leg's side */
-              const w0 = mdd(a, im - 1, up), w1 = k === 1 ? mdd(im, i1, up) : null;
-              const over = w1 && w1.d > (w0 ? w0.d : -1) && (!w0 || (up ? w1.l.p < w0.l.p : w1.h.p > w0.h.p)), w = over ? w1 : w0;
-              const put = (w, s) => lv.push({ n: g + x.toLowerCase() + s, ...(up ? w.l : w.h) },
-                { n: g + "m" + s, t: Math.max(w.h.t, w.l.t), p: (w.h.p + w.l.p) / 2 });
-              if (w1 && !over && side((up ? w1.l : w1.h).p)) put(w1, "t");
-              const f = w && (up ? w.l : w.h);
-              if (!f || !side(f.p)) break;
-              put(w, k);
-              a = w.i;
+            const up = Z.low, x = up ? "L" : "H", side = (p) => up ? p < last : p > last, dd = [];
+            if (i1 <= i0) return [];
+            let m = i0, d = 0, h = -1;
+            const close = () => { if (h >= 0 && d >= V / 10) dd.push({ d, m, h }); };
+            for (let i = i0; i <= i1; i++) {
+              const r = S[i];
+              if (up ? r[1] > S[m][1] : r[2] < S[m][2]) { close(); m = i; d = 0; h = -1; continue; }
+              const e = up ? S[m][1] - r[2] : r[1] - S[m][2];
+              if (e > d) { d = e; h = i; }
             }
+            close();
+            const lv = [{ n: g + x, t: Z.c.t + 15e4, p: Z.p }];
+            dd.sort((a, b) => b.d - a.d).map(({ m, h }) => {
+              const hi = up ? m : h, lo = up ? h : m;
+              return { t: S[h][0], hi: fd(S[hi][0], S[hi][1]), lo: fd(S[lo][0], S[lo][2]) };
+            }).filter((w) => side(up ? w.lo : w.hi)).slice(0, depth).forEach((w, k) => lv.push(
+              { n: g + x.toLowerCase() + (k + 1), t: w.t, p: up ? w.lo : w.hi }, { n: g + "m" + (k + 1), t: w.t, p: (w.hi + w.lo) / 2 }));
             return lv.filter((z) => side(z.p)).map((z) => ({ ...z, low: up }));
           };
           const ia = ex(A), ib = ex(B), ic = ex(C);
