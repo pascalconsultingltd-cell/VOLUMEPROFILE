@@ -539,9 +539,9 @@
                   <button
                     id="sscTog"
                     class="a"
-                    title="Simple scalp (being designed): each leg's (fixed, open, retrace) greatest swing high over the mid (sell) and swing low under it (buy)"
+                    title="Simple scalp (being designed): each leg's (fixed, open, retrace) worst drawdowns toward the mid, 1 to 5 levels (click: up, right click: down)"
                   >
-                    SSC
+                    SSC5
                   </button></span
                 ></span
               ></span
@@ -2193,10 +2193,11 @@
         schedule();
       }
       /* SSC: the simple scalp's levels drawn (see sscTree) */
-      let showSsc = true;
-      function setShowSsc(v) {
-        showSsc = !!v;
-        $("sscTog").className = showSsc ? "a" : "";
+      let sscDepth = 5;
+      function setSscDepth(v) {
+        sscDepth = Math.max(0, Math.min(5, v | 0));
+        $("sscTog").className = sscDepth ? "a" : "";
+        $("sscTog").textContent = sscDepth ? "SSC" + sscDepth : "SSC";
         schedule();
       }
       /* PB: P Bells' births and deaths drawn on the PF */
@@ -5730,7 +5731,7 @@
               });
             });
             /* SSC: each leg's greatest swings, a line to the right edge */
-            const ss = showSsc && !RPL && sscTree(piv);
+            const ss = sscDepth && !RPL && sscTree(piv, sscDepth);
             g.lineWidth = 1;
             g.setLineDash([8, 3]);
             const ssl = ss || [];
@@ -5768,8 +5769,8 @@
             if (sz) sz.forEach(({ nodes }, j) => nodes.forEach((n, m) => ptag(Y(n.p),
               (j ? "S" : "B") + (m + 1) + " " + n.p.toFixed(0), j ? "rgb(239,83,80)" : "rgb(38,166,154)")));
             if (sz) sz[1].s0.forEach((n) => ptag(Y(n.p), "S0 " + n.p.toFixed(0), "rgb(239,83,80)"));
-            /* SSC: f (fixed leg), o (open leg), r (retrace); H / h a zag's start and swing high, L / l a zig's start
-               and swing low, m the swing's middle; sells red, buys green */
+            /* SSC: f (fixed leg), o (open leg), r (retrace); H / h1.. a zag's start and swing highs, L / l1.. a zig's
+               start and swing lows, m1.. the swings' middles; sells red, buys green */
             ssl.forEach((z) => ptag(Y(z.p), z.n + " " + z.p.toFixed(0), z.low ? "rgb(0,121,107)" : "rgb(198,40,40)"));
           };
           zLegs = [];
@@ -7742,11 +7743,12 @@
          * touches M (the mid), a zag from over M (sells), a zig from under it
          * (buys): its start, and its max drawdown (as if short on a zag, long
          * on a zig; a worse one after the touch when it goes further), on BTCUSDT 1s (prices to FDUSD by the previous 5m's
-         * ratio): that swing's far end and middle.
+         * ratio): that swing's far end and middle; each next level (to
+         * `depth`) the same from the last far end on, nearer M.
          * Returns [{ n, t, p, low }], or null.
          */
         let sscC = null;
-        function sscTree(piv) {
+        function sscTree(piv, depth) {
           const nP = piv.length;
           if (nP < 3) return null;
           const A = piv[nP - 3], B = piv[nP - 2], C = piv[nP - 1], S = [];
@@ -7758,7 +7760,7 @@
           }
           const last = mid != null ? mid : k5.length ? k5[k5.length - 1].c : null;
           if (!S.length || last == null) return null;
-          const key = [A.c.t, B.c.t, C.c.t, C.p, S.length, S[S.length - 1][0], Math.round(last)].join();
+          const key = [A.c.t, B.c.t, C.c.t, C.p, S.length, S[S.length - 1][0], Math.round(last), depth].join();
           if (sscC && sscC.key === key) return sscC.out;
           const fd = (t, u) => {
             const t5 = Math.floor(t / 3e5) * 3e5 - 3e5, q = uk5.get(t5), c = k5[szBs(k5, t5)];
@@ -7781,27 +7783,30 @@
               }
               if (m < 0 || (up ? r[1] > S[m][1] : r[2] < S[m][2])) m = i;
             }
-            return h < 0 ? null : { d: best, h: { t: S[h][0], p: fd(S[h][0], S[h][1]) }, l: { t: S[l][0], p: fd(S[l][0], S[l][2]) } };
+            return h < 0 ? null : { d: best, i: up ? l : h, h: { t: S[h][0], p: fd(S[h][0], S[h][1]) }, l: { t: S[l][0], p: fd(S[l][0], S[l][2]) } };
           };
           /* one leg from S[i0] to S[i1], from pivot Z, on its side of M only (a zag from over M, a zig from
-             under it) until it first touches M: its start, its max drawdown's far end and middle (from its end on) */
-          const leg = (g, i0, i1, Z) => {
-            const up = Z.low, x = up ? "L" : "H";
-            if (i1 <= i0 || (up ? Z.p >= last : Z.p <= last)) return [];
-            let im = i1 + 1;
-            for (let i = i0; i <= i1; i++) if (fd(S[i][0], S[i][2]) <= last && fd(S[i][0], S[i][1]) >= last) { im = i; break; }
-            /* a worse drawdown after the touch takes over when its far end goes past the one before it */
-            const w0 = mdd(i0, im - 1, up), w1 = mdd(im, i1, up), lv = [{ n: g + x, t: Z.c.t + 15e4, p: Z.p }];
-            const w = w1 && w1.d > (w0 ? w0.d : -1) && (!w0 || (up ? w1.l.p < w0.l.p : w1.h.p > w0.h.p)) ? w1 : w0;
-            if (w) {
-              const f = up ? w.l : w.h, m = (w.h.p + w.l.p) / 2;
-              lv.push({ n: g + x.toLowerCase(), ...f }, { n: g + "m", t: Math.max(w.h.t, w.l.t), p: m });
+             under it): its start, then its worst drawdown until it first touches M (a worse one after the
+             touch takes over when it goes further): that swing's far end and middle (from its end on); each
+             next level the same from the last far end on, `depth` levels at most */
+          const leg = (g, i0, i1, Z, depth) => {
+            const up = Z.low, x = up ? "L" : "H", side = (p) => up ? p < last : p > last, lv = [{ n: g + x, t: Z.c.t + 15e4, p: Z.p }];
+            if (i1 <= i0 || !side(Z.p)) return [];
+            for (let k = 1, a = i0; k <= depth && a < i1; k++) {
+              let im = i1 + 1;
+              for (let i = a; i <= i1; i++) if (fd(S[i][0], S[i][2]) <= last && fd(S[i][0], S[i][1]) >= last) { im = i; break; }
+              const w0 = mdd(a, im - 1, up), w1 = mdd(im, i1, up);
+              const w = w1 && w1.d > (w0 ? w0.d : -1) && (!w0 || (up ? w1.l.p < w0.l.p : w1.h.p > w0.h.p)) ? w1 : w0;
+              const f = w && (up ? w.l : w.h);
+              if (!f || !side(f.p)) break;
+              lv.push({ n: g + x.toLowerCase() + k, ...f }, { n: g + "m" + k, t: Math.max(w.h.t, w.l.t), p: (w.h.p + w.l.p) / 2 });
+              a = w.i;
             }
-            return lv.filter((z) => up ? z.p < last : z.p > last).map((z) => ({ ...z, low: up }));
+            return lv.filter((z) => side(z.p)).map((z) => ({ ...z, low: up }));
           };
           const ia = ex(A), ib = ex(B), ic = ex(C);
           if (ia < 0 || ib < 0 || ic < 0) return null;
-          const out = [leg("f", ia, ib, A), leg("o", ib, ic, B), leg("r", ic, S.length - 1, C)].flat();
+          const out = [leg("f", ia, ib, A, depth), leg("o", ib, ic, B, depth), leg("r", ic, S.length - 1, C, depth)].flat();
           sscC = { key, out };
           return out;
         }
@@ -8064,7 +8069,7 @@
 
       const SAVE_KEY = "btcfdusd-state-v2";
       /* raise this whenever the default vol / B / O change */
-      const DEFAULTS_VER = 49;
+      const DEFAULTS_VER = 50;
       function toast(t) {
         const el = $("toast");
         el.textContent = t;
@@ -8096,7 +8101,7 @@
           showPB,
           showBZ,
           szDepth,
-          showSsc,
+          sscDepth,
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
@@ -8160,9 +8165,9 @@
         /* SZ: SZ3 by default since version 48 */
         if (st.dv >= 48 && typeof st.szDepth === "number")
           setSzDepth(st.szDepth);
-        /* SSC: new in version 49, on by default */
-        if (st.dv >= 49 && typeof st.showSsc === "boolean")
-          setShowSsc(st.showSsc);
+        /* SSC: SSC5 by default since version 50 */
+        if (st.dv >= 50 && typeof st.sscDepth === "number")
+          setSscDepth(st.sscDepth);
         /*
          * A reload behaves like Alt+X, except that drawings
          * and settings are kept: the view (zoom, pan, price
@@ -8363,7 +8368,8 @@
       $("missTog").onclick = () => setVpMiss(!vpMiss);
       $("pbTog").onclick = () => setShowPB(!showPB);
       $("bzTog").onclick = () => setShowBZ(!showBZ);
-      $("sscTog").onclick = () => setShowSsc(!showSsc);
+      $("sscTog").onclick = () => setSscDepth((sscDepth + 1) % 6);
+      $("sscTog").oncontextmenu = (e) => (e.preventDefault(), setSscDepth((sscDepth + 5) % 6));
       $("szTog").onclick = () => setSzDepth((szDepth + 1) % 6);
       $("szTog").oncontextmenu = (e) => (e.preventDefault(), setSzDepth((szDepth + 5) % 6));
       /* replay at RT: the data cut there (USDT seconds and FDUSD
