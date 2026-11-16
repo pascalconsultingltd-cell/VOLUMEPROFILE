@@ -7795,11 +7795,16 @@
             for (let k = 1, a = i0; k <= depth && a < i1; k++) {
               let im = i1 + 1;
               for (let i = a; i <= i1; i++) if (fd(S[i][0], S[i][2]) <= last && fd(S[i][0], S[i][1]) >= last) { im = i; break; }
-              const w0 = mdd(a, im - 1, up), w1 = mdd(im, i1, up);
-              const w = w1 && w1.d > (w0 ? w0.d : -1) && (!w0 || (up ? w1.l.p < w0.l.p : w1.h.p > w0.h.p)) ? w1 : w0;
+              /* first step: the worst drawdown after the touch takes over when worse and further, else it
+                 is a level of its own (t) if its far end is back on the leg's side */
+              const w0 = mdd(a, im - 1, up), w1 = k === 1 ? mdd(im, i1, up) : null;
+              const over = w1 && w1.d > (w0 ? w0.d : -1) && (!w0 || (up ? w1.l.p < w0.l.p : w1.h.p > w0.h.p)), w = over ? w1 : w0;
+              const put = (w, s) => lv.push({ n: g + x.toLowerCase() + s, ...(up ? w.l : w.h) },
+                { n: g + "m" + s, t: Math.max(w.h.t, w.l.t), p: (w.h.p + w.l.p) / 2 });
+              if (w1 && !over && side((up ? w1.l : w1.h).p)) put(w1, "t");
               const f = w && (up ? w.l : w.h);
               if (!f || !side(f.p)) break;
-              lv.push({ n: g + x.toLowerCase() + k, ...f }, { n: g + "m" + k, t: Math.max(w.h.t, w.l.t), p: (w.h.p + w.l.p) / 2 });
+              put(w, k);
               a = w.i;
             }
             return lv.filter((z) => side(z.p)).map((z) => ({ ...z, low: up }));
