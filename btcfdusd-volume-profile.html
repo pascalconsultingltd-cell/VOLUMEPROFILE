@@ -539,9 +539,9 @@
                   <button
                     id="sscTog"
                     class="a"
-                    title="Simple scalp (being designed): each leg's (fixed, open, retrace) worst drawdowns toward the mid, 1 to 5 levels (click: up, right click: down)"
+                    title="A (automate, the a command): each leg's (fixed, open, retrace) worst drawdowns toward the mid, 1 to 5 levels (click: up, right click: down)"
                   >
-                    SSC3
+                    A3
                   </button></span
                 ></span
               ></span
@@ -2192,12 +2192,12 @@
         $("szTog").textContent = szDepth ? "SZ" + szDepth : "SZ";
         schedule();
       }
-      /* SSC: the simple scalp's levels drawn (see sscTree) */
+      /* SSC (button A): the simple scalp's levels drawn (see sscTree) */
       let sscDepth = 3;
       function setSscDepth(v) {
         sscDepth = Math.max(0, Math.min(5, v | 0));
         $("sscTog").className = sscDepth ? "a" : "";
-        $("sscTog").textContent = sscDepth ? "SSC" + sscDepth : "SSC";
+        $("sscTog").textContent = sscDepth ? "A" + sscDepth : "A";
         schedule();
       }
       /* PB: P Bells' births and deaths drawn on the PF */
