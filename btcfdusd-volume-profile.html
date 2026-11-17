@@ -3783,7 +3783,10 @@
             ),
             cP = (1 + lmK) * colW + gap,
             x6 = 6 + lmK * colW,
-            cnt = cfg.tpo && tpoW > 0 ? nTpo : 0;
+            /* main full screen: the profiles still worked out, unseen,
+               for the blue zones they hold */
+            bzOnly = cfg.main && cfg.tpo && showBZ && !tpoW && !side,
+            cnt = cfg.tpo && (tpoW > 0 || bzOnly) ? nTpo : 0;
           profs = [];
           /* tb whole days back, tf = the slide in between; one
              more day on the left while sliding */
@@ -4040,7 +4043,7 @@
           } else if (!cnt || !(volN > 0)) pocHome = false;
           g.save();
           g.beginPath();
-          g.rect(0, top, tR, bot - top);
+          g.rect(0, top, bzOnly ? 0 : tR, bot - top);
           g.clip();
           g.font = "10px ui-monospace,Menlo,monospace";
           g.textBaseline = "middle";
@@ -4798,6 +4801,7 @@
             g.stroke();
             g.lineWidth = 1;
           }
+          if (bzOnly) profs = [];
           g.restore();
           /*
            * 15m history needed: three days before the oldest
