@@ -2188,14 +2188,9 @@
          30m close (fills only change there), each worked out once on
          the data cut at that close and drawn up to the next close;
          a finished day kept in localStorage */
-      const BZ_KEY = "bz1|",
+      const BZ_KEY = "bz2|",
         bzHist = new Map(),
         bzTry = new Map();
-      /* the a bot (az) gets today's latest state on 127.0.0.1:8765:
-         sent once it changes, tried again a minute later if
-         nothing listens */
-      let bzSent = "",
-        bzPostAt = 0;
       function bzDay(dS) {
         if (!bzHist.has(dS)) {
           let h = null;
@@ -5387,6 +5382,8 @@
                 let zs;
                 RT = c;
                 replayIn();
+                /* empty: its profiles are the live ones (no peek) */
+                profCache.clear();
                 try { zs = bzOf(dS); } finally {
                   replayOut();
                   RT = keep;
@@ -5408,20 +5405,6 @@
                 sched();
                 break job;
               }
-            }
-          }
-          if (cfg.main && !RPL && Date.now() - bzPostAt > 6e4) {
-            const dT = dayOf(Date.now()),
-              h = bzHist.get(dT) || [];
-            let i = h.length - 1;
-            while (i >= 0 && h[i] === undefined) i--;
-            const msg = i >= 0 ? JSON.stringify({ t: dT + i * TPO_MS, z: h[i] }) : "";
-            if (msg && msg !== bzSent) {
-              bzPostAt = Date.now();
-              fetch("http://127.0.0.1:8765/bz", { method: "POST",
-                headers: { "Content-Type": "text/plain" }, body: msg })
-                .then((r) => { if (r.ok) (bzSent = msg), (bzPostAt = 0); })
-                .catch(() => {});
             }
           }
           /* BZ: the bells' blue zones (P and D Bells' lead wings
