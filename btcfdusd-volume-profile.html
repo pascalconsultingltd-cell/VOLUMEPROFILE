@@ -2184,6 +2184,21 @@
         $("bzTog").className = showBZ ? "a" : "";
         schedule();
       }
+      /* BZ history (no repaint): per day, its 48 states, one per
+         30m close (fills only change there), each worked out once on
+         the data cut at that close and drawn up to the next close;
+         a finished day kept in localStorage */
+      const BZ_KEY = "bz1|",
+        bzHist = new Map(),
+        bzTry = new Map();
+      function bzDay(dS) {
+        if (!bzHist.has(dS)) {
+          let h = null;
+          try { h = JSON.parse(localStorage.getItem(BZ_KEY + dS)); } catch (e) {}
+          bzHist.set(dS, Array.isArray(h) && h.length === 48 ? h : new Array(48).fill(undefined));
+        }
+        return bzHist.get(dS);
+      }
       /* SZ: sub-zigzag levels drawn, 0 = off (see szTree) */
       let szDepth = 0;
       function setSzDepth(v) {
@@ -3783,10 +3798,7 @@
             ),
             cP = (1 + lmK) * colW + gap,
             x6 = 6 + lmK * colW,
-            /* main full screen: the profiles still worked out, unseen,
-               for the blue zones they hold */
-            bzOnly = cfg.main && cfg.tpo && showBZ && !tpoW && !side,
-            cnt = cfg.tpo && (tpoW > 0 || bzOnly) ? nTpo : 0;
+            cnt = cfg.tpo && tpoW > 0 ? nTpo : 0;
           profs = [];
           /* tb whole days back, tf = the slide in between; one
              more day on the left while sliding */
@@ -4043,7 +4055,7 @@
           } else if (!cnt || !(volN > 0)) pocHome = false;
           g.save();
           g.beginPath();
-          g.rect(0, top, bzOnly ? 0 : tR, bot - top);
+          g.rect(0, top, tR, bot - top);
           g.clip();
           g.font = "10px ui-monospace,Menlo,monospace";
           g.textBaseline = "middle";
@@ -4369,10 +4381,7 @@
             };
           };
           /* DT: each day's last bell (by age), for the next day */
-          const rkEnd = new Map(),
-            /* BZ: the blue zones of the days drawn (lead wings'
-               empty rows, merged), for the PF: { lo, hi, t0, t1 } */
-            blueZ = [];
+          const rkEnd = new Map();
           for (let d = 0; d < cnt + ex; d++) {
             const Q = dayProf(tpoDays[d]),
               cx0 = x6 + (d - ex + tf) * cP,
@@ -4701,30 +4710,6 @@
                   Y(r * P.step) - yT);
             }));
             lb.fill();
-            /* BZ: each lead wing's empty rows as price bands, from
-               the bell's birth (its day's start if not found) to
-               the day's end */
-            const zOf = (W, fl, cur, kind) => W.ps.forEach((B) => {
-              const px = B.S.px,
-                rs = B.lead.filter((r) => cur(r) > (fl.get(r) || 0))
-                  .sort((a, b) => a - b),
-                bs = ((bellDays.get(P.dS) || {}).bs || [])
-                  .filter((b) => b.kind === kind),
-                dl = (b) => Math.abs(b.last - px),
-                bl = bs.reduce((a, b) => !a || dl(b) < dl(a) ? b : a,
-                  null),
-                t0 = bl && dl(bl) < vf ? bl.birth : P.dS;
-              for (let i = 0; i < rs.length; ) {
-                let j = i;
-                while (j + 1 < rs.length && rs[j + 1] === rs[j] + 1)
-                  j++;
-                blueZ.push({ lo: rs[i] * P.step,
-                  hi: (rs[j] + 1) * P.step, t0, t1: nextDay(P.dS) });
-                i = j + 1;
-              }
-            });
-            zOf(bf, bf.rw, (r) => (exp.get(r) || 0) * kv, "P");
-            zOf(bfD, bfD.rw, (r) => (dc.get(r) || 0) * kv, "D");
             perfLine(P, exp, cx0, (e) => F(e * kv * vs), "#000");
             /* its vipocs: black lines to the curve */
             drawPs(P, sp, cx0, (S) => cX(Math.floor(S.px / P.step)));
@@ -4801,7 +4786,6 @@
             g.stroke();
             g.lineWidth = 1;
           }
-          if (bzOnly) profs = [];
           g.restore();
           /*
            * 15m history needed: three days before the oldest
@@ -5319,10 +5303,112 @@
 
           }
 
+          /* BZ: a day's blue zones as at NOW(): its P Bells' lead
+             wing rows under their curve (closed volume) and its D
+             Bells' (the closed surplus over the P curves), merged
+             into price bands; null while its data is not all in */
+          const bzOf = (dS) => {
+            loadAggr(dS);
+            loadUsdt(dS);
+            const Q = dayProf(dS);
+            if (Q.poc == null) return [];
+            const P = Object.assign({}, Q),
+              vw = vwOf(dS, P.step),
+              uk = usdtK.get(dS),
+              at = aggrT.get(dS),
+              z = uk && uk.k[uk.k.length - 1],
+              ok = uk && at && (dS === dayOf(NOW())
+                ? z && z[0] >= NOW() - 12e4 : uk.end && at.end),
+              vf = volFor(dS) > 0 ? volFor(dS) : P.step * 10,
+              kv = kvFor(dS, "BTCUSDT");
+            if (!ok || !vw || !(volOfDay(dS) > 0) || !(kv > 0)) return null;
+            const sp = byAge(P, subPocs(dS, P.ps, vf, P.step)),
+              exp = expOf(P, sp, vf),
+              dc = dCurve(P, vw, sp, kv, vf, exp),
+              ag = (X) => {
+                const w = P.rows.get(Math.floor(X.px / P.step));
+                return w && w.length ? rowAge(w) : 99;
+              },
+              /* the P's and D's by age, each one's move vs the one
+                 before (1: the day before's last vipoc), as drawn */
+              rk = [...sp, ...(dc.ps || [])].map((X) => [ag(X), X])
+                .sort((a, b) => a[0] - b[0]),
+              dm = new Map();
+            let q0 = vipocs(dayProf(prevDay(dS))).pop();
+            rk.forEach(([, X]) => {
+              dm.set(X, q0 == null ? 0 : X.px >= q0 ? 1 : -1);
+              q0 = X.px;
+            });
+            const bf = bellFill(P, sp, vw, kv, vf, dm),
+              bfD = bellFill(P, dc.ps || [], vw, kv, vf, dm, (rw) => {
+                const m = new Map();
+                rw.forEach((u, r) => {
+                  const d = u - (exp.get(r) || 0) * kv;
+                  if (d > 0) m.set(r, d);
+                });
+                return m;
+              }),
+              rs = new Set();
+            bf.ps.forEach((B) => B.lead.forEach((r) => {
+              if ((exp.get(r) || 0) * kv > (bf.rw.get(r) || 0)) rs.add(r);
+            }));
+            bfD.ps.forEach((B) => B.lead.forEach((r) => {
+              if ((dc.get(r) || 0) * kv > (bfD.rw.get(r) || 0)) rs.add(r);
+            }));
+            const s = [...rs].sort((a, b) => a - b), out = [];
+            for (let i = 0; i < s.length; ) {
+              let j = i;
+              while (j + 1 < s.length && s[j + 1] === s[j] + 1) j++;
+              out.push([s[i] * P.step, (s[j] + 1) * P.step]);
+              i = j + 1;
+            }
+            return out;
+          };
+          /* BZ history: one missing 30m state per draw (live only),
+             on the data cut at its close (replay's cut); data not
+             in yet: tried again on a later draw */
+          if (cfg.main && showBZ && !RPL && geo.length) {
+            const now = Date.now();
+            job: for (let dS = dayOf(geo[0].c.t); dS <= dayOf(now); dS += DAY) {
+              const h = bzDay(dS);
+              for (let i = 0; i < 48; i++) {
+                const c = dS + i * TPO_MS;
+                if (c > now - 12e4) break job;
+                if (h[i] !== undefined) continue;
+                /* 00:00: nothing closed, no bell yet */
+                if (!i) { h[0] = []; continue; }
+                /* profCache is this draw's, not in the replay swap */
+                const keep = RT, pc = new Map(profCache);
+                let zs;
+                RT = c;
+                replayIn();
+                try { zs = bzOf(dS); } finally {
+                  replayOut();
+                  RT = keep;
+                  profCache.clear();
+                  pc.forEach((v, k) => profCache.set(k, v));
+                }
+                /* data not in: later (a slot that never loads is
+                   given up after 30 tries, so the rest goes on) */
+                if (zs === null) {
+                  const k = dS + "|" + i;
+                  bzTry.set(k, (bzTry.get(k) || 0) + 1);
+                  if (bzTry.get(k) < 30) break job;
+                  zs = [];
+                }
+                h[i] = zs;
+                if (i === 47) try {
+                  localStorage.setItem(BZ_KEY + dS, JSON.stringify(h));
+                } catch (e) {}
+                sched();
+                break job;
+              }
+            }
+          }
           /* BZ: the bells' blue zones (P and D Bells' lead wings
              still empty) as light blue bands on the main chart,
-             from the bell's birth to its day's end (or now, then
-             half way into the blank space on the right) */
+             each 30m state from its close to the next (the last:
+             now, then half way into the blank space on the right) */
           if (cfg.main && showBZ && !side && geo.length) {
             const iv = geo.length > 1 ? geo[1].c.t - geo[0].c.t : 3e5,
               xT = (t) => {
@@ -5340,12 +5426,14 @@
                space right of the last candle */
             const xn = xT(NOW()),
               xr = geoAt(NOW()) ? xn + (px0 - xn) / 2 : xn;
-            blueZ.forEach((z) => {
-              const xa = xT(z.t0),
-                xb = z.t1 > NOW() ? xr : xT(z.t1);
-              if (xb > xa)
-                g.fillRect(xa, Y(z.hi), xb - xa, Y(z.lo) - Y(z.hi));
-            });
+            bzHist.forEach((h, dS) => h.forEach((zs, i) => {
+              const c = dS + i * TPO_MS;
+              if (!zs || c > NOW()) return;
+              const xa = xT(c),
+                xb = c + TPO_MS > NOW() ? xr : xT(c + TPO_MS);
+              if (xb > xa) zs.forEach(([lo, hi]) =>
+                g.fillRect(xa, Y(hi), xb - xa, Y(lo) - Y(hi)));
+            }));
             g.restore();
           }
           /* PB (main chart): each P Bell, from its birth to
