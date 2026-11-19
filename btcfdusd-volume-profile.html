@@ -8027,6 +8027,8 @@
             ypan,
             lock,
             tpoFrac,
+            pcPx,
+            full,
             TF: cfg.main ? TF : undefined,
             nTpo: cfg.main ? nTpo : undefined,
           }),
@@ -8038,6 +8040,10 @@
             if (Number.isFinite(st.off)) off = st.off;
             if (st.ysc > 0) ysc = st.ysc;
             if (st.tpoFrac > 0) tpoFrac = st.tpoFrac;
+            if (st.pcPx > 0) pcPx = st.pcPx;
+            /* the main chart's full window, except on a phone */
+            if (cfg.main && !fs0 && "full" in st && (st.full === null ||
+              typeof st.full === "string")) setFull(st.full);
             if (Number.isFinite(st.ypan)) ypan = st.ypan;
             if (st.lock && st.lock.hi > st.lock.lo)
               lock = { hi: st.lock.hi, lo: st.lock.lo };
@@ -8196,6 +8202,7 @@
           lines: lines.filter(
             (l) => !(l.k === "b" && l.lo === l.hi),
           ),
+          ctl: !document.body.classList.contains("noctl"),
           main: mainChart.getState(),
           mini: miniChart.getState(),
           win: Object.assign(
@@ -8260,18 +8267,22 @@
         if (st.dv >= 51 && typeof st.sscDepth === "number")
           setSscDepth(st.sscDepth);
         /*
-         * A reload behaves like Alt+X, except that drawings
-         * and settings are kept: the view (zoom, pan, price
-         * scale, floating window) always starts from its
-         * default, so only timeframe and TPO days are taken
-         * from the saved chart state; the main chart always
-         * opens on standard candles (Std).
+         * A reload keeps drawings, settings and the layout saved
+         * by Ctrl+S: type, length, timeframe, TPO days, window
+         * widths, the full window, the 15s window's place, the
+         * toggles unfolded; zoom, pan and price scale start from
+         * their default (Alt+R resets the layout).
          */
         /* TPO days: back to 3 in version 24 */
         const keep = (s) =>
-          s && { TF: s.TF, nTpo: st.dv >= 24 ? s.nTpo : 3 };
+          s && { TF: s.TF, nTpo: st.dv >= 24 ? s.nTpo : 3, mode: s.mode,
+            N: s.N, tpoFrac: s.tpoFrac, pcPx: s.pcPx, full: s.full };
         mainChart.setState(keep(st.main));
         miniChart.setState(keep(st.mini));
+        const w = st.win;
+        if (w && w.w > 0) setMiniBox(w);
+        if (w && w.hidden) mini.style.display = "none";
+        if (st.ctl) $("ctlTog").click();
         schedule();
       }
       addEventListener("keydown", (e) => {
@@ -8446,12 +8457,12 @@
       };
       $("sym").textContent = SYM + " " + TF;
       document.title = SYM;
-      restore();
-      /* a fresh page starts as after Alt+R: settings kept,
-         views back home */
+      /* a fresh page starts as after Alt+R, then takes what
+         Ctrl+S saved */
       miniHome();
       mainChart.resetView();
       miniChart.resetView();
+      restore();
       $("ordTog").onclick = () => setShowOrders(!showOrders);
       $("ordLineTog").onclick = () => setShowLines(!showLines);
       $("bsTog").onclick = () => setShowScores(!showScores);
