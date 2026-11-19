@@ -4715,16 +4715,19 @@
             drawPs(P, sp, cx0, (S) => cX(Math.floor(S.px / P.step)));
             /* the clip ends here: numbers and dots never cut */
             g.restore();
-            /* P's and D's ranked by age together, 1 = oldest, in
-               the middle of each bell; green above the one before
-               (1: the day before's last), red below */
+            /* P's and D's ranked by age together, 1 = oldest, out of
+               each bell past its BS dot (P's right, D's left); green
+               above the one before (1: the day before's last), red
+               below */
             g.save();
             g.font = "bold 12px ui-monospace,Menlo,monospace";
             g.textAlign = "center";
             g.textBaseline = "middle";
             g.strokeStyle = "#fff";
             g.lineWidth = 3;
-            rk.forEach(([, x, px, mv], i) => {
+            rk.forEach(([, , px, mv, , sd], i) => {
+              const r = Math.floor(px / P.step), x = sd > 0
+                ? cX(r) + 24 : xLf((dc.get(r) || 0) * kv * vs) - 24;
               g.fillStyle = !mv ? "#000"
                 : mv > 0 ? "#089981" : "#e53935";
               g.strokeText(i + 1, x, Y(px));
